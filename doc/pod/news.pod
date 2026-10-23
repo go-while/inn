@@ -194,6 +194,14 @@ malformed stored Xref records with tradspool and corrupt history records.
 The overview and storage backends also validate more structures before using
 them.  Many thanks to Kevin Bowling for the patches.
 
+=item *
+
+Fixed B<innd> not exiting on SIGTERM or SIGHUP while no connection was
+active: the signal was only noticed at the next connection or when the main
+loop timed out, up to several minutes later, so stopping it with C<kill> or
+C<docker stop> usually ended in a SIGKILL without the active file and history
+being flushed.
+
 =back
 
 =head1 Changes in 2.7.4 (2026-06-22)
