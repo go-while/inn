@@ -1,0 +1,5 @@
+.git
+tests/e2e
+**/*.o
+**/*.lo
+**/.libs
