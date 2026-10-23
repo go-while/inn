@@ -205,6 +205,12 @@ file and history being flushed.  This bug was introduced in INN 2.5.4.  A
 signal arriving while B<innd> was busy, for instance in a slow filter, was
 not acted on promptly either; that part of the problem is older.
 
+=item *
+
+B<nnrpd> now answers a COMPRESS command naming another algorithm than
+DEFLATE with a 502 response code when a compression layer is already
+active, as S<RFC 8054> requires, instead of 503.
+
 =back
 
 =head1 Changes in 2.7.4 (2026-06-22)
