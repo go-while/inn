@@ -17,7 +17,7 @@ B<sendxbatches> I<sitename> I<host> I<file> [I<file> ...]
 B<innxbatch> connects to port 119 of the NNTP server at the specified I<host>,
 and sends it the specified xbatch files, using the XBATCH extension to the
 NNTP protocol.  These files are specified either from the command line or
-from standard input if B<i> is used.
+from standard input if B<-i> is used.
 
 Each file is removed after it has been successfully transferred.
 
@@ -29,10 +29,10 @@ If authentication credentials are present for the remote server in the
 F<passwd.nntp> file in I<pathetc>, then B<innxbatch> will use them to
 authenticate.
 
-B<innxbatch> does not use itself any file locking.  At worst, a batch could be
+B<innxbatch> itself does not use any file locking.  At worst, a batch could be
 transmitted twice in parallel by two independent invocations of B<innxbatch>.
 To prevent this, it should be invoked by a script run out of cron(8) that uses
-shlock(1) to lock the host name, followed by a C<ctlinnd flush> command to
+shlock(8) to lock the host name, followed by a C<ctlinnd flush> command to
 flush the batch file.  B<sendxbatches> is such a wrapper around B<innxbatch>.
 It will ensure only one instance is run, flush I<sitename> (as used in the
 F<newsfeeds> entry) and send to I<host> the files given as arguments.
@@ -119,6 +119,6 @@ Karsten Leipold <poldi@dfn.de>.  Rewritten into POD by Julien Elie.
 =head1 SEE ALSO
 
 ctlinnd(8), incoming.conf(5), innxmit(8), newsfeeds(5), nntpsend(8),
-passwd.nntp(5), shlock(1).
+passwd.nntp(5), shlock(8).
 
 =cut

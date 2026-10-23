@@ -31,7 +31,7 @@
 #define FLUSH_ERROR(F) (fflush((F)) == EOF || ferror((F)))
 #define LPAREN         '(' /* For vi :-) */
 #define HEADER_DELTA   20
-#define GECOSTERM(c)   ((c) == ',' || (c) == ';' || (c) == ':' || (c) == LPAREN)
+#define GECOSTERM(c) ((c) == ',' || (c) == ';' || (c) == ':' || (c) == LPAREN)
 
 typedef enum _HEADERTYPE {
     HTobs,
@@ -306,9 +306,8 @@ AnAdministrator(void)
     if (getuid() == news_uid)
         return true;
 
-        /* See if we are in the right group and examine process
-         * supplementary groups, rather than the group(5) file entry.
-         */
+    /* See if we are in the right group and examine process
+     * supplementary groups, rather than the group(5) file entry. */
 #ifdef HAVE_GETGROUPS
     {
         int ngroups = getgroups(0, 0);

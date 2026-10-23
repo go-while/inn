@@ -12,7 +12,7 @@ MAN1	= ../man/convdate.1 ../man/fastrm.1 ../man/gencancel.1 \
 	../man/getlist.1 \
 	../man/grephistory.1 ../man/inews.1 ../man/innconfval.1 \
 	../man/innmail.1 ../man/nntpget.1 ../man/pullnews.1 ../man/rnews.1 \
-	../man/shlock.1 ../man/shrinkfile.1 ../man/simpleftp.1 ../man/sm.1
+	../man/shrinkfile.1 ../man/simpleftp.1
 
 MAN3	= ../man/libinn.3 ../man/libinn_clientlib.3 ../man/libinn_dbz.3 \
 	../man/libinn_inndcomm.3 \
@@ -22,7 +22,8 @@ MAN3	= ../man/libinn.3 ../man/libinn_clientlib.3 ../man/libinn_dbz.3 \
 
 MAN5	= ../man/active.5 ../man/active.times.5 ../man/buffindexed.conf.5 \
 	../man/control.ctl.5 ../man/cycbuff.conf.5 ../man/distrib.pats.5 \
-	../man/distributions.5 ../man/expire.ctl.5 ../man/history.5 \
+	../man/distributions.5 ../man/expire.ctl.5 \
+	../man/hissqlite.5 ../man/history.5 \
 	../man/incoming.conf.5 ../man/inn.conf.5 ../man/innfeed.conf.5 \
 	../man/innreport.conf.5 ../man/inn-secrets.conf.5 \
 	../man/innwatch.ctl.5 ../man/moderators.5 \
@@ -32,13 +33,17 @@ MAN5	= ../man/active.5 ../man/active.times.5 ../man/buffindexed.conf.5 \
 	../man/passwd.nntp.5 ../man/inn-radius.conf.5 ../man/readers.conf.5 \
 	../man/storage.conf.5 ../man/subscriptions.5
 
-MAN8	= ../man/actsync.8 ../man/archive.8 ../man/auth_krb5.8 \
+MAN8	= ../man/actmerge.8 ../man/actsync.8 ../man/archive.8 \
+	../man/auth_krb5.8 \
 	../man/batcher.8 ../man/buffchan.8 \
 	../man/ckpasswd.8 ../man/cnfsheadconf.8 ../man/cnfsstat.8 \
-	../man/controlchan.8 ../man/ctlinnd.8 ../man/cvtbatch.8 \
+	../man/controlbatch.8 ../man/controlchan.8 ../man/ctlinnd.8 \
+	../man/cvtbatch.8 \
 	../man/docheckgroups.8 \
 	../man/domain.8 ../man/expire.8 ../man/expireover.8 \
-	../man/expirerm.8 ../man/ident.8 \
+	../man/expirerm.8 \
+	../man/hissqlite-convert.8 ../man/hissqlite-util.8 \
+	../man/ident.8 \
 	../man/innbind.8 ../man/inncheck.8 ../man/innd.8 ../man/inndf.8 \
 	../man/innfeed.8 ../man/innreport.8 ../man/innstat.8 \
 	../man/innupgrade.8 \
@@ -51,7 +56,7 @@ MAN8	= ../man/actsync.8 ../man/archive.8 ../man/auth_krb5.8 \
 	../man/ovsqlite-util.8 \
 	../man/procbatch.8 ../man/prunehistory.8 ../man/radius.8 \
 	../man/rc.news.8 ../man/scanlogs.8 ../man/scanspool.8 \
-	../man/send-ihave.8 ../man/sendinpaths.8 \
+	../man/send-ihave.8 ../man/sendinpaths.8 ../man/shlock.8 ../man/sm.8 \
 	../man/tally.control.8 ../man/tdx-util.8 \
 	../man/tinyleaf.8 ../man/writelog.8
 
@@ -84,10 +89,8 @@ maintclean: distclean
 ../man/nntpget.1:	nntpget.pod		; $(POD2MAN) -s 1 $? > $@
 ../man/pullnews.1:	pullnews.pod		; $(POD2MAN) -s 1 $? > $@
 ../man/rnews.1:		rnews.pod		; $(POD2MAN) -s 1 $? > $@
-../man/shlock.1:	shlock.pod		; $(POD2MAN) -s 1 $? > $@
 ../man/shrinkfile.1:	shrinkfile.pod		; $(POD2MAN) -s 1 $? > $@
 ../man/simpleftp.1:	simpleftp.pod		; $(POD2MAN) -s 1 $? > $@
-../man/sm.1:		sm.pod			; $(POD2MAN) -s 1 $? > $@
 
 ../man/libinn.3:	libinn.pod		; $(POD2MAN) -s 3 $? > $@
 ../man/libinnauth.3:	libinnauth.pod		; $(POD2MAN) -s 3 $? > $@
@@ -109,6 +112,7 @@ maintclean: distclean
 ../man/distrib.pats.5:	distrib.pats.pod	; $(POD2MAN) -s 5 $? > $@
 ../man/distributions.5:	distributions.pod	; $(POD2MAN) -s 5 $? > $@
 ../man/expire.ctl.5:	expire.ctl.pod		; $(POD2MAN) -s 5 $? > $@
+../man/hissqlite.5:	hissqlite.pod		; $(POD2MAN) -s 5 $? > $@
 ../man/history.5:	history.pod		; $(POD2MAN) -s 5 $? > $@
 ../man/incoming.conf.5:	incoming.conf.pod	; $(POD2MAN) -s 5 $? > $@
 ../man/inn.conf.5:	inn.conf.pod		; $(POD2MAN) -s 5 $? > $@
@@ -131,6 +135,7 @@ maintclean: distclean
 ../man/storage.conf.5:	storage.conf.pod	; $(POD2MAN) -s 5 $? > $@
 ../man/subscriptions.5:	subscriptions.pod	; $(POD2MAN) -s 5 $? > $@
 
+../man/actmerge.8:	actmerge.pod		; $(POD2MAN) -s 8 $? > $@
 ../man/actsync.8:	actsync.pod		; $(POD2MAN) -s 8 $? > $@
 ../man/archive.8:	archive.pod		; $(POD2MAN) -s 8 $? > $@
 ../man/auth_krb5.8:	auth_krb5.pod		; $(POD2MAN) -s 8 $? > $@
@@ -139,6 +144,7 @@ maintclean: distclean
 ../man/ckpasswd.8:	ckpasswd.pod		; $(POD2MAN) -s 8 $? > $@
 ../man/cnfsheadconf.8:	cnfsheadconf.pod	; $(POD2MAN) -s 8 $? > $@
 ../man/cnfsstat.8:	cnfsstat.pod		; $(POD2MAN) -s 8 $? > $@
+../man/controlbatch.8:	controlbatch.pod	; $(POD2MAN) -s 8 $? > $@
 ../man/controlchan.8:	controlchan.pod		; $(POD2MAN) -s 8 $? > $@
 ../man/ctlinnd.8:	ctlinnd.pod		; $(POD2MAN) -s 8 $? > $@
 ../man/cvtbatch.8:	cvtbatch.pod		; $(POD2MAN) -s 8 $? > $@
@@ -147,6 +153,8 @@ maintclean: distclean
 ../man/expire.8:	expire.pod		; $(POD2MAN) -s 8 $? > $@
 ../man/expireover.8:	expireover.pod		; $(POD2MAN) -s 8 $? > $@
 ../man/expirerm.8:	expirerm.pod		; $(POD2MAN) -s 8 $? > $@
+../man/hissqlite-convert.8: hissqlite-convert.pod ; $(POD2MAN) -s 8 $? > $@
+../man/hissqlite-util.8: hissqlite-util.pod	; $(POD2MAN) -s 8 $? > $@
 ../man/ident.8:		ident.pod		; $(POD2MAN) -s 8 $? > $@
 ../man/innbind.8:	innbind.pod		; $(POD2MAN) -s 8 $? > $@
 ../man/inncheck.8:	inncheck.pod		; $(POD2MAN) -s 8 $? > $@
@@ -182,6 +190,8 @@ maintclean: distclean
 ../man/scanspool.8:	scanspool.pod		; $(POD2MAN) -s 8 $? > $@
 ../man/send-ihave.8:	send-ihave.pod		; $(POD2MAN) -s 8 $? > $@
 ../man/sendinpaths.8:	sendinpaths.pod		; $(POD2MAN) -s 8 $? > $@
+../man/shlock.8:	shlock.pod		; $(POD2MAN) -s 8 $? > $@
+../man/sm.8:		sm.pod			; $(POD2MAN) -s 8 $? > $@
 ../man/tally.control.8:	tally.control.pod	; $(POD2MAN) -s 8 $? > $@
 ../man/tdx-util.8:	tdx-util.pod		; $(POD2MAN) -s 8 $? > $@
 ../man/tinyleaf.8:	tinyleaf.pod		; $(POD2MAN) -s 8 $? > $@

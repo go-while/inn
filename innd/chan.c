@@ -286,7 +286,7 @@ CHANtracing(CHANNEL *cp, bool flag)
         notice("%s trace address %s lastactive %lu nextlog %lu", name, addr,
                (unsigned long) cp->LastActive, (unsigned long) cp->NextLog);
         if (FD_ISSET(cp->fd, &channels.sleep_set))
-            notice("%s trace sleeping %lu 0x%p", name,
+            notice("%s trace sleeping %lu %p", name,
                    (unsigned long) cp->Waketime, (void *) cp->Waker);
         if (FD_ISSET(cp->fd, &channels.read_set))
             notice("%s trace reading %lu %s", name,
@@ -319,22 +319,22 @@ CHANclose_nntp(CHANNEL *cp, const char *name)
     else {
         notice(
             "%s checkpoint seconds %lu accepted %lu refused %lu rejected %lu"
-            " duplicate %lu accepted size %.0f duplicate size %.0f"
-            " rejected size %.0f",
+            " duplicate %lu accepted size %llu duplicate size %llu"
+            " rejected size %llu",
             name, (unsigned long) (Now.tv_sec - cp->Started_checkpoint),
             cp->Received - cp->Received_checkpoint,
             cp->Refused - cp->Refused_checkpoint,
             cp->Rejected - cp->Rejected_checkpoint,
             cp->Duplicate - cp->Duplicate_checkpoint,
-            (double) (cp->Size - cp->Size_checkpoint),
-            (double) (cp->DuplicateSize - cp->DuplicateSize_checkpoint),
-            (double) (cp->RejectSize - cp->RejectSize_checkpoint));
+            cp->Size - cp->Size_checkpoint,
+            cp->DuplicateSize - cp->DuplicateSize_checkpoint,
+            cp->RejectSize - cp->RejectSize_checkpoint);
         notice("%s closed seconds %lu accepted %lu refused %lu rejected %lu"
-               " duplicate %lu accepted size %.0f duplicate size %.0f"
-               " rejected size %.0f",
+               " duplicate %lu accepted size %llu duplicate size %llu"
+               " rejected size %llu",
                name, (unsigned long) (Now.tv_sec - cp->Started), cp->Received,
-               cp->Refused, cp->Rejected, cp->Duplicate, (double) cp->Size,
-               (double) cp->DuplicateSize, (double) cp->RejectSize);
+               cp->Refused, cp->Rejected, cp->Duplicate, cp->Size,
+               cp->DuplicateSize, cp->RejectSize);
     }
     if (cp->Data.Newsgroups.Data != NULL) {
         free(cp->Data.Newsgroups.Data);
@@ -492,6 +492,7 @@ CHANname(CHANNEL *cp)
     int i;
     SITE *sp;
     const char *site;
+    const char *type;
     pid_t pid;
 
     switch (cp->Type) {
@@ -536,14 +537,18 @@ CHANname(CHANNEL *cp)
                     pid = sp->pid;
                 break;
             }
+        if (cp->Type == CTfile)
+            type = "file";
+        else if (cp->Type == CTexploder)
+            type = "exploder";
+        else
+            type = "proc";
         if (pid == 0)
             snprintf(cp->Name, sizeof(cp->Name), "%s:%d:%s",
-                     MaxLength(site, site), cp->fd,
-                     cp->Type == CTfile ? "file" : "proc");
+                     MaxLength(site, site), cp->fd, type);
         else
             snprintf(cp->Name, sizeof(cp->Name), "%s:%d:%s:%ld",
-                     MaxLength(site, site), cp->fd,
-                     cp->Type == CTfile ? "file" : "proc", (long) pid);
+                     MaxLength(site, site), cp->fd, type, (long) pid);
         break;
     }
     return cp->Name;
@@ -556,7 +561,7 @@ CHANname(CHANNEL *cp)
 CHANNEL *
 CHANfromdescriptor(int fd)
 {
-    if (fd < 0 || fd > channels.table_size)
+    if (fd < 0 || fd >= channels.table_size)
         return NULL;
     return &channels.table[fd];
 }
@@ -779,12 +784,12 @@ CHANresize(CHANNEL *cp, size_t size)
     bp->left += change;
     p = bp->data;
 
-    /* Reallocate the buffer and adjust offets if realloc moved the location
-       of the memory region.  Only adjust offets if we're in a state where we
+    /* Reallocate the buffer and adjust offsets if realloc moved the location
+       of the memory region.  Only adjust offsets if we're in a state where we
        care about the header contents.
 
        FIXME: This is invalid C, although it will work on most (all?)  common
-       systems.  The pointers need to be reduced to offets and then turned
+       systems.  The pointers need to be reduced to offsets and then turned
        back into relative pointers rather than adjusting the pointers
        directly, since as soon as realloc is called, pointers into the old
        space become invalid and may not be used further, even for arithmetic.

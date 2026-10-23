@@ -2,10 +2,10 @@ include ../../Makefile.global
 
 top	= ../..
 
-SEC1	= convdate.1 delayer.1 fastrm.1 gencancel.1 getlist.1 \
+SEC1	= convdate.1 fastrm.1 gencancel.1 getlist.1 \
 	grephistory.1 inews.1 \
 	innconfval.1 innmail.1 nntpget.1 pgpverify.1 pullnews.1 rnews.1 \
-	shlock.1 shrinkfile.1 simpleftp.1 sm.1
+	shrinkfile.1 simpleftp.1
 
 SEC3	= libinn.3 libinn_clientlib.3 libinn_dbz.3 libinn_inndcomm.3 \
 	libinn_list.3 libinn_qio.3 libinn_tst.3 libinn_uwildmat.3 \
@@ -16,25 +16,26 @@ SEC3PM	= INN__Config.3pm \
 
 SEC5	= active.5 active.times.5 buffindexed.conf.5 control.ctl.5 \
 	cycbuff.conf.5 distrib.pats.5 distributions.5 expire.ctl.5 \
-	history.5 incoming.conf.5 \
+	hissqlite.5 history.5 incoming.conf.5 \
 	inn.conf.5 innfeed.conf.5 innreport.conf.5 inn-secrets.conf.5 \
 	innwatch.ctl.5 moderators.5 motd.news.5 \
 	newsfeeds.5 newsgroups.5 newslog.5 nnrpd.track.5 nntpsend.ctl.5 ovdb.5 \
 	ovsqlite.5 passwd.nntp.5 inn-radius.conf.5 readers.conf.5 \
 	storage.conf.5 subscriptions.5
 
-SEC8	= actsync.8 archive.8 batcher.8 buffchan.8 ckpasswd.8 \
-	cnfsheadconf.8 cnfsstat.8 controlchan.8 ctlinnd.8 cvtbatch.8 \
-	docheckgroups.8 domain.8 expire.8 expireover.8 expirerm.8 \
-	ident.8 \
+SEC8	= actmerge.8 actsync.8 archive.8 batcher.8 buffchan.8 ckpasswd.8 \
+	cnfsheadconf.8 cnfsstat.8 controlbatch.8 controlchan.8 ctlinnd.8 \
+	cvtbatch.8 \
+	delayer.8 docheckgroups.8 domain.8 expire.8 expireover.8 expirerm.8 \
+	hissqlite-convert.8 hissqlite-util.8 ident.8 \
 	innbind.8 inncheck.8 innd.8 inndf.8 innfeed.8 innreport.8 innstat.8 \
 	innupgrade.8 innwatch.8 innxbatch.8 innxmit.8 mailpost.8 makedbz.8 \
 	makehistory.8 mod-active.8 news.daily.8 news2mail.8 ninpaths.8 \
 	nnrpd.8 nntpsend.8 ovdb_init.8 ovdb_monitor.8 ovdb_server.8 \
 	ovdb_stat.8 overchan.8 ovsqlite-server.8 ovsqlite-util.8 perl-nocem.8 \
 	procbatch.8 prunehistory.8 radius.8 rc.news.8 \
-	scanlogs.8 scanspool.8 send-ihave.8 send-uucp.8 sendinpaths.8 \
-	tally.control.8 tdx-util.8 tinyleaf.8 writelog.8
+	scanlogs.8 scanspool.8 send-ihave.8 send-uucp.8 sendinpaths.8 shlock.8 \
+	sm.8 tally.control.8 tdx-util.8 tinyleaf.8 writelog.8
 
 all:
 clobber clean distclean:
@@ -65,7 +66,8 @@ install-man5:
 	for M in $(SEC5) ; do \
 	    $(CP_MAN) $$M $D$(MAN5)/$$M ; \
 	done
-	rm -f $D$(MAN5)/motd.innd.5 $D$(MAN5)/motd.nnrpd.5
+	rm -f $D$(MAN5)/hisv6.5 $D$(MAN5)/motd.innd.5 $D$(MAN5)/motd.nnrpd.5
+	$(LN_S) history.5 $D$(MAN5)/hisv6.5
 	$(LN_S) motd.news.5 $D$(MAN5)/motd.innd.5
 	$(LN_S) motd.news.5 $D$(MAN5)/motd.nnrpd.5
 	rm -f $D$(MAN5)/localgroups.5 $D$(MAN5)/nocem.ctl.5

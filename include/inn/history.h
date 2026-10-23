@@ -1,10 +1,16 @@
 /*
-**  Interface to history API
+**  Interface to history API.
+**
+**  Written by Alex Kiernan in 2001.
+**
+**  Various bug fixes, code and documentation improvements since then
+**  in 2001, 2004, 2009, 2010, 2021, 2022, 2026.
 */
 
 #ifndef INN_HISTORY_H
-#define INN_HISTORY_H 1
+#define INN_HISTORY_H
 
+#include "inn/libinn.h"
 #include "inn/macros.h"
 #include "inn/portable-stdbool.h"
 #include <sys/types.h>
@@ -77,7 +83,24 @@ enum {
     /* (time_t) interval, in s, between stats of the history database
      * for * detecting a replacement, or 0 to disable (no checks);
      * defaults {hisv6, taggedhash} */
-    HISCTLS_STATINTERVAL
+    HISCTLS_STATINTERVAL,
+
+    /* (bool) does this backend expire IN PLACE (mutating the live database
+     * via a writer rather than rebuilding a new file and swapping it)?
+     * Backends that do not implement this selector leave the value untouched,
+     * so the caller must initialise it to false.  expire(8) uses this to
+     * decide whether to open the history read/write (in place) or read-only
+     * (rebuild-and-swap, the hisv6 model). */
+    HISCTLG_INPLACEEXPIRE,
+
+    /* (size_t) get a cheap, conservative overestimate of the number of
+     * entries in the history database, without scanning it, suitable for
+     * sizing data structures such as Bloom filters.  Each backend derives
+     * the estimate from its own on-disk layout.  Returns false (leaving the
+     * value untouched) if no estimate can be made; callers should fall back
+     * to their own default sizing.  expireover(8) uses this to size its
+     * Bloom filter before walking the history database. */
+    HISCTLG_ENTRYESTIMATE
 };
 
 struct history *HISopen(const char *, const char *, int);
@@ -96,7 +119,8 @@ bool HISexpire(struct history *, const char *, const char *, bool, void *,
                time_t,
                bool (*)(void *, time_t, time_t, time_t, struct token *));
 bool HISwalk(struct history *, const char *, void *,
-             bool (*)(void *, time_t, time_t, time_t, const struct token *));
+             bool (*)(void *, const HASH *, time_t, time_t, time_t,
+                      const struct token *));
 struct histstats HISstats(struct history *);
 const char *HISerror(struct history *);
 bool HISctl(struct history *, int, void *);

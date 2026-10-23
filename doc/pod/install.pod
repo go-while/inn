@@ -71,13 +71,13 @@ INN has been confirmed to build on recent versions of the following operating
 systems:
 
     AIX (including 7.2 and 7.3)
-    FreeBSD (including 12.1, 13.0 and 14.0)
-    Linux (including 3.16, 4.19, 5.10, 5.15, 6.1 and 6.8 kernels,
-           glibc 2.19, 2.28, 2.31, 2.36 and 2.38,
-           and musl 1.1.24, 1.2.2, 1.2.3 and 1.2.4)
-    macOS (including 11, 12, 13 and 14)
-    NetBSD (including 9.2)
-    OpenBSD (including 6.8, 7.2 and 7.5)
+    FreeBSD (including 12.1, 13.0, 14.0, 15.0 and 16.0)
+    Linux (including 3.16, 4.19, 5.10, 5.15, 6.1, 6.12 and 7.0 kernels,
+           glibc 2.19, 2.28, 2.31, 2.36, 2.41 and 2.42,
+           and musl 1.1.24, 1.2.2, 1.2.3, 1.2.4, 1.2.5 and 1.2.6)
+    macOS (including 11, 12, 13, 14, 15 and 26)
+    NetBSD (including 9.2 and 10.1)
+    OpenBSD (including 6.8, 7.8 and 7.9)
     Oracle Solaris (including 10 1/13, 11.3 and 11.4)
 
 Current versions of INN may also work on other operating systems like
@@ -159,7 +159,7 @@ the C<gnupg1> package.
 
 =item *
 
-If you want to use either the Python embedded hooks, you'll need to have a
+If you want to use the Python embedded hooks, you'll need to have a
 suitable version of B<Python> installed.  See F<doc/hook-python> for more
 information.
 
@@ -179,16 +179,16 @@ of configure options enabling optional features and the software and
 versions you'll need:
 
     --with-bdb          Berkeley DB 4.4 or higher, 4.7+ recommended
-    --with-blacklist    blacklistd from FreeBSD 11 or higher base system
+    --with-blocklist    blocklistd from FreeBSD 11, NetBSD 7 or higher versions
     --with-canlock      libcanlock 3.3.0 or higher
     --with-krb5         MIT Kerberos v5 1.6.1 or higher
-    --with-openssl      OpenSSL 0.9.6 or higher, 3.0.0+ recommended
-                        LibreSSL 2.1.0 or higher, 3.2.0+ recommended
+    --with-openssl      OpenSSL 1.1.1 or higher, 3.0.0+ recommended
+                        LibreSSL 2.8.0 or higher, 3.5.0+ recommended
     --with-perl         Perl 5.004_03 or higher, 5.8.0+ recommended
     --with-python       Python 2.3.0 or higher, 2.5.0+ recommended
                         Python 3.3.0 or higher
     --with-sasl         Cyrus SASL 2.1.0 or higher
-    --with-sqlite3      SQLite 3.8.2 or higher, 3.20.0+ recommended
+    --with-sqlite3      SQLite 3.24.0 or higher
     --with-zlib         zlib 1.x or higher
 
 If any of these libraries (other than Perl or Python) are built shared and
@@ -314,11 +314,15 @@ B<--with-tmp-dir> below).
 
 Sets the prefix for INN database files.  The default is F<PREFIX/db>,
 where PREFIX is F</usr/local/news> unless overridden with the option above.
-The F<history> and F<active> files will be stored in this directory, and
-writes to those files are an appreciable percentage of INN's disk activity.
-The F<history> file can also be quite large (requiring up to S<2 GB> or more
-during nightly B<expire>), so this is a common portion of INN to move to a
-different file system.
+The history database and the F<active> file will be stored in this directory,
+and writes to those files are an appreciable percentage of INN's disk
+activity.  The history database can also be quite large (requiring up to
+S<2 GB> or more), and is rewritten to a new one during nightly B<expire> for
+the C<hisv6> history storage method, so this is a common portion of INN to
+move to a different file system.  To move only the history database, without
+the other database files, see the I<pathhistory> parameter in inn.conf(5).
+You can also set a dedicated path for the history database with the
+B<--with-history-dir> option given to C<configure>.
 
 =item B<--with-spool-dir>=PATH
 
@@ -359,23 +363,24 @@ define a 32-bit I<off_t> type.
 This is not enabled by default (unless of course I<off_t> is already 64-bit
 long), even on platforms that support it, because it changes the format
 of INN's on-disk databases (making it difficult to upgrade an earlier INN
-installation) and can significantly increase the size of some of the history
-database files.  Large file support is not necessary unless your F<history>
-database is so large that it exceeds S<2 GB> or you want to use CNFS buffers
-larger than S<2 GB> on 32-bit platforms.
+installation) and can significantly increase the size of some of the C<hisv6>
+history database files.  Large file support is not necessary unless you use
+the C<hisv6> history storage method and your C<hisv6> history database is so
+large that it exceeds S<2 GB> or you want to use CNFS buffers larger than S<2
+GB> on 32-bit platforms.
 
-The history, tradindexed and buffindexed overview, and timecaf databases
-written by an INN built with this option are incompatible with those
+The C<hisv6> history, tradindexed and buffindexed overview, and timecaf
+databases written by an INN built with this option are incompatible with those
 written by an INN without this option.  (CNFS buffers are compatible.)
 
 =item B<--enable-tagged-hash>
 
-Use tagged hash table for the F<history> database.  The tagged hash format
-uses much less memory but is somewhat slower.  This option is recommended
-if you have less than S<256 MB> of RAM on your news server.  If you install
-INN without tagged hash (the default) and B<expire> takes an excessive amount
-of time, you should make sure the RAM in your system satisfies the
-following formula:
+Use tagged hash table for the C<hisv6> history database.  The tagged
+hash format uses much less memory but is somewhat slower.  This option is
+recommended if you have less than S<256 MB> of RAM on your news server.
+If you install INN without tagged hash (the default) and B<expire> takes
+an excessive amount of time, you should make sure the RAM in your system
+satisfies the following formula:
 
     ram > 10 * tablesize
 
@@ -383,7 +388,7 @@ following formula:
     tablesize: 3rd field on the 1st line of history.dir (bytes)
 
 If you don't have at least that much RAM, try rebuilding INN with tagged
-hash enabled.
+hash enabled or switch to the C<hissqlite> history storage method.
 
 NOTE: B<--enable-largefiles> cannot be used with B<--enable-tagged-hash>.
 
@@ -472,14 +477,14 @@ explicitly passed to C<configure>.
 
 =item B<--with-sqlite3>=PATH
 
-Enables support for SQLite (3.8.2 or higher), which means that it
-will then be possible to use the ovsqlite overview method if you wish.
-Enabling this configure option doesn't mean you'll be required to use
-ovsqlite, but it does require that SQLite be installed on your system
-(including the header files, not just the runtime libraries).  If a
-path is given, it sets the installed directory of SQLite.  In case
-non-standard paths to the SQLite library are used, one or both of the
-options B<--with-sqlite3-include> and B<--with-sqlite3-lib> can be given
+Enables support for SQLite (3.24.0 or higher), which means that it
+will then be possible to use the ovsqlite overview method or the hissqlite
+history method if you wish.  Enabling this configure option doesn't mean
+you'll be required to use either method, but it does require that SQLite be
+installed on your system (including the header files, not just the runtime
+libraries).  If a path is given, it sets the installed directory of SQLite.
+In case non-standard paths to the SQLite library are used, one or both of
+the options B<--with-sqlite3-include> and B<--with-sqlite3-lib> can be given
 to C<configure> with a path.
 
 If the SQLite library is found at configure time, INN will be built
@@ -542,18 +547,19 @@ If the libcanlock library is found at configure time, INN will be built with
 Cancel-Lock support unless the B<--without-canlock> flag is explicitly passed
 to C<configure>.
 
-=item B<--with-blacklist>=PATH
+=item B<--with-blocklist>=PATH
 
-Enables B<nnrpd> integration with FreeBSD's or NetBSD's blacklistd(8)
-for blocking of brute force attacks.  blacklistd and its client library
-libblacklist have been available in the FreeBSD base system since S<FreeBSD
+Enables B<nnrpd> integration with FreeBSD's or NetBSD's blocklistd(8)
+for blocking of brute force attacks.  blocklistd and its client library
+libblocklist have been available in the FreeBSD base system since S<FreeBSD
 11> and should be automatically detected if PATH is not given.  They have also
-been in the NetBSD base system since S<NetBSD 7>.
+been in the NetBSD base system since S<NetBSD 7>.  Formerly known as blacklist
+back then, blocklist is the new name in S<FreeBSD 15> and S<NetBSD 10>.
 
 For this feature to have any effect, B<nnrpd> needs to be started with the
-B<-B> flag, and blacklistd needs to be configured and running.  See the
+B<-B> flag, and blocklistd needs to be configured and running.  See the
 B<nnrpd> documentation for a short configuration snippet and/or read the
-blacklistd(8) documentation.
+blocklistd(8) documentation.
 
 =back
 
@@ -684,12 +690,12 @@ stored on your server, makes writing programs that fiddle with the news spool
 very easy, gives you fine control over article retention times, and comes with
 the B<scanspool> support utility to perform sanity checks.
 
-Disadvantages: Takes a very fast file system and I/O system to keep up
-with current Usenet traffic volumes due to file system overhead.  Groups
-with heavy traffic tend to create a bottleneck because of inefficiencies
-in storing large numbers of article files in a single directory.  Requires
-a nightly B<expire> program to delete old articles out of the news spool, a
-process that can slow down the server for several hours or more.
+Disadvantages: Needs a faster file system and I/O system than the cnfs
+and timecaf storage methods due to file system overhead.  Groups with heavy
+traffic tend to create a bottleneck because of inefficiencies in storing large
+numbers of article files in a single directory.  It consumes more inodes and
+requires a nightly B<expire> program to delete old articles out of the news
+spool.
 
 =item timehash
 
@@ -697,13 +703,15 @@ Articles are stored as individual files as in tradspool, but are divided
 into directories based on the arrival time to ensure that no single
 directory contains so many files as to cause a bottleneck.
 
-Advantages: Heavy traffic groups do not cause bottlenecks, and fine
+Advantages: Heavy traffic groups do not cause bottlenecks, and a fine
 control of article retention time is still possible.
 
-Disadvantages: The ability to easily find all articles in a given
-newsgroup and manually fiddle with the article spool is lost, and INN
-still suffers from speed degradation due to file system overhead (creating
-and deleting individual files is a slow operation).
+Disadvantages: The ability to easily find all articles in a given newsgroup
+and manually fiddle with the article spool is lost, and INN still suffers
+from speed degradation due to file system overhead (creating and deleting
+individual files is a slow operation) and from a higher inode usage.  It also
+requires a nightly B<expire> program to delete old articles out of the news
+spool.
 
 =item timecaf
 
@@ -713,7 +721,7 @@ same file.
 
 A given CAF file contains all the articles received during a time frame of
 4 minutes or so (256 seconds), and is limited to 262,144 articles and about
-3,5 GB.  It is enough for normal operations.  The only caveat is when you're
+3.5 GB.  It is enough for normal operations.  The only caveat is when you're
 feeding at high speed bunches of articles between two servers; you'll then
 want to limit it to that amount of articles during the time frame when a CAF
 file stores newly arrived articles.
@@ -722,11 +730,13 @@ Advantages: Roughly four times faster than timehash for article writes,
 since much of the file system overhead is bypassed, while still retaining
 the same fine control over article retention time.
 
-Disadvantages: Even worse than timehash, and similar to CNFS (below),
-using this method means giving up all but the most careful manually
-fiddling with your article spool.  As one of the newer and least widely
-used storage types, timecaf has not been as thoroughly tested as the other
-methods.
+Disadvantages: Even worse than timehash, and similar to CNFS (below), using
+this method means giving up all but the most careful manually fiddling with
+your article spool.  As one of the newer and least widely used storage types,
+timecaf has not been as thoroughly tested as the other methods.  It requires
+running a nightly B<expire> program to delete old articles by either
+compacting CAF files if they still contain available articles, or removing
+them.
 
 =item cnfs
 
@@ -935,7 +945,7 @@ address will be used.
 =item hiscachesize
 
 The amount of memory (in kilobytes) to allocate for a cache of recently
-used F<history> file entries.  Setting this to C<0> disables history caching.
+used history file entries.  Setting this to C<0> disables history caching.
 History caching can greatly increase the number of articles per second
 that your server is capable of processing.  A value of C<256> is a good
 default choice.
@@ -1088,7 +1098,7 @@ This entry will cause B<innd> to write out a file in I<pathspool>/outgoing
 named F<remote.example.com> and containing the Message-ID and storage
 token of each message to send to that site.  (The storage token is INN's
 internal pointer to where an article is stored; to retrieve an article
-given its storage token, use sm(1)).  B<innxmit> knows how to read files
+given its storage token, use sm(8)).  B<innxmit> knows how to read files
 of this format and send those articles to the remote site.  For
 information on setting it up to run periodically, see L<Setting Up the
 Cron Jobs> below.  You will also need to set up a config file for
@@ -1413,10 +1423,10 @@ Only one entry is required for all storage classes; it looks like:
     /remember/:11
 
 This entry says how long to keep the message-IDs for articles that have
-already expired in the history file so that the server doesn't accept them
+already expired in the history database so that the server doesn't accept them
 again.  Occasionally, fairly old articles will get regurgitated somewhere
 and offered to you again, so even after you've expired articles from your
-spool, you want to keep them around in your history file for a little
+spool, you want to keep them around in your history database for a little
 while to ensure you don't get duplicates.
 
 INN will reject any articles more than a certain number of days old (the
@@ -1548,10 +1558,11 @@ At this point, you need to set up the news database directory
 (in I<pathdb>).  This directory will hold the active(5) file (the list of
 newsgroups you carry), the active.times(5) file (the creator and creation
 time of newsgroups created since the server was initialized), the
-newsgroups(5) file (descriptions for all the newsgroups you carry), and
-the history(5) file (a record of every article the server currently has or
-has seen in the past few days, used to decide whether to accept or refuse
-new incoming messages).
+newsgroups(5) file (descriptions for all the newsgroups you carry), and,
+unless the I<pathhistory> parameter puts it elsewhere, the history
+database (a record of every article the server currently has or has seen
+in the past few days, used to decide whether to accept or refuse new
+incoming messages).
 
 Before starting to work on this, make sure you're logged on as the news
 user, since all of these files need to be owned by that user.  This is a
@@ -1582,17 +1593,21 @@ standalone.  If you don't want these groups to be visible to clients,
 do I<not> delete them; simply hide them in F<readers.conf>.  C<to> must also
 exist as a newsgroup if you have I<mergetogroups> set in F<inn.conf>.
 
-Next, you need to create an empty F<history> database.  To do this, type:
+Next, you need to create an empty history database.  See I<hismethod> in
+F<inn.conf>, and then set appropriately the history storage method you wish
+to use.
 
-    cd <pathdb in inn.conf>
+To create an empty C<hisv6> history database, type:
+
+    cd <pathhistory in inn.conf>
     touch history
     makedbz -i -o
 
-B<makedbz> will then create a database optimized for handling about 6,000,000
-articles (or 500,000 if the slower tagged hash format is used).  If you
-expect to inject more articles than that, use the B<-s> flag to specify the
-number of entries to size the initial F<history> file for.  To pre-size it for
-100,000,000 articles, type:
+B<makedbz> will then create a database optimized for handling about
+6,666,666 articles (or 500,000 if the slower tagged hash format is used).  If
+you expect to inject more articles than that, use the B<-s> flag to specify the
+number of entries to size the initial C<hisv6> F<history> file for.  To
+pre-size it for 100,000,000 articles, type:
 
     makedbz -i -o -s 100000000
 
@@ -1600,9 +1615,14 @@ This initial size does not limit the number of articles the news server will
 accept.  It will just get slower when that size is exceeded, until the next
 run of B<news.daily> which will appropriately resize it.
 
+If I<hismethod> is set to C<hissqlite> in F<inn.conf>, run B<makehistory>
+(with no arguments) instead: on an empty spool, it simply creates an empty
+F<history.sqlite> database in I<pathhistory>.  Do not create the file by hand
+with C<touch>, and no pre-sizing is needed; the database grows by itself.
+
 (Note that if you install INN with C<make install>, you do not need to
 run these commands: the installation takes care of creating the
-F<history> database.)
+history database for the configured I<hismethod>.)
 
 When it finishes, make sure the file permissions are correct on all
 the files you've just created:

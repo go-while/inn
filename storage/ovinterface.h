@@ -1,9 +1,16 @@
 /*
-**  Overview interface header
+**  Overview interface header.
+**
+**  Written by Katsuhiro Kondou in 1999.
+**
+**  Various bug fixes, code and documentation improvements since then
+**  in 1999-2006, 2010, 2011, 2017, 2020, 2021, 2026.
 */
 
 #ifndef OVINTERFACE_H
-#define OVINTERFACE_H 1
+#define OVINTERFACE_H
+
+#include <stdio.h>
 
 #include "config.h"
 #include "inn/history.h"
@@ -35,12 +42,25 @@ typedef struct overview_method {
 
 bool OVgroupbasedexpire(TOKEN token, const char *group, const char *data,
                         int len, time_t arrived, time_t expires);
+struct bloom_filter;
 bool OVhisthasmsgid(struct history *, const char *data);
 void OVEXPremove(TOKEN token, bool deletedgroups, char **xref, int ngroups);
 void OVEXPcleanup(void);
 
+extern struct bloom_filter *OVtokencache;
 extern time_t OVnow;
 extern FILE *EXPunlinkfile;
+
+/* Tombstone log: when set, OVEXPremove appends the textual form of each
+ * successfully cancelled token to this stream.  A subsequent expire run
+ * consumes the log to drop history entries for those articles without
+ * doing per-article SMretrieve(RETR_STAT) calls.  Set by expireover (and
+ * by fastrm when called via expirerm in delayrm mode).  Internal --
+ * managed via direct extern access by expireover/fastrm, not via OVctl,
+ * because the file lifecycle (atomic .NEW -> final rename on success)
+ * does not fit the per-call OVctl pattern. */
+extern FILE *OVtombstonefile;
+
 extern bool OVignoreselfexpire;
 extern bool OVusepost;
 extern bool OVkeep;

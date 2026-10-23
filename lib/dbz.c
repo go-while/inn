@@ -19,7 +19,7 @@
 **    now <david.robinson@sun.com> (January, 1993).
 **
 **  Major reworking by Clayton O'Neill (coneill@oneill.net).  Removed all the
-**  C News and backwards compatible cruft.  Ripped out all the tagmask stuff
+**  C News and backward compatible cruft.  Ripped out all the tagmask stuff
 **  and replaced it with hashed .pag entries.  This removes the need for base
 **  file access.  Primary bottleneck now appears to be the hash algorithm and
 **  search().  You can change DBZ_INTERNAL_HASH_SIZE in dbz.h to increase the
@@ -64,6 +64,9 @@
 **  1998) for dbz-3.3.2.
 **
 **  Limited can't tag warnings once per dbzinit() by Sang-yong Suh (May, 1998)
+**
+**  Various bug fixes, code and documentation improvements since then
+**  in 1999-2011, 2014-2016, 2018, 2021, 2022, 2024.
 */
 
 #include "portable/system.h"
@@ -1557,7 +1560,7 @@ set(searcher *sp, hash_table *tab, void *value)
         memcpy(where, value, tab->reclen);
         debug("set: incore");
         if (tab->incore == INCORE_MMAP) {
-            if (innconf->nfswriter) {
+            if (innconf != NULL && innconf->nfswriter) {
                 inn_msync_page(where, tab->reclen, MS_ASYNC);
             }
             return true;

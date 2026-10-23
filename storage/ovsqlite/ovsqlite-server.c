@@ -3,6 +3,9 @@
 **
 **  Original implementation written by Bo Lindbergh (2020-12-17).
 **  <2bfjdsla52kztwejndzdstsxl9athp@gmail.com>
+**
+**  Various bug fixes, code and documentation improvements since then
+**  in 2021-2024, 2026.
 */
 
 #include "config.h"
@@ -41,7 +44,9 @@
 #    include "sql-init.h"
 #    include "sql-main.h"
 
-#    define OVSQLITE_DB_FILE "ovsqlite.db"
+#    define OVSQLITE_DB_FILE           "ovsqlite.db"
+#    define OVSQLITE_BUSY_TIMEOUT_MS   999999999
+#    define CHECKPOINT_BUSY_TIMEOUT_MS 10000
 
 #    ifdef HAVE_ZLIB
 
@@ -114,14 +119,18 @@ static sqlite3 *connection;
 static sql_main_t sql_main;
 
 static bool use_compression;
+static bool use_wal = true;
 static unsigned long pagesize;
 static unsigned long cachesize;
+static unsigned long mmapsize;
 static struct timeval transaction_time_limit = {10, 0};
 static unsigned long transaction_row_limit = 10000;
+static unsigned long wal_checkpoint_threshold = 1000;
 
 static bool in_transaction;
 static unsigned int transaction_rowcount;
 static struct timeval next_commit;
+static int wal_pages;
 
 
 static void
@@ -280,32 +289,11 @@ make_inet_listener(void)
 {
     char *path;
     struct sockaddr_in sa;
-    int status;
-    void const *cookie;
     int ret;
     socklen_t salen;
     int fd;
 
-    sqlite3_bind_int(sql_main.random, 1, OVSQLITE_COOKIE_LENGTH);
-    status = sqlite3_step(sql_main.random);
-    if (status != SQLITE_ROW) {
-        die("SQLite error while generating random cookie: %s",
-            sqlite3_errmsg(connection));
-    }
-    cookie = sqlite3_column_blob(sql_main.random, 0);
-    if (!cookie) {
-        status = sqlite3_errcode(connection);
-        if (status != SQLITE_OK) {
-            die("SQLite error while generating random cookie: %s",
-                sqlite3_errmsg(connection));
-        } else {
-            die("unexpected NULL result while generating random cookie");
-        }
-    }
-    if (sqlite3_column_bytes(sql_main.random, 0) != OVSQLITE_COOKIE_LENGTH)
-        die("unexpected result size while generating random cookie");
-    memcpy(port.cookie, cookie, OVSQLITE_COOKIE_LENGTH);
-    resetclear(sql_main.random);
+    sqlite3_randomness(sizeof port.cookie, port.cookie);
 
     listensock = socket(AF_INET, SOCK_STREAM, 0);
     if (listensock == -1)
@@ -381,8 +369,10 @@ load_config(void)
     free(path);
     if (top) {
         config_param_boolean(top, "compress", &use_compression);
+        config_param_boolean(top, "walmode", &use_wal);
         config_param_unsigned_number(top, "pagesize", &pagesize);
         config_param_unsigned_number(top, "cachesize", &cachesize);
+        config_param_unsigned_number(top, "mmapsize", &mmapsize);
         if (config_param_real(top, "transtimelimit", &timelimit)) {
             transaction_time_limit.tv_sec = (long) timelimit;
             transaction_time_limit.tv_usec =
@@ -393,6 +383,8 @@ load_config(void)
         }
         config_param_unsigned_number(top, "transrowlimit",
                                      &transaction_row_limit);
+        config_param_unsigned_number(top, "walcheckpointthreshold",
+                                     &wal_checkpoint_threshold);
 
         config_free(top);
     }
@@ -534,6 +526,42 @@ make_dict(char const *groupname, int groupname_len, uint64_t artnum)
 
 #    endif /* HAVE_ZLIB */
 
+static int
+wal_hook(void *data UNUSED, sqlite3 *db UNUSED, const char *dbname UNUSED,
+         int pages)
+{
+    wal_pages = pages;
+    return SQLITE_OK;
+}
+
+static void
+checkpoint_wal(void)
+{
+    int rc;
+
+    /* Force a TRUNCATE checkpoint: wait for readers to finish, then write
+     * all WAL content back to the database file and reset the WAL.  This
+     * is no worse than the non-WAL path where every commit takes an
+     * exclusive lock.  Use a short busy_timeout so the server doesn't
+     * stall indefinitely, the normal timeout is ~31 years for writer
+     * locks. */
+    sqlite3_busy_timeout(connection, CHECKPOINT_BUSY_TIMEOUT_MS);
+    rc = sqlite3_wal_checkpoint_v2(connection, NULL,
+                                   SQLITE_CHECKPOINT_TRUNCATE, NULL, NULL);
+    sqlite3_busy_timeout(connection, OVSQLITE_BUSY_TIMEOUT_MS);
+    if (rc == SQLITE_OK) {
+        wal_pages = 0;
+    } else if (rc == SQLITE_BUSY) {
+        notice("WAL checkpoint: readers did not finish within timeout"
+               " (%d pages)",
+               wal_pages);
+    } else {
+        warn("WAL checkpoint failed: %s (%d pages)",
+             connection ? sqlite3_errmsg(connection) : sqlite3_errstr(rc),
+             wal_pages);
+    }
+}
+
 static void
 open_db(void)
 {
@@ -544,6 +572,9 @@ open_db(void)
     bool init;
     char sqltext[64];
 
+    status = sqlite3_initialize();
+    if (status != SQLITE_OK)
+        die("SQLite3 initialization failed");
     path = concatpath(innconf->pathoverview, OVSQLITE_DB_FILE);
     init = stat(path, &sb) == -1;
     if (init) {
@@ -553,7 +584,9 @@ open_db(void)
             sqlite3_open_v2(path, &connection,
                             SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE, NULL);
         if (status != SQLITE_OK)
-            die("cannot create database: %s", sqlite3_errstr(status));
+            die("cannot create database: %s", connection
+                                                  ? sqlite3_errmsg(connection)
+                                                  : sqlite3_errstr(status));
         sqlite3_extended_result_codes(connection, 1);
         status =
             sqlite_helper_init(&sql_init_helper, (sqlite3_stmt **) &sql_init,
@@ -582,8 +615,23 @@ open_db(void)
         status =
             sqlite3_open_v2(path, &connection, SQLITE_OPEN_READWRITE, NULL);
         if (status != SQLITE_OK)
-            die("cannot open database: %s", sqlite3_errstr(status));
+            die("cannot open database: %s", connection
+                                                ? sqlite3_errmsg(connection)
+                                                : sqlite3_errstr(status));
         sqlite3_extended_result_codes(connection, 1);
+
+        /*
+         * SQLite quirk: if opening the file in read/write mode fails,
+         * it silently retries in read-only mode.
+         *
+         * Detect this now because the first write attempt will happen
+         * at some unknowable future time.
+         *
+         * (The init branch above doesn't need this check
+         * because table creation would fail immediately.)
+         */
+        if (sqlite3_db_readonly(connection, "main"))
+            die("cannot get write access to the database");
     }
     status =
         sqlite_helper_init(&sql_main_helper, (sqlite3_stmt **) &sql_main,
@@ -650,16 +698,71 @@ open_db(void)
             sqlite3_free(errmsg);
         }
     }
+    if (mmapsize) {
+        snprintf(sqltext, sizeof sqltext, "pragma mmap_size = %lu;", mmapsize);
+        status = sqlite3_exec(connection, sqltext, 0, NULL, &errmsg);
+        if (status != SQLITE_OK) {
+            warn("cannot set mmap size: %s", errmsg);
+            sqlite3_free(errmsg);
+        }
+    }
+    if (use_wal) {
+        status = sqlite3_exec(connection,
+                              "pragma journal_mode = 'WAL';"
+                              "pragma synchronous = 'NORMAL';",
+                              0, NULL, &errmsg);
+        if (status != SQLITE_OK) {
+            warn("cannot enable WAL mode: %s", errmsg);
+            sqlite3_free(errmsg);
+        }
+        sqlite3_wal_hook(connection, wal_hook, NULL);
+    } else {
+        status = sqlite3_exec(connection, "pragma journal_mode = 'PERSIST';",
+                              0, NULL, &errmsg);
+        if (status != SQLITE_OK) {
+            warn("cannot set PERSIST journal mode: %s", errmsg);
+            sqlite3_free(errmsg);
+        }
+    }
 }
 
 static void
 close_db(void)
 {
-    sqlite3_step(sql_main.delete_journal);
-    sqlite3_reset(sql_main.delete_journal);
+    if (use_wal) {
+        int wal_frames, checkpointed;
+        int rc;
+
+        /* Use PASSIVE checkpoint first — it never blocks and is safe even
+         * when direct reader processes (nnrpd) still have the database open.
+         * Avoid TRUNCATE directly here as it would hang waiting for all
+         * readers to disconnect (busy_timeout is ~31 years). */
+        rc = sqlite3_wal_checkpoint_v2(connection, NULL,
+                                       SQLITE_CHECKPOINT_PASSIVE, &wal_frames,
+                                       &checkpointed);
+        if (rc == SQLITE_OK && wal_frames == checkpointed) {
+            /* All frames checkpointed (no readers holding pins).
+             * Safe to truncate the WAL file for a clean shutdown. */
+            sqlite3_wal_checkpoint_v2(connection, NULL,
+                                      SQLITE_CHECKPOINT_TRUNCATE, NULL, NULL);
+        } else if (rc == SQLITE_OK && wal_frames > checkpointed) {
+            notice("WAL checkpoint: %d/%d frames checkpointed"
+                   " (readers still connected)",
+                   checkpointed, wal_frames);
+        }
+    } else {
+        int status;
+
+        status = sqlite3_step(sql_main.delete_journal);
+        if (status != SQLITE_DONE)
+            notice("failed to delete the rollback journal: %s",
+                   sqlite3_errmsg(connection));
+        sqlite3_reset(sql_main.delete_journal);
+    }
     sqlite_helper_term(&sql_main_helper, (sqlite3_stmt **) &sql_main);
     sqlite3_close_v2(connection);
     connection = NULL;
+    sqlite3_shutdown();
 #    ifdef HAVE_ZLIB
     if (use_compression) {
         inflateEnd(&inflation);
@@ -730,12 +833,16 @@ static void
 begin_transaction(void)
 {
     struct timeval now;
+    int status;
 
     if (in_transaction)
         return;
     gettimeofday(&now, NULL);
     next_commit = timeval_sum(now, transaction_time_limit);
-    sqlite3_step(sql_main.begin);
+    status = sqlite3_step(sql_main.begin);
+    if (status != SQLITE_DONE)
+        die("failed to start database transaction: %s",
+            sqlite3_errmsg(connection));
     sqlite3_reset(sql_main.begin);
     in_transaction = true;
 }
@@ -743,9 +850,14 @@ begin_transaction(void)
 static void
 commit_transaction(void)
 {
+    int status;
+
     if (!in_transaction)
         return;
-    sqlite3_step(sql_main.commit);
+    status = sqlite3_step(sql_main.commit);
+    if (status != SQLITE_DONE)
+        die("failed to commit database transaction: %s",
+            sqlite3_errmsg(connection));
     sqlite3_reset(sql_main.commit);
     transaction_rowcount = 0;
     in_transaction = false;
@@ -754,21 +866,36 @@ commit_transaction(void)
 static void
 savepoint(void)
 {
-    sqlite3_step(sql_main.savepoint);
+    int status;
+
+    status = sqlite3_step(sql_main.savepoint);
+    if (status != SQLITE_DONE)
+        die("failed to create database savepoint: %s",
+            sqlite3_errmsg(connection));
     sqlite3_reset(sql_main.savepoint);
 }
 
 static void
 release_savepoint(void)
 {
-    sqlite3_step(sql_main.release_savepoint);
+    int status;
+
+    status = sqlite3_step(sql_main.release_savepoint);
+    if (status != SQLITE_DONE)
+        die("failed to release database savepoint: %s",
+            sqlite3_errmsg(connection));
     sqlite3_reset(sql_main.release_savepoint);
 }
 
 static void
 rollback_savepoint(void)
 {
-    sqlite3_step(sql_main.rollback_savepoint);
+    int status;
+
+    status = sqlite3_step(sql_main.rollback_savepoint);
+    if (status != SQLITE_DONE)
+        die("failed to rollback database savepoint: %s",
+            sqlite3_errmsg(connection));
     sqlite3_reset(sql_main.rollback_savepoint);
 }
 
@@ -814,12 +941,14 @@ sql_error_response(client_t *client, int status)
 
 #    define fail_stmt() goto failure_stmt
 
-#    define failure_response                     \
-        failure : simple_response(client, code); \
+#    define failure_response           \
+    failure:                           \
+        simple_response(client, code); \
         break
 
-#    define failure_stmt_response                          \
-        failure_stmt : sql_error_response(client, status); \
+#    define failure_stmt_response           \
+    failure_stmt:                           \
+        sql_error_response(client, status); \
         break
 
 #    define failhandling      \
@@ -1778,8 +1907,12 @@ do_expire_group(client_t *client)
     resetclear(stmt);
     stmt = NULL;
 
-    sqlite3_step(sql_main.clear_expireart);
-    sqlite3_reset(sql_main.clear_expireart);
+    stmt = sql_main.clear_expireart;
+    status = sqlite3_step(stmt);
+    if (status != SQLITE_DONE)
+        fail_stmt();
+    sqlite3_reset(stmt);
+    stmt = NULL;
 
     if (changes > 0) {
         if ((uint64_t) changes > oldcount)
@@ -1890,8 +2023,12 @@ do_finish_expire(client_t *client)
     resetclear(stmt);
     stmt = NULL;
 
-    sqlite3_step(sql_main.clear_expireart);
-    sqlite3_reset(sql_main.clear_expireart);
+    stmt = sql_main.clear_expireart;
+    status = sqlite3_step(stmt);
+    if (status != SQLITE_DONE)
+        fail_stmt();
+    sqlite3_reset(stmt);
+    stmt = NULL;
 
     transaction_rowcount += changes;
     release_savepoint();
@@ -2085,6 +2222,9 @@ mainloop(void)
             }
             nap = &delta;
         } else {
+            /* Idle: no active transaction.  Checkpoint WAL if needed. */
+            if (use_wal && wal_pages >= (int) wal_checkpoint_threshold)
+                checkpoint_wal();
             nap = NULL;
         }
         read_fds_out = read_fds;
@@ -2139,10 +2279,12 @@ main(int argc, char **argv)
         }
     }
     if (debug) {
+        message_handlers_notice(1, message_log_stderr);
         message_handlers_warn(1, message_log_stderr);
         message_handlers_die(1, message_log_stderr);
     } else {
         openlog("ovsqlite-server", L_OPENLOG_FLAGS | LOG_PID, LOG_INN_PROG);
+        message_handlers_notice(1, message_log_syslog_notice);
         message_handlers_warn(1, message_log_syslog_err);
         message_handlers_die(1, message_log_syslog_err);
     }

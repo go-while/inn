@@ -1,8 +1,10 @@
 ##########################################################################
 # INN module for innreport.
 #
-# (c) 1997-2001 by Fabien Tassin <fta@sofaraway.org>.
-# Enhanced by several contributors since then.
+# Copyright (c) 1997-2001 by Fabien Tassin <fta@sofaraway.org>.
+#
+# Various bug fixes, code and documentation improvements since then
+# in 2002-2011, 2013-2015, 2017, 2018, 2020-2026.
 #
 # See innreport documentation for more information.
 ##########################################################################
@@ -96,6 +98,7 @@ our %batcher_articles;
 our %batcher_bytes;
 our %batcher_elapsed;
 our %batcher_offered;
+our %cleanfeed_ng_events;
 our %cnfsstat;
 our %cnfsstat_cycles;
 our %cnfsstat_rate;
@@ -293,6 +296,12 @@ our $nocem_lastid;
 our %nocem_newids;
 our %nocem_skipids;
 our %nocem_totalids;
+our %postfilter_ng_results;
+our %postfilter_ng_rules;
+our %postfilter_ng_time_count;
+our %postfilter_ng_time_max;
+our %postfilter_ng_time_min;
+our %postfilter_ng_time_total;
 our %rnews_bogus_date;
 our %rnews_bogus_dist;
 our %rnews_bogus_ng;
@@ -304,6 +313,9 @@ our $rnews_no_colon_space;
 our %rnews_rejected;
 our $rnews_too_old;
 our %rnews_unapproved;
+
+my @unique_hash_keys_unused
+  = ("paused", "? (can't getpeername)");    # perltidy -wuk
 
 # init innd timer
 foreach (values %timer_names) {
@@ -331,6 +343,32 @@ foreach (values %nnrpd_timer_names) {
     $nnrpd_time_num{$_} = 0;     # ...
 }
 $nnrpd_time_times = 0;           # ...
+
+# _postfilter_ng_fields: Extract key="value" fields from a structured
+# Postfilter-NG log entry.  Its Logger.pm escapes backslashes and double
+# quotes; reverse those escapes here before using the values as report keys.
+sub _postfilter_ng_fields($) {
+    my ($text) = @_;
+    my %fields;
+
+    while ($text =~ /(?:^|\s)([A-Za-z][A-Za-z0-9_]*)="((?:\\.|[^"\\])*)"/g) {
+        my ($key, $value) = ($1, $2);
+        $value =~ s/\\(["\\])/$1/g;
+        $fields{$key} = $value;
+    }
+
+    return \%fields;
+}
+
+# _postfilter_ng_field: Return a usable display value even if a malformed or
+# older structured entry omits one of the expected fields.
+sub _postfilter_ng_field($$) {
+    my ($fields, $name) = @_;
+
+    return '(missing)'
+      if !defined $fields->{$name} || $fields->{$name} eq '';
+    return $fields->{$name};
+}
 
 # collect: Used to collect the data.
 sub collect($$$$$$) {
@@ -683,11 +721,6 @@ sub collect($$$$$$) {
             $innd_control{"flush"}++;
             return 1;
         }
-        # flush-file
-        if ($left =~ /flush_file/) {
-            $innd_control{"flush_file"}++;
-            return 1;
-        }
         # too many connections from site
         if ($left =~ /too many connections from (\S+)/o) {
             $innd_max_conn{$1}++;
@@ -835,7 +868,7 @@ sub collect($$$$$$) {
         }
         # paused
         if ($left =~ m/(\S+) paused /o) {
-            $innd_control{"paused"}++;
+            # Already counted by "ctlinnd command m:reason"
             return 1;
         }
         # throttled
@@ -938,11 +971,27 @@ sub collect($$$$$$) {
           if $left =~ /CNFS(?:-sm)?: metacycbuff \S+ cycbuff is moved to /o;
         # From XBATCH
         return 1 if $left =~ /\S+:\d+ accepted batch size \d+/o;
-        # Cleanfeed status reports
+        # cleanfeed-ng structured audit/rejection events.
+        if ($left
+            =~ /^filter: cleanfeed_event action=(\S+) rule=(\S+)(?:\s|$)/o)
+        {
+            $cleanfeed_ng_events{"$1\t$2"}++;
+            return 1;
+        }
+        # Routine Cleanfeed and cleanfeed-ng housekeeping messages.  These are
+        # expected operational notices, not errors, and therefore need not be
+        # repeated in the daily "Unknown entries" section.
         return 1 if $left =~ /^filter: status/o;
         return 1 if $left =~ /^filter: Reloading bad files/o;
+        return 1 if $left =~ /^filter: Reloading external cleanfeed lists/o;
         return 1 if $left =~ /^filter: Saved EMP database/o;
         return 1 if $left =~ /^filter: Restored EMP database/o;
+        return 1 if $left =~ /^filter: metrics articles=/o;
+        return 1 if $left =~ /^filter: cleanfeed-ng runtime version=/o;
+        return 1 if $left =~ /^filter: Meow unto the greatness of Fluffy/o;
+        # About phn_aggressive=1 or dontrejectfiltered=true but the news admin
+        # may actually want such a configuration.
+        return 1 if $left =~ /^filter: WARNING /o;
         # PyClean status reports
         return 1 if $left =~ /^python: pyclean successfully hooked into INN/o;
         # Using the stathist parameter
@@ -1210,7 +1259,8 @@ sub collect($$$$$$) {
     ## innxmit
     if ($prog eq "innxmit") {
         # 437 Duplicate article
-        if ($left
+        if (
+            $left
             =~ /(\S+) rejected [^\s]+ \(.*?\) (?:437|439) Duplicate article$/o
         ) {
             my $server = $1;
@@ -1233,7 +1283,8 @@ sub collect($$$$$$) {
             return 1;
         }
         # 437 Too old -- ...
-        if ($left
+        if (
+            $left
             =~ /(\S+) rejected [^\s]+ \(.*\) (?:437|439) Too old -- \".*?\"$/o
         ) {
             my $server = $1;
@@ -1323,20 +1374,17 @@ sub collect($$$$$$) {
             $innxmit_ihfail{$server} = 1;
             if ($left =~ /436 \S+ NNTP \S+ out of space/o) {
                 $innxmit_nospace{$server}++;
-                return 1;
-            }
-            if ($left =~ /400 \S+ space/o) {
+            } elsif ($left =~ /400 \S+ space/o) {
                 $innxmit_nospace{$server}++;
-                return 1;
-            }
-            if ($left =~ /400 Bad file/o) {
+            } elsif ($left =~ /400 Bad file/o) {
                 $innxmit_crefused{$server}++;
-                return 1;
-            }
-            if ($left =~ /480 Transfer permission denied/o) {
+            } elsif ($left =~ /480 Transfer permission denied/o) {
                 $innxmit_crefused{$server}++;
-                return 1;
+            } elsif ($left =~ /400 loadav/o) {
+                # xxx ihave failed 400 loadav [innwatch:hiload] yyy gt zz
+                $innxmit_hiload{$server}++;
             }
+            return 1;
         }
         # stats (new format)
         if (
@@ -1439,15 +1487,6 @@ sub collect($$$$$$) {
             $innxmit_site{$server}++;
             return 1;
         }
-        # xxx ihave failed 400 loadav [innwatch:hiload] yyy gt zzz
-        if ($left =~ /^(\S+) ihave failed 400 loadav/o) {
-            my $server = $1;
-            $server = lc $server unless $CASE_SENSITIVE;
-            $innxmit_hiload{$server}++;
-            return 1;
-        }
-        # ihave failed
-        return 1 if ($left =~ /\S+ ihave failed/o);
         # requeued (...) 436 No space
         return 1 if ($left =~ /\S+ requeued \S+ 436 No space/o);
         # requeued (...) 400 No space
@@ -1657,6 +1696,81 @@ sub collect($$$$$$) {
         return 1 if $left =~ /\S+ cant opendir \S+ I\/O error$/o;
         # perl filtering enabled
         return 1 if $left =~ /perl filtering enabled$/o;
+        # Postfilter-NG emits structured key="value" entries through nnrpd.
+        # article_result is a level-1 event and therefore provides one final
+        # outcome per logged article.  Detailed rule matches are available at
+        # higher verbosity and are summarized separately when present.
+        if (
+            $left =~ /^filter:\ postfilter-ng\s+(
+                        article_result|
+                        rule_matched|
+                        badword_rule_matched
+                      )(?:\s|$)/ox
+        ) {
+            my $event = $1;
+            my $fields = &_postfilter_ng_fields($left);
+
+            if ($event eq 'article_result') {
+                my $result = &_postfilter_ng_field($fields, 'result');
+                my $action = &_postfilter_ng_field($fields, 'action');
+                my $audit
+                  = &_postfilter_ng_field($fields, 'audit') == 1
+                  ? "yes"
+                  : "no";
+                my $reason = &_postfilter_ng_field($fields, 'reason_text');
+
+                $postfilter_ng_results{"$result\t$action\t$audit\t$reason"}++;
+
+                if (defined $fields->{elapsed_ms}
+                    && $fields->{elapsed_ms} =~ /^\d+(?:\.\d+)?$/o)
+                {
+                    my $elapsed = 0 + $fields->{elapsed_ms};
+                    $postfilter_ng_time_count{$result}++;
+                    $postfilter_ng_time_total{$result} += $elapsed;
+                    $postfilter_ng_time_min{$result} = $elapsed
+                      if !defined $postfilter_ng_time_min{$result}
+                      || $elapsed < $postfilter_ng_time_min{$result};
+                    $postfilter_ng_time_max{$result} = $elapsed
+                      if !defined $postfilter_ng_time_max{$result}
+                      || $elapsed > $postfilter_ng_time_max{$result};
+                }
+            } else {
+                my $action;
+                if ($event eq 'badword_rule_matched') {
+                    my $score = &_postfilter_ng_field($fields, 'score');
+                    $action = "score=$score";
+                } else {
+                    $action = &_postfilter_ng_field($fields, 'action');
+                }
+
+                my $rule = &_postfilter_ng_field($fields, 'rule_id');
+                my $target = &_postfilter_ng_field($fields, 'target');
+                $postfilter_ng_rules{"$event\t$action\t$rule\t$target"}++;
+            }
+
+            return 1;
+        }
+        # Routine Postfilter-NG lifecycle and high-verbosity diagnostic
+        # messages.  Warnings and errors are deliberately not swallowed so
+        # that innreport continues to surface operational failures.
+        return 1
+          if $left =~ /^filter:\ postfilter-ng\s+(?:
+                         article_identity|
+                         check_completed|
+                         check_skipped|
+                         configuration_generations_pruned|
+                         configuration_loaded|
+                         configuration_reloaded|
+                         custom_filter_loaded|
+                         dns_reputation_query|
+                         header_added|
+                         header_deleted|
+                         header_mime_encoded|
+                         header_pseudonymized|
+                         header_replaced|
+                         phase_completed|
+                         trusted_profile_applied
+                       )(?:\s|$)/ox;
         # Python filtering enabled
         return 1 if $left =~ /Python filtering enabled$/o;
         return 1 if $left =~ /^python interpreter initialized OK$/o;
@@ -1703,8 +1817,10 @@ sub collect($$$$$$) {
           =~ /^python: dynamic authorization access type is not known: /o;
         # during daily expiration
         return 1 if $left =~ /^\S+ rejected Expiring process \d+$/o;
-        # during ovsqlite-util
+        # during ovsqlite-util / hissqlite-util
         return 1 if $left =~ /^\S+ rejected ovsqlite-util fixes$/o;
+        return 1 if $left =~ /^\S+ rejected ovsqlite-util vacuum$/o;
+        return 1 if $left =~ /^\S+ rejected hissqlite-util vacuum$/o;
         # during scanlogs
         return 1 if $left =~ /^\S+ rejected Flushing log and syslog files$/o;
         return 1 if $left =~ /^\S+ rejected Snapshot log and syslog files$/o;
@@ -1714,6 +1830,9 @@ sub collect($$$$$$) {
         return 1 if $left =~ /^\S+ auth also-log: /o;
         return 1 if $left =~ /^\S+ res also-log: /o;
         return 1 if $left =~ /^\S+ rejected by rule /o;
+        # for ovsqlite WAL mode
+        return 1
+          if $left =~ /^ovsqlite: direct reader not available, using server$/o;
         # connect
         if ($left =~ /(\S+) (\([0-9a-fA-F:.]*\) )?connect(?: - port \d+)?$/o) {
             my $cust = $1;
@@ -1837,7 +1956,8 @@ sub collect($$$$$$) {
             return 1;
         }
         # times
-        if ($left
+        if (
+            $left
             =~ /(\S+) times user (.+) system (\S+) idle (\S+) elapsed (\S+)$/o
         ) {
             my ($cust, $user, $system, $idle, $elapsed) = ($1, $2, $3, $4, $5);
@@ -1955,11 +2075,30 @@ sub collect($$$$$$) {
             $nnrpd_time_times += $1;
             my $timers = $2;
 
+            # Specifically treat the idle timer as it is not properly computed
+            # in TLS sessions.  Assume that it corresponds to the time when
+            # other timers are not in action.
+            $nnrpd_time_time{idle} += $1;
+            my $idle_time = $1;
+
             while ($timers =~ /(\S+) (\d+)\((\d+)\)\s*/g) {
                 my $name = $nnrpd_timer_names{$1} || $1;
-                $nnrpd_time_time{$name} += $2;
+                if ($name ne "idle") {
+                    $idle_time -= $2;
+                    $nnrpd_time_time{idle} -= $2;
+                }
+            }
+
+            while ($timers =~ /(\S+) (\d+)\((\d+)\)\s*/g) {
+                my $name = $nnrpd_timer_names{$1} || $1;
+                my $timer = $2;
+                if ($name eq "idle") {
+                    $timer = $idle_time;
+                } else {
+                    $nnrpd_time_time{$name} += $timer;
+                }
                 if ($3) {
-                    my $average = $2 / $3;
+                    my $average = $timer / $3;
                     $nnrpd_time_num{$name} += $3;
                     my $min = $nnrpd_time_min{$name};
                     $nnrpd_time_min{$name} = $average
@@ -1996,6 +2135,12 @@ sub collect($$$$$$) {
           if $left =~ /^starttls:\ \S+\ with\ cipher\ \S+
                        \ \(\d+\/\d+\ bits\)\ no\ authentication
                        $/ox;
+    }
+
+    ########
+    ## ovsqlite-server
+    if ($prog eq "ovsqlite-server") {
+        return 1 if $left =~ /^WAL checkpoint: /o;
     }
 
     ########
@@ -2100,7 +2245,8 @@ sub collect($$$$$$) {
             return 1;
         }
         # rejected 437 No colon-space ...
-        if ($left
+        if (
+            $left
             =~ /rejected (?:437|439) No colon-space in \"(.*)\" header field$/o
         ) {
             $rnews_no_colon_space++;

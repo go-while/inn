@@ -24,6 +24,12 @@ dnl instead of the compile if what you're checking for is missing, don't
 dnl bother checking for it.  Compile-time errors often produce a lot more
 dnl useful information for someone debugging a problem than configure-time
 dnl errors.
+dnl
+dnl Originally written by Forrest J. Cavalier III <mibsoft@epix.net> in 1998.
+dnl Rewritten for Autoconf 2.57 by Russ Allbery in 2003.
+dnl
+dnl Various bug fixes, code and documentation improvements since its creation
+dnl in 1998-2018, 2020-2026.
 
 AC_INIT([INN], [2.8.0], [inn-workers@lists.isc.org],
     [inn], [https://www.isc.org/othersoftware/])
@@ -33,8 +39,11 @@ AC_CONFIG_AUX_DIR([support])
 dnl Mention dependencies at the beginning of the configure output so that
 dnl people do not waste too much time finding the right packages to install.
 AC_MSG_NOTICE([Building INN requires the following dependencies to be met,
-besides a working compiler, a POSIX shell and GNU make, as well as Autoconf
-if you're bootstrapping the source code.
+besides a working compiler, a POSIX-compliant shell and GNU make, as well as
+Autoconf if you're bootstrapping the source code.
+POSIX-compliant tools like tail, head or sed are required by some checks
+during configure.  Please ensure they are present in the default PATH (for
+instance on Solaris, /usr/xpg4/bin or /opt/csw/bin should be added to PATH).
 ---
 *******************************************
 ** Debian and RedHat-based distributions **
@@ -102,6 +111,7 @@ Optional FreeBSD packages:
 - db18 (--with-bdb --with-bdb-lib=/usr/local/lib/db18
         --with-bdb-include=/usr/local/include/db18, the "18" indicates version
         and can be replaced with another version, for ovdb overview)
+- libcanlock (--with-canlock)
 - krb5 (--with-krb5)
 - python3 (--with-python)
 - cyrus-sasl (--with-sasl)
@@ -119,10 +129,6 @@ Runtime optionals (see Linux equivalents above for descriptions):
 - p5-Encode, p5-MIME-Tools
 - p5-DBD-SQLite
 ---
-Unavailable packages (but may now be?):
-- libcanlock (libcanlock is not yet available in the ports tree and needs
-              manual compilation)
----
 Happy building!])
 
 dnl Ignore Automake conditionals (called in a few m4 macros) as INN does not
@@ -132,10 +138,11 @@ m4_define_default([AM_CONDITIONAL], [:])
 dnl Lots of our macros are stored in separate files for ease of maintenance.
 m4_include([m4/aux-libs.m4])
 m4_include([m4/bdb.m4])
-m4_include([m4/blacklist.m4])
+m4_include([m4/blocklist.m4])
 m4_include([m4/canlock.m4])
 m4_include([m4/cc-c-o.m4])
 m4_include([m4/cc-flags.m4])
+m4_include([m4/clang.m4])
 m4_include([m4/compress.m4])
 m4_include([m4/inet-ntoa.m4])
 m4_include([m4/iov-max.m4])
@@ -241,12 +248,12 @@ DO_DBZ_TAGGED_HASH=DONT
 inn_enable_tagged_hash=no
 AC_ARG_ENABLE([tagged-hash],
     [AS_HELP_STRING([--enable-tagged-hash],
-        [Use tagged hash table for history])],
+        [Use tagged hash table for hisv6 history])],
     [if test "x$enableval" = xyes ; then
         DO_DBZ_TAGGED_HASH=DO
         inn_enable_tagged_hash=yes
         AC_DEFINE([DO_TAGGED_HASH], [1],
-            [Define to use tagged hash for the history file.])
+            [Define to use tagged hash for the hisv6 history file.])
     fi])
 AC_SUBST([DO_DBZ_TAGGED_HASH])
 
@@ -370,7 +377,6 @@ AS_IF([`AS_ECHO(["=head1 test"]) | pod2text --guesswork=none > /dev/null 2>&1`],
 AC_SUBST(POD2TEXT_OPTION)
 
 dnl Checks for programs.
-AC_PROG_GCC_TRADITIONAL
 AC_PROG_LEX([noyywrap])
 AC_PROG_LN_S
 AC_PROG_MAKE_SET
@@ -544,7 +550,7 @@ fi
 dnl Handle optional libraries and probing for their locations and component
 dnl libraries if needed.
 INN_LIB_BDB_OPTIONAL
-INN_LIB_BLACKLIST_OPTIONAL
+INN_LIB_BLOCKLIST_OPTIONAL
 INN_LIB_CANLOCK_OPTIONAL
 INN_LIB_KRB5_OPTIONAL
 INN_LIB_OPENSSL_OPTIONAL
@@ -592,7 +598,7 @@ dnl Special checks for header files.
 AC_HEADER_STDBOOL
 
 dnl Generic checks for header files.
-AC_CHECK_HEADERS([crypt.h inttypes.h limits.h \
+AC_CHECK_HEADERS([crypt.h inttypes.h \
                   stdint.h strings.h sys/bitypes.h sys/filio.h sys/loadavg.h \
                   sys/select.h sys/time.h sys/uio.h syslog.h unistd.h])
 
@@ -790,17 +796,26 @@ dnl
 dnl For Clang, try -Weverything but disable some of the warnings:
 dnl
 dnl   -Wcast-qual                     Some structs require casting away const.
+dnl   -Wclass-varargs                 Not an actual problem.
 dnl   -Wcovered-switch-default        Does not do harm to have default cases.
+dnl   -Wc++-keyword                   Intended for C++, not applicable to C.
+dnl   -Wdefault-const-init-var        Intended for C++, not applicable to C.
 dnl   -Wdisabled-macro-expansion      Not an actual problem.
+dnl   -Wexcess-padding                Not an actual problem.
 dnl   -Wextra-semi-stmt               Useful for readability.
+dnl   -Wimplicit-void-ptr-cast        Intended for C++, not applicable to C.
+dnl   -Wnrvo                          Fine in C.
 dnl   -Wpacked                        Not an actual problem.
 dnl   -Wpadded                        Not an actual problem.
 dnl   -Wpoison-system-directories     Not an actual problem (e.g. Xcode).
 dnl   -Wreserved-id-macro             Autoconf sets several of these normally.
 dnl   -Wreserved-identifier           False positives with FD_ZERO.
 dnl   -Wsign-conversion               Too many fiddly changes for the benefit.
+dnl   -Wstack-protector-purecap-ignored Not an actual problem (CHERI hardware).
+dnl   -Wswitch-default                False positives with switches on enums.
 dnl   -Wswitch-enum                   Useless noise.
 dnl   -Wtautological-pointer-compare  False positives with for loops.
+dnl   -Wtentative-definition-compat   Intended for C++, not applicable to C.
 dnl   -Wundef                         Conflicts with Autoconf probe results.
 dnl   -Wunreachable-code              Happens with optional compilation.
 dnl   -Wunreachable-code-return       Other compilers get confused.
@@ -814,11 +829,6 @@ dnl -Wstack-protector (for gcc, but many false positives from small buffers)
 dnl -Wimplicit-int-conversion, -Wshorten-64-to-32 (for Clang)
 dnl -fstrict-overflow (for Clang, but -fwrapv used by embedded Perl causes an
 dnl error of "argument unused during compilation" in clang-11)
-dnl
-dnl First, we add -Wunknown-warning-option to CFLAGS so that Clang properly
-dnl reports probes for unknown flags as errors.
-INN_PROG_CC_FLAG([-Werror=unknown-warning-option],
-                 [CFLAGS="$CFLAGS -Werror=unknown-warning-option"], [])
 m4_foreach_w(
     [flag],
     [-fstrict-aliasing -fstrict-flex-arrays=3
@@ -839,17 +849,28 @@ m4_foreach_w(
      -Wmissing-prototypes -Wmissing-declarations
      -Wnormalized=nfc -Wredundant-decls -Wrestrict -Wnested-externs -Winline
      -Winvalid-pch -Wvla -Wuse-after-free=3 -Wno-unused-function
-     -Weverything -Wno-cast-qual -Wno-covered-switch-default
-     -Wno-disabled-macro-expansion -Wno-extra-semi-stmt
-     -Wno-implicit-int-conversion -Wno-packed -Wno-padded
+     -Weverything -Wno-cast-qual -Wno-class-varargs -Wno-covered-switch-default
+     -Wno-c++-keyword -Wno-default-const-init-var
+     -Wno-disabled-macro-expansion -Wno-excess-padding -Wno-extra-semi-stmt
+     -Wno-implicit-int-conversion -Wno-implicit-void-ptr-cast
+     -Wno-packed -Wno-padded
      -Wno-poison-system-directories
      -Wno-reserved-id-macro -Wno-reserved-identifier -Wno-shorten-64-to-32
-     -Wno-sign-conversion -Wno-switch-enum -Wno-tautological-pointer-compare
+     -Wno-sign-conversion -Wno-stack-protector-purecap-ignored
+     -Wno-switch-default -Wno-switch-enum
+     -Wno-tautological-pointer-compare -Wno-tentative-definition-compat
      -Wno-undef -Wno-unreachable-code -Wno-unreachable-code-return
      -Wno-unsafe-buffer-usage
      -Wno-unused-macros -Wno-used-but-marked-unused],
     [INN_PROG_CC_FLAG(flag, [CC_WARNINGS="${CC_WARNINGS} flag"], [])])
 AC_SUBST([CC_WARNINGS])
+
+dnl The -Wno-nrvo option is recognized by GCC but then produces a warning that
+dnl it is valid for C++/ObjC++ but not for C.  Let's check for it only with
+dnl Clang.
+AS_IF([test x"$CLANG" = xyes],
+    [INN_PROG_CC_FLAG(-Wno-nrvo,
+        [CC_WARNINGS="${CC_WARNINGS} -Wno-nrvo"], [])])
 
 dnl On OpenBSD, the system headers contain many redundant declarations.
 AS_CASE([$host],
@@ -882,9 +903,6 @@ AS_IF([test x"$inn_enable_hardening_flags" = xyes],
                       [LDFLAGS="${LDFLAGS} -Wl,-z,relro"], [])
      INN_PROG_LD_FLAG([-Wl,-z,now],
                       [LDFLAGS="${LDFLAGS} -Wl,-z,now"], [])])
-
-dnl Now that compiler flags have been checked, remove -Werror from CFLAGS.
-CFLAGS=`AS_ECHO(["${CFLAGS}"]) | sed 's/ -Werror=unknown-warning-option//'`
 
 dnl Clean up our LIBS, just for grins.
 LIBS=`AS_ECHO(["$LIBS"]) | sed 's/^  *//' | sed 's/   */ /g' | sed 's/  *$//'`

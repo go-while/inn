@@ -1,18 +1,22 @@
 /*
 **  Overview buffer and index method.
+**
+**  Originally written in 1999.
+**  Various bug fixes, code and documentation improvements since then
+**  in 1999-2010, 2013-2017, 2019-2026.
 */
 
 /*
-** Buffindexed using shared memory on ovbuff by Sang-yong Suh
+**  Buffindexed using shared memory on ovbuff by Sang-yong Suh.
 **
-** During the recent discussions in inn-workers, Alex Kiernan found
-** that inn_lock_range() is not working for MMAPed file.  This explains
-** why buffindexed has long outstanding bugs such as "could not MMAP...".
+**  During the discussions in inn-workers in 2003, Alex Kiernan found
+**  that inn_lock_range() is not working for MMAPed file.  This explains
+**  why buffindexed has long outstanding bugs such as "could not MMAP...".
 **
-** This version corrects the file locking error by using shared memory.
-** The bitfield of each buffer file is loaded into memory, and is shared
-** by all programs such as innd, expireover, makehistory, and overchan.
-** The locking problem is handled by semaphore.
+**  This version corrects the file locking error by using shared memory.
+**  The bitfield of each buffer file is loaded into memory, and is shared
+**  by all programs such as innd, expireover, makehistory, and overchan.
+**  The locking problem is handled by semaphore.
 */
 
 #include "portable/system.h"
@@ -22,9 +26,7 @@
 #include <ctype.h>
 #include <errno.h>
 #include <fcntl.h>
-#if HAVE_LIMITS_H
-#    include <limits.h>
-#endif
+#include <limits.h>
 #include <sys/stat.h>
 #include <time.h>
 
@@ -263,6 +265,7 @@ static int GROUPfd;
 static GROUPHEADER *GROUPheader = NULL;
 static GROUPENTRY *GROUPentries = NULL;
 static int GROUPcount = 0;
+static size_t GROUPmapsize = 0;
 static GROUPLOC GROUPemptyloc = {-1};
 #define NULLINDEX (-1)
 static OV ovnull = {0, NULLINDEX};
@@ -278,12 +281,14 @@ static OVSEARCH *Cachesearch;
 static int ovbuffmode;
 
 static GROUPLOC GROUPnewnode(void);
-static bool GROUPremapifneeded(GROUPLOC loc);
+static int GROUPmappingprot(int mode);
+static bool GROUPremapifneeded(GROUPLOC loc, bool hash_locked);
 static void GROUPLOCclear(GROUPLOC *loc);
 static bool GROUPLOCempty(GROUPLOC loc);
 static bool GROUPlockhash(enum inn_locktype type);
 static bool GROUPlock(GROUPLOC gloc, enum inn_locktype type);
-static off_t GROUPfilesize(int count);
+static bool GROUPentrycount(off_t size, int *count);
+static bool GROUPfilesize(int count, off_t *size);
 static bool GROUPexpand(int mode);
 static void *ovopensearch(const char *group, ARTNUM low, ARTNUM high,
                           bool needov);
@@ -728,6 +733,13 @@ ovbuffinit_disks(void)
             strncpy(buf, dpx.totala, OVBUFFLASIZ);
             buf[OVBUFFLASIZ] = '\0';
             ovbuff->totalblk = hex2offt(buf);
+            if (ovbuff->base > ovbuff->len
+                || (off_t) ovbuff->totalblk
+                       != (ovbuff->len - ovbuff->base) / OV_BLOCKSIZE) {
+                warn("buffindexed: invalid block count for %s", ovbuff->path);
+                ovlock(ovbuff, INN_LOCK_UNLOCK);
+                return false;
+            }
 
             if (rpx->version == 0) {
                 /* no binary data available. use character data */
@@ -744,6 +756,12 @@ ovbuffinit_disks(void)
                  */
                 ovbuff->usedblk = rpx->usedblk;
                 ovbuff->freeblk = rpx->freeblk;
+            }
+            if (ovbuff->usedblk > ovbuff->totalblk
+                || ovbuff->freeblk > ovbuff->totalblk) {
+                warn("buffindexed: invalid block usage for %s", ovbuff->path);
+                ovlock(ovbuff, INN_LOCK_UNLOCK);
+                return false;
             }
             Needunlink = false;
         } else {
@@ -863,6 +881,25 @@ getovbuff(OV ov)
             return ovbuff;
     }
     return NULL;
+}
+
+static bool
+ovblockvalid(const OVBUFF *ovbuff, unsigned int blocknum)
+{
+    off_t blocks;
+
+    if (ovbuff->base > ovbuff->len)
+        return false;
+    blocks = (ovbuff->len - ovbuff->base) / OV_BLOCKSIZE;
+    return blocknum < (unsigned long) blocks;
+}
+
+static bool
+ovindexspanvalid(const OVINDEX *index)
+{
+    return index->offset >= 0 && index->len >= 0
+           && index->offset <= OV_BLOCKSIZE
+           && index->len <= OV_BLOCKSIZE - index->offset;
 }
 
 #ifdef OV_DEBUG
@@ -1051,7 +1088,9 @@ buffindexed_open(int mode)
 {
     char *groupfn;
     struct stat sb;
-    int i, flag = 0;
+    off_t groupsize;
+    enum inn_locktype locktype;
+    int i, flag;
     static int uninitialized = 1;
     ULONG on, off;
 
@@ -1107,28 +1146,47 @@ buffindexed_open(int mode)
         return false;
     }
 
+    locktype = (mode & OV_WRITE) ? INN_LOCK_WRITE : INN_LOCK_READ;
+    if (!GROUPlockhash(locktype)) {
+        syswarn("buffindexed: Could not lock %s", groupfn);
+        free(groupfn);
+        close(GROUPfd);
+        return false;
+    }
+
     if (fstat(GROUPfd, &sb) < 0) {
         syswarn("buffindexed: Could not fstat %s", groupfn);
+        GROUPlockhash(INN_LOCK_UNLOCK);
+        free(groupfn);
+        close(GROUPfd);
+        return false;
+    }
+    if (sb.st_size < 0) {
+        errno = EOVERFLOW;
+        syswarn("buffindexed: invalid size for %s", groupfn);
+        GROUPlockhash(INN_LOCK_UNLOCK);
         free(groupfn);
         close(GROUPfd);
         return false;
     }
     if (sb.st_size > (off_t) sizeof(GROUPHEADER)) {
-        if (mode & OV_READ)
-            flag |= PROT_READ;
-        if (mode & OV_WRITE) {
-            /*
-             * Note: below mapping of groupheader won't work unless we have
-             * both PROT_READ and PROT_WRITE perms.
-             */
-            flag |= PROT_WRITE | PROT_READ;
+        flag = GROUPmappingprot(mode);
+        if (!GROUPentrycount(sb.st_size, &GROUPcount)
+            || !GROUPfilesize(GROUPcount, &groupsize)) {
+            syswarn("buffindexed: invalid size for %s", groupfn);
+            GROUPlockhash(INN_LOCK_UNLOCK);
+            free(groupfn);
+            close(GROUPfd);
+            return false;
         }
-        GROUPcount = (sb.st_size - sizeof(GROUPHEADER)) / sizeof(GROUPENTRY);
-        GROUPheader =
-            mmap(0, GROUPfilesize(GROUPcount), flag, MAP_SHARED, GROUPfd, 0);
+        GROUPmapsize = (size_t) groupsize;
+        GROUPheader = mmap(0, GROUPmapsize, flag, MAP_SHARED, GROUPfd, 0);
         if (GROUPheader == MAP_FAILED) {
             syswarn("buffindexed: Could not mmap %s in buffindexed_open",
                     groupfn);
+            GROUPheader = NULL;
+            GROUPmapsize = 0;
+            GROUPlockhash(INN_LOCK_UNLOCK);
             free(groupfn);
             close(GROUPfd);
             return false;
@@ -1136,12 +1194,15 @@ buffindexed_open(int mode)
         GROUPentries = (void *) &GROUPheader[1];
     } else {
         GROUPcount = 0;
+        GROUPmapsize = 0;
         if (!GROUPexpand(mode)) {
+            GROUPlockhash(INN_LOCK_UNLOCK);
             free(groupfn);
             close(GROUPfd);
             return false;
         }
     }
+    GROUPlockhash(INN_LOCK_UNLOCK);
     fdflag_close_exec(GROUPfd, true);
 
     free(groupfn);
@@ -1151,19 +1212,49 @@ buffindexed_open(int mode)
 }
 
 static GROUPLOC
-GROUPfind(const char *group, bool Ignoredeleted)
+GROUPfind(const char *group, bool Ignoredeleted, bool *failed)
 {
     HASH grouphash;
     unsigned int i;
+    int steps = 0;
     GROUPLOC loc;
 
     grouphash = Hash(group, strlen(group));
     memcpy(&i, &grouphash, sizeof(i));
+    if (failed != NULL)
+        *failed = false;
+    if (GROUPheader == NULL || GROUPentries == NULL) {
+        if (failed != NULL)
+            *failed = true;
+        return GROUPemptyloc;
+    }
 
     loc = GROUPheader->hash[i % GROUPHEADERHASHSIZE];
-    GROUPremapifneeded(loc);
+    if (!GROUPremapifneeded(loc, false)) {
+        if (failed != NULL)
+            *failed = true;
+        return GROUPemptyloc;
+    }
+    loc = GROUPheader->hash[i % GROUPHEADERHASHSIZE];
 
     while (!GROUPLOCempty(loc)) {
+        if (loc.recno >= GROUPcount && !GROUPremapifneeded(loc, false)) {
+            if (failed != NULL)
+                *failed = true;
+            return GROUPemptyloc;
+        }
+        if (loc.recno >= GROUPcount) {
+            warn("buffindexed: group index entry %d out of range", loc.recno);
+            if (failed != NULL)
+                *failed = true;
+            return GROUPemptyloc;
+        }
+        if (steps++ >= GROUPcount) {
+            warn("buffindexed: cycle in group index chain");
+            if (failed != NULL)
+                *failed = true;
+            return GROUPemptyloc;
+        }
         if (GROUPentries[loc.recno].deleted == 0 || Ignoredeleted) {
             if (memcmp(&grouphash, &GROUPentries[loc.recno].hash, sizeof(HASH))
                 == 0) {
@@ -1181,7 +1272,7 @@ buffindexed_groupstats(const char *group, int *lo, int *hi, int *count,
 {
     GROUPLOC gloc;
 
-    gloc = GROUPfind(group, false);
+    gloc = GROUPfind(group, false, NULL);
     if (GROUPLOCempty(gloc)) {
         return false;
     }
@@ -1216,6 +1307,7 @@ setinitialge(GROUPENTRY *ge, HASH grouphash, char *flag, GROUPLOC next,
 bool
 buffindexed_groupadd(const char *group, ARTNUM lo, ARTNUM hi, char *flag)
 {
+    bool failed;
     unsigned int i;
     HASH grouphash;
     GROUPLOC gloc;
@@ -1224,7 +1316,9 @@ buffindexed_groupadd(const char *group, ARTNUM lo, ARTNUM hi, char *flag)
     struct ov_name_table *ntp;
 #endif /* OV_DEBUG */
 
-    gloc = GROUPfind(group, true);
+    gloc = GROUPfind(group, true, &failed);
+    if (failed)
+        return false;
     if (!GROUPLOCempty(gloc)) {
         ge = &GROUPentries[gloc.recno];
         if (GROUPentries[gloc.recno].deleted != 0) {
@@ -1238,8 +1332,13 @@ buffindexed_groupadd(const char *group, ARTNUM lo, ARTNUM hi, char *flag)
     grouphash = Hash(group, strlen(group));
     memcpy(&i, &grouphash, sizeof(i));
     i = i % GROUPHEADERHASHSIZE;
-    GROUPlockhash(INN_LOCK_WRITE);
+    if (!GROUPlockhash(INN_LOCK_WRITE))
+        return false;
     gloc = GROUPnewnode();
+    if (GROUPLOCempty(gloc)) {
+        GROUPlockhash(INN_LOCK_UNLOCK);
+        return false;
+    }
     ge = &GROUPentries[gloc.recno];
     setinitialge(ge, grouphash, flag, GROUPheader->hash[i], lo, hi);
     GROUPheader->hash[i] = gloc;
@@ -1259,46 +1358,144 @@ buffindexed_groupadd(const char *group, ARTNUM lo, ARTNUM hi, char *flag)
     return true;
 }
 
-static off_t
-GROUPfilesize(int count)
+static bool
+GROUPentrycount(off_t size, int *count)
 {
-    return ((off_t) count * sizeof(GROUPENTRY)) + sizeof(GROUPHEADER);
+    uintmax_t payload;
+    uintmax_t entries;
+
+    if (size < (off_t) sizeof(GROUPHEADER)) {
+        errno = EINVAL;
+        return false;
+    }
+    if ((uintmax_t) size > SIZE_MAX) {
+        errno = EOVERFLOW;
+        return false;
+    }
+    payload = (uintmax_t) size - sizeof(GROUPHEADER);
+    if (payload % sizeof(GROUPENTRY) != 0) {
+        errno = EINVAL;
+        return false;
+    }
+    entries = payload / sizeof(GROUPENTRY);
+    if (entries > INT_MAX) {
+        errno = EOVERFLOW;
+        return false;
+    }
+    *count = (int) entries;
+    return true;
+}
+
+static bool
+GROUPfilesize(int count, off_t *size)
+{
+    uintmax_t bytes;
+
+    if (count < 0
+        || (uintmax_t) count
+               > (UINTMAX_MAX - sizeof(GROUPHEADER)) / sizeof(GROUPENTRY)) {
+        errno = EOVERFLOW;
+        return false;
+    }
+    bytes = sizeof(GROUPHEADER) + (uintmax_t) count * sizeof(GROUPENTRY);
+    if (bytes > SIZE_MAX) {
+        errno = EOVERFLOW;
+        return false;
+    }
+    *size = (off_t) bytes;
+    if (*size < 0 || (uintmax_t) *size != bytes) {
+        errno = EOVERFLOW;
+        return false;
+    }
+    return true;
+}
+
+/* Return the mmap protection required by an overview open mode.  Writers
+ * also need read permission because the mapped header is inspected. */
+static int
+GROUPmappingprot(int mode)
+{
+    int prot = 0;
+
+    if (mode & OV_READ)
+        prot |= PROT_READ;
+    if (mode & OV_WRITE)
+        prot |= PROT_READ | PROT_WRITE;
+    return prot;
 }
 
 /* Check if the given GROUPLOC refers to GROUPENTRY that we don't have mmap'ed,
 ** if so then see if the file has been grown by another writer and remmap
 */
 static bool
-GROUPremapifneeded(GROUPLOC loc)
+GROUPremapifneeded(GROUPLOC loc, bool hash_locked)
 {
+    GROUPHEADER *newheader;
     struct stat sb;
+    off_t groupsize;
+    bool locked = false;
+    int count;
 
-    if (loc.recno < GROUPcount)
+    if (GROUPheader != NULL && GROUPentries != NULL && loc.recno < GROUPcount)
         return true;
 
-    if (fstat(GROUPfd, &sb) < 0)
+    /* GROUPexpand publishes the new file size while holding this lock.  A
+       remapper must not map that size until expansion has committed the new
+       header or left a stable zero-filled extension after failure. */
+    if (!hash_locked) {
+        if (!GROUPlockhash(INN_LOCK_READ))
+            return false;
+        locked = true;
+    }
+
+    if (fstat(GROUPfd, &sb) < 0) {
+        if (locked)
+            GROUPlockhash(INN_LOCK_UNLOCK);
         return false;
+    }
 
-    if (GROUPfilesize(GROUPcount) >= sb.st_size)
+    if (GROUPheader != NULL && GROUPentries != NULL
+        && (uintmax_t) GROUPmapsize >= (uintmax_t) sb.st_size) {
+        if (locked)
+            GROUPlockhash(INN_LOCK_UNLOCK);
         return true;
+    }
 
-    if (GROUPheader) {
-        if (munmap((void *) GROUPheader, GROUPfilesize(GROUPcount)) < 0) {
+    if (!GROUPentrycount(sb.st_size, &count)
+        || !GROUPfilesize(count, &groupsize)) {
+        syswarn("buffindexed: invalid group.index size");
+        if (locked)
+            GROUPlockhash(INN_LOCK_UNLOCK);
+        return false;
+    }
+
+    newheader = mmap(0, (size_t) groupsize, GROUPmappingprot(ovbuffmode),
+                     MAP_SHARED, GROUPfd, 0);
+    if (newheader == MAP_FAILED) {
+        syswarn(
+            "buffindexed: Could not mmap group.index in GROUPremapifneeded");
+        if (locked)
+            GROUPlockhash(INN_LOCK_UNLOCK);
+        return false;
+    }
+
+    if (GROUPheader != NULL) {
+        if (munmap((void *) GROUPheader, GROUPmapsize) < 0) {
             syswarn("buffindexed: Could not munmap group.index in "
                     "GROUPremapifneeded");
+            munmap(newheader, (size_t) groupsize);
+            if (locked)
+                GROUPlockhash(INN_LOCK_UNLOCK);
             return false;
         }
     }
 
-    GROUPcount = (sb.st_size - sizeof(GROUPHEADER)) / sizeof(GROUPENTRY);
-    GROUPheader = mmap(0, GROUPfilesize(GROUPcount), PROT_READ | PROT_WRITE,
-                       MAP_SHARED, GROUPfd, 0);
-    if (GROUPheader == MAP_FAILED) {
-        syswarn(
-            "buffindexed: Could not mmap group.index in GROUPremapifneeded");
-        return false;
-    }
+    GROUPcount = count;
+    GROUPmapsize = (size_t) groupsize;
+    GROUPheader = newheader;
     GROUPentries = (void *) &GROUPheader[1];
+    if (locked)
+        GROUPlockhash(INN_LOCK_UNLOCK);
     return true;
 }
 
@@ -1307,36 +1504,52 @@ GROUPremapifneeded(GROUPLOC loc)
 static bool
 GROUPexpand(int mode)
 {
+    GROUPHEADER *newheader;
+    struct stat st;
+    off_t groupsize, oldsize;
     int i;
-    int flag = 0;
+    int newcount;
 
-    if (GROUPheader) {
-        if (munmap((void *) GROUPheader, GROUPfilesize(GROUPcount)) < 0) {
-            syswarn(
-                "buffindexed: Could not munmap group.index in GROUPexpand");
-            return false;
-        }
+    if (GROUPcount > INT_MAX - 1024) {
+        errno = EOVERFLOW;
+        syswarn("buffindexed: group.index has too many entries");
+        return false;
     }
-    GROUPcount += 1024;
-    if (ftruncate(GROUPfd, GROUPfilesize(GROUPcount)) < 0) {
+    newcount = GROUPcount + 1024;
+    if (!GROUPfilesize(newcount, &groupsize)) {
+        syswarn("buffindexed: invalid expanded group.index size");
+        return false;
+    }
+    if (fstat(GROUPfd, &st) < 0) {
+        syswarn("buffindexed: Could not stat group.index before expansion");
+        return false;
+    }
+    oldsize = st.st_size;
+    if (ftruncate(GROUPfd, groupsize) < 0) {
         syswarn("buffindexed: Could not extend group.index");
         return false;
     }
-    if (mode & OV_READ)
-        flag |= PROT_READ;
-    if (mode & OV_WRITE) {
-        /*
-         * Note: below check of magic won't work unless we have both PROT_READ
-         * and PROT_WRITE perms.
-         */
-        flag |= PROT_WRITE | PROT_READ;
-    }
-    GROUPheader =
-        mmap(0, GROUPfilesize(GROUPcount), flag, MAP_SHARED, GROUPfd, 0);
-    if (GROUPheader == MAP_FAILED) {
+    newheader = mmap(0, (size_t) groupsize, GROUPmappingprot(mode), MAP_SHARED,
+                     GROUPfd, 0);
+    if (newheader == MAP_FAILED) {
         syswarn("buffindexed: Could not mmap group.index in GROUPexpand");
+        /* If this is initial creation, restore the header-only file.  For an
+           established mapping, keep the harmless zero-filled extension so
+           that a reader from an older process cannot be left mapped past EOF.
+           A later expansion attempt will initialize the same entries. */
+        if (GROUPheader == NULL && ftruncate(GROUPfd, oldsize) < 0)
+            syswarn("buffindexed: Could not undo group.index expansion");
         return false;
     }
+    if (GROUPheader != NULL
+        && munmap((void *) GROUPheader, GROUPmapsize) < 0) {
+        syswarn("buffindexed: Could not munmap group.index in GROUPexpand");
+        munmap(newheader, (size_t) groupsize);
+        return false;
+    }
+    GROUPcount = newcount;
+    GROUPmapsize = (size_t) groupsize;
+    GROUPheader = newheader;
     GROUPentries = (void *) &GROUPheader[1];
     if (GROUPheader->magic != GROUPHEADERMAGIC) {
         GROUPheader->magic = GROUPHEADERMAGIC;
@@ -1358,25 +1571,41 @@ GROUPnewnode(void)
 {
     GROUPLOC loc;
 
-    /* If we didn't find any free space, then make some */
+    /* If we didn't find any free space, first pick up an expansion performed
+       by another writer, and then make more space if necessary. */
+    if (GROUPLOCempty(GROUPheader->freelist)) {
+        loc.recno = INT_MAX;
+        if (!GROUPremapifneeded(loc, true))
+            return GROUPemptyloc;
+    }
     if (GROUPLOCempty(GROUPheader->freelist)) {
         if (!GROUPexpand(ovbuffmode)) {
             return GROUPemptyloc;
         }
     }
-    assert(!GROUPLOCempty(GROUPheader->freelist));
+
     loc = GROUPheader->freelist;
-    GROUPheader->freelist = GROUPentries[GROUPheader->freelist.recno].next;
+    if (!GROUPremapifneeded(loc, true))
+        return GROUPemptyloc;
+    loc = GROUPheader->freelist;
+    if (GROUPLOCempty(loc) || loc.recno >= GROUPcount) {
+        warn("buffindexed: freelist entry %d out of range", loc.recno);
+        return GROUPemptyloc;
+    }
+    GROUPheader->freelist = GROUPentries[loc.recno].next;
     return loc;
 }
 
 bool
 buffindexed_groupdel(const char *group)
 {
+    bool failed;
     GROUPLOC gloc;
     GROUPENTRY *ge;
 
-    gloc = GROUPfind(group, false);
+    gloc = GROUPfind(group, false, &failed);
+    if (failed)
+        return false;
     if (GROUPLOCempty(gloc)) {
         return true;
     }
@@ -1651,6 +1880,7 @@ bool
 buffindexed_add(const char *group, ARTNUM artnum, TOKEN token, char *data,
                 int len, time_t arrived, time_t expires)
 {
+    bool failed;
     GROUPLOC gloc;
     GROUPENTRY *ge;
 
@@ -1659,7 +1889,9 @@ buffindexed_add(const char *group, ARTNUM artnum, TOKEN token, char *data,
         return true;
     }
 
-    gloc = GROUPfind(group, false);
+    gloc = GROUPfind(group, false, &failed);
+    if (failed)
+        return false;
     if (GROUPLOCempty(gloc)) {
         return true;
     }
@@ -1734,6 +1966,8 @@ ovgroupunmap(void)
     for (i = 0; i < GROUPDATAHASHSIZE; i++) {
         for (gdb = groupdatablock[i]; gdb != NULL; gdb = gdbnext) {
             gdbnext = gdb->next;
+            if (gdb->mmapped)
+                munmap(gdb->addr, gdb->len);
             free(gdb);
         }
         groupdatablock[i] = NULL;
@@ -1751,6 +1985,23 @@ ovgroupunmap(void)
             free(Cachesearch);
             Cachesearch = NULL;
         }
+    }
+}
+
+/* Failure must invalidate cached index state as well as temporary mappings.
+   A zero Gibcount with a non-NULL, partially filled Gib is not a valid cache
+   entry (gettoken expects at least one element whenever Gib is non-NULL). */
+static void
+ovgroupunmap_failed(void)
+{
+    ovgroupunmap();
+    free(Gib);
+    Gib = NULL;
+    Gibcount = 0;
+    if (Cachesearch != NULL) {
+        free(Cachesearch->group);
+        free(Cachesearch);
+        Cachesearch = NULL;
     }
 }
 
@@ -1791,7 +2042,7 @@ ovgroupmmap(GROUPENTRY *ge, ARTNUM low, ARTNUM high, bool needov)
     OV ov = ge->baseindex;
     OVBUFF *ovbuff;
     GROUPDATABLOCK *gdb;
-    int pagefudge, limit, i, count, len;
+    int pagefudge, limit, i, capacity, count, expected, len;
     off_t offset, mmapoffset;
     OVBLOCK *ovblock;
     void *addr;
@@ -1801,18 +2052,30 @@ ovgroupmmap(GROUPENTRY *ge, ARTNUM low, ARTNUM high, bool needov)
         Gibcount = 0;
         return true;
     }
-    Gibcount = ge->count;
-    if (Gibcount == 0)
+    expected = ge->count;
+    Gibcount = 0;
+    if (expected == 0)
         return true;
-    Gib = xmalloc(Gibcount * sizeof(OVINDEX));
+    if (expected < 0) {
+        warn("buffindexed: negative overview count");
+        return false;
+    }
+    capacity = expected > OV_FUDGE ? OV_FUDGE : expected;
+    Gib = xmalloc(capacity * sizeof(OVINDEX));
     count = 0;
     while (ov.index != NULLINDEX) {
+        for (giblist = Giblist; giblist != NULL; giblist = giblist->next)
+            if (giblist->ov.index == ov.index
+                && giblist->ov.blocknum == ov.blocknum) {
+                warn("buffindexed: loop in overview index blocks");
+                ovgroupunmap_failed();
+                return false;
+            }
         ovbuff = getovbuff(ov);
-        if (ovbuff == NULL) {
-            warn("buffindexed: ovgroupmmap ovbuff is null(ovindex is %d, "
-                 "ovblock is %u",
-                 ov.index, ov.blocknum);
-            ovgroupunmap();
+        if (ovbuff == NULL || !ovblockvalid(ovbuff, ov.blocknum)) {
+            warn("buffindexed: invalid index block %d:%u", ov.index,
+                 ov.blocknum);
+            ovgroupunmap_failed();
             return false;
         }
         offset = ovbuff->base + OV_OFFSET(ov.blocknum);
@@ -1823,20 +2086,32 @@ ovgroupmmap(GROUPENTRY *ge, ARTNUM low, ARTNUM high, bool needov)
                          mmapoffset))
             == MAP_FAILED) {
             syswarn("buffindexed: ovgroupmmap could not mmap index block");
-            ovgroupunmap();
+            ovgroupunmap_failed();
             return false;
         }
         ovblock = (void *) ((char *) addr + pagefudge);
         if (ov.index == ge->curindex.index
             && ov.blocknum == ge->curindex.blocknum) {
             limit = ge->curindexoffset;
+            if (limit < 0 || (size_t) limit > OVINDEXMAX) {
+                warn("buffindexed: invalid index entry count %d", limit);
+                munmap(addr, len);
+                ovgroupunmap_failed();
+                return false;
+            }
         } else {
             limit = OVINDEXMAX;
         }
         for (i = 0; i < limit; i++) {
-            if (Gibcount == count) {
-                Gibcount += OV_FUDGE;
-                Gib = xrealloc(Gib, Gibcount * sizeof(OVINDEX));
+            if (capacity == count) {
+                if (capacity > INT_MAX - OV_FUDGE) {
+                    warn("buffindexed: too many overview index entries");
+                    munmap(addr, len);
+                    ovgroupunmap_failed();
+                    return false;
+                }
+                capacity += OV_FUDGE;
+                Gib = xreallocarray(Gib, capacity, sizeof(OVINDEX));
             }
             Gib[count++] = ovblock->ovindex[i];
         }
@@ -1868,7 +2143,7 @@ ovgroupmmap(GROUPENTRY *ge, ARTNUM low, ARTNUM high, bool needov)
         if (gdb != NULL)
             continue;
         ovbuff = getovbuff(ov);
-        if (ovbuff == NULL)
+        if (ovbuff == NULL || !ovblockvalid(ovbuff, ov.blocknum))
             continue;
         gdb = xmalloc(sizeof(GROUPDATABLOCK));
         gdb->datablk = ov;
@@ -1887,12 +2162,10 @@ ovgroupmmap(GROUPENTRY *ge, ARTNUM low, ARTNUM high, bool needov)
         for (gdb = groupdatablock[i]; gdb != NULL; gdb = gdb->next) {
             ov = gdb->datablk;
             ovbuff = getovbuff(ov);
-            if (ovbuff == NULL) {
-                warn("buffindexed: ovgroupmmap could not get ovbuff block for"
-                     " new, %d, %u",
+            if (ovbuff == NULL || !ovblockvalid(ovbuff, ov.blocknum)) {
+                warn("buffindexed: invalid overview data block %d:%u",
                      ov.index, ov.blocknum);
-                free(gdb);
-                ovgroupunmap();
+                ovgroupunmap_failed();
                 return false;
             }
             offset = ovbuff->base + OV_OFFSET(ov.blocknum);
@@ -1903,8 +2176,7 @@ ovgroupmmap(GROUPENTRY *ge, ARTNUM low, ARTNUM high, bool needov)
                                   ovbuff->fd, mmapoffset))
                 == MAP_FAILED) {
                 syswarn("buffindexed: ovgroupmmap could not mmap data block");
-                free(gdb);
-                ovgroupunmap();
+                ovgroupunmap_failed();
                 return false;
             }
             gdb->data = (char *) gdb->addr + pagefudge;
@@ -1921,7 +2193,7 @@ ovopensearch(const char *group, ARTNUM low, ARTNUM high, bool needov)
     GROUPENTRY *ge;
     OVSEARCH *search;
 
-    gloc = GROUPfind(group, false);
+    gloc = GROUPfind(group, false, NULL);
     if (GROUPLOCempty(gloc))
         return NULL;
 
@@ -1962,7 +2234,7 @@ buffindexed_opensearch(const char *group, int low, int high)
             Cachesearch = NULL;
         }
     }
-    gloc = GROUPfind(group, false);
+    gloc = GROUPfind(group, false, NULL);
     if (GROUPLOCempty(gloc)) {
         return NULL;
     }
@@ -2003,6 +2275,16 @@ ovsearch(void *handle, ARTNUM *artnum, char **data, int *len, TOKEN *token,
             if (artnum)
                 *artnum = Gib[search->cur].artnum;
         } else {
+            srchov.index = Gib[search->cur].index;
+            srchov.blocknum = Gib[search->cur].blocknum;
+            ovbuff = getovbuff(srchov);
+            if (ovbuff == NULL || !ovblockvalid(ovbuff, srchov.blocknum)
+                || !ovindexspanvalid(&Gib[search->cur])) {
+                warn("buffindexed: invalid overview entry for article %lu",
+                     (unsigned long) Gib[search->cur].artnum);
+                search->cur++;
+                return false;
+            }
             if (artnum)
                 *artnum = Gib[search->cur].artnum;
             if (len)
@@ -2012,8 +2294,6 @@ ovsearch(void *handle, ARTNUM *artnum, char **data, int *len, TOKEN *token,
             if (expires)
                 *expires = Gib[search->cur].expires;
             if (data) {
-                srchov.index = Gib[search->cur].index;
-                srchov.blocknum = Gib[search->cur].blocknum;
                 gdb = searchgdb(&srchov);
                 if (gdb == NULL) {
                     if (len)
@@ -2037,8 +2317,8 @@ ovsearch(void *handle, ARTNUM *artnum, char **data, int *len, TOKEN *token,
                     if (newblock) {
                         search->gdb.datablk.blocknum = srchov.blocknum;
                         search->gdb.datablk.index = srchov.index;
-                        ovbuff = getovbuff(srchov);
-                        if (ovbuff == NULL) {
+                        if (ovbuff == NULL
+                            || !ovblockvalid(ovbuff, srchov.blocknum)) {
                             warn("buffindexed: ovsearch could not get ovbuff"
                                  " block for new, %d, %u",
                                  srchov.index, srchov.blocknum);
@@ -2087,24 +2367,16 @@ static void
 ovclosesearch(void *handle, bool freeblock)
 {
     OVSEARCH *search = (OVSEARCH *) handle;
-    GROUPDATABLOCK *gdb;
-    int i;
 #ifdef OV_DEBUG
     GROUPENTRY *ge;
     GROUPLOC gloc;
 #endif /* OV_DEBUG */
 
-    for (i = 0; i < GROUPDATAHASHSIZE; i++) {
-        for (gdb = groupdatablock[i]; gdb != NULL; gdb = gdb->next) {
-            if (gdb->mmapped)
-                munmap(gdb->addr, gdb->len);
-        }
-    }
     if (search->gdb.mmapped)
         munmap(search->gdb.addr, search->gdb.len);
     if (freeblock) {
 #ifdef OV_DEBUG
-        gloc = GROUPfind(search->group, false);
+        gloc = GROUPfind(search->group, false, NULL);
         if (!GROUPLOCempty(gloc)) {
             ge = &GROUPentries[gloc.recno];
             freegroupblock(ge);
@@ -2139,6 +2411,9 @@ static bool
 gettoken(ARTNUM artnum, TOKEN *token)
 {
     int i, j, offset, limit;
+
+    if (Gib == NULL || Gibcount <= 0)
+        return false;
     offset = 0;
     limit = Gibcount;
     for (i = (limit - offset) / 2; i > 0; i = (limit - offset) / 2) {
@@ -2201,7 +2476,7 @@ buffindexed_getartinfo(const char *group, ARTNUM artnum, TOKEN *token)
                 return true;
             else {
                 /* examine to see if overview index are increased */
-                gloc = GROUPfind(group, false);
+                gloc = GROUPfind(group, false, NULL);
                 if (GROUPLOCempty(gloc)) {
                     return false;
                 }
@@ -2225,7 +2500,7 @@ buffindexed_getartinfo(const char *group, ARTNUM artnum, TOKEN *token)
             }
         }
     }
-    gloc = GROUPfind(group, false);
+    gloc = GROUPfind(group, false, NULL);
     if (GROUPLOCempty(gloc)) {
         return false;
     }
@@ -2262,7 +2537,13 @@ buffindexed_expiregroup(const char *group, int *lo, struct history *h)
     OVSEARCH search = {0};
 
     if (group == NULL) {
-        for (i = 0; i < GROUPheader->freelist.recno; i++) {
+        /* Refresh a mapping that may have been extended by another writer,
+           then inspect every slot.  Empty slots have count zero, while -1 in
+           the freelist means all slots have been allocated. */
+        gloc.recno = INT_MAX;
+        if (!GROUPremapifneeded(gloc, false))
+            return false;
+        for (i = 0; i < GROUPcount; i++) {
             gloc.recno = i;
             GROUPlock(gloc, INN_LOCK_WRITE);
             ge = &GROUPentries[gloc.recno];
@@ -2301,7 +2582,7 @@ buffindexed_expiregroup(const char *group, int *lo, struct history *h)
         }
         return true;
     }
-    gloc = GROUPfind(group, false);
+    gloc = GROUPfind(group, false, NULL);
     if (GROUPLOCempty(gloc)) {
         return false;
     }
@@ -2541,12 +2822,14 @@ buffindexed_close(void)
     close(GROUPfd);
 
     if (GROUPheader) {
-        if (munmap((void *) GROUPheader, GROUPfilesize(GROUPcount)) < 0) {
+        if (munmap((void *) GROUPheader, GROUPmapsize) < 0) {
             syswarn("buffindexed: could not munmap group.index in "
                     "buffindexed_close");
             return;
         }
         GROUPheader = NULL;
+        GROUPentries = NULL;
+        GROUPmapsize = 0;
     }
 
     /* sync the bit field */
@@ -2647,7 +2930,7 @@ main(int argc, char **argv)
         GROUPlock(gloc, INN_LOCK_UNLOCK);
         exit(0);
     }
-    gloc = GROUPfind(group, false);
+    gloc = GROUPfind(group, false, NULL);
     if (GROUPLOCempty(gloc)) {
         fprintf(stderr, "gloc is null\n");
     }

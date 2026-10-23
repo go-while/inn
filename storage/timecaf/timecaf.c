@@ -1,6 +1,11 @@
 /*
 **  Like the timehash storage method (and heavily inspired by it), but uses
 **  the CAF library to store multiple articles in a single file.
+**
+**  Written by Richard Todd <rmtodd@mailhost.ecn.uoknor.edu> in 1998.
+**
+**  Various bug fixes, code and documentation improvements since then
+**  in 1998-2010, 2014, 2015, 2021, 2022, 2024, 2026.
 */
 
 #include "portable/system.h"
@@ -316,7 +321,7 @@ AddTOCCache(time_t timestamp, CAFTOCENT *toc, CAFHEADER head,
 }
 
 /*
-** Do stating of an article, going thru the TOC cache if possible.
+**  Do stating of an article, going through the TOC cache if possible.
 */
 
 static ARTHANDLE *
@@ -455,6 +460,8 @@ timecaf_store(const ARTHANDLE article, const STORAGECLASS class)
                  CAFErrorStr());
             SMseterror(SMERR_UNDEFINED, NULL);
             free(path);
+            WritingFile.path = NULL;
+            WritingFile.fd = -1;
             token.type = TOKEN_EMPTY;
             return token;
         }
@@ -524,20 +531,43 @@ OpenArticle(const char *path, ARTNUM artnum, const RETRTYPE amount)
 
     private = xmalloc(sizeof(PRIV_TIMECAF));
     art->private = (void *) private;
+    if (len > UINT_MAX) {
+        SMseterror(SMERR_UNDEFINED, "article is too large");
+        close(fd);
+        free(art->private);
+        free(art);
+        return NULL;
+    }
     private->artlen = len;
     if (innconf->articlemmap) {
         off_t curoff, tmpoff;
         size_t delta;
 
         curoff = lseek(fd, (off_t) 0, SEEK_CUR);
+        if (curoff < 0) {
+            SMseterror(SMERR_UNDEFINED, NULL);
+            syswarn("timecaf: could not locate article");
+            close(fd);
+            free(art->private);
+            free(art);
+            return NULL;
+        }
         delta = curoff % pagesize;
         tmpoff = curoff - delta;
+        if (len > SIZE_MAX - delta) {
+            SMseterror(SMERR_UNDEFINED, "article mapping is too large");
+            close(fd);
+            free(art->private);
+            free(art);
+            return NULL;
+        }
         private->mmaplen = len + delta;
         if ((private->mmapbase = mmap(NULL, private->mmaplen, PROT_READ,
                                       MAP_SHARED, fd, tmpoff))
             == MAP_FAILED) {
             SMseterror(SMERR_UNDEFINED, NULL);
             syswarn("timecaf: could not mmap article");
+            close(fd);
             free(art->private);
             free(art);
             return NULL;
@@ -550,9 +580,10 @@ OpenArticle(const char *path, ARTNUM artnum, const RETRTYPE amount)
         private->artdata = private->mmapbase + delta;
     } else {
         private->artdata = xmalloc(private->artlen);
-        if (read(fd, private->artdata, private->artlen) < 0) {
+        if (xread(fd, private->artdata, private->artlen) < 0) {
             SMseterror(SMERR_UNDEFINED, NULL);
             syswarn("timecaf: could not read article");
+            close(fd);
             free(private->artdata);
             free(art->private);
             free(art);
@@ -578,7 +609,7 @@ OpenArticle(const char *path, ARTNUM artnum, const RETRTYPE amount)
 
     if ((p = wire_findbody(private->artdata, private->artlen)) == NULL) {
         SMseterror(SMERR_NOBODY, NULL);
-        if (innconf->articlemmap)
+        if (innconf->articlemmap && private->mmapbase != NULL)
             munmap(private->mmapbase, private->mmaplen);
         else
             free(private->artdata);
@@ -596,8 +627,8 @@ OpenArticle(const char *path, ARTNUM artnum, const RETRTYPE amount)
     }
 
     if (amount == RETR_BODY) {
-        art->data = p + 4;
-        art->len = art->len - (private->artdata - p - 4);
+        art->data = p;
+        art->len = private->artlen - (p - private->artdata);
         return art;
     }
     SMseterror(SMERR_UNDEFINED, "Invalid retrieve request");
@@ -781,8 +812,10 @@ FindDir(DIR *dir, FINDTYPE type)
     return NULL;
 }
 
-/* Grovel thru a CAF table-of-contents finding the next still-existing article
- */
+/*
+**  Grovel through a CAF table-of-contents finding the next still-existing
+**  article.
+*/
 static int
 FindNextArt(const CAFHEADER *head, CAFTOCENT *toc, ARTNUM *artp)
 {
@@ -817,7 +850,9 @@ timecaf_next(ARTHANDLE *article, const RETRTYPE amount)
 
     length = strlen(innconf->patharticles) + 32;
     path = xmalloc(length);
-    if (article == NULL) {
+    if (article == NULL || article->private == NULL) {
+        if (article != NULL)
+            free(article);
         priv.top = NULL;
         priv.sec = NULL;
         priv.ter = NULL;
@@ -829,7 +864,7 @@ timecaf_next(ARTHANDLE *article, const RETRTYPE amount)
         priv = *(PRIV_TIMECAF *) article->private;
         free(article->private);
         free(article);
-        if (innconf->articlemmap)
+        if (innconf->articlemmap && priv.mmapbase != NULL)
             munmap(priv.mmapbase, priv.mmaplen);
         else
             free(priv.artdata);
@@ -901,7 +936,9 @@ timecaf_next(ARTHANDLE *article, const RETRTYPE amount)
         art->type = TOKEN_TIMECAF;
         art->data = NULL;
         art->len = 0;
-        art->private = xmalloc(sizeof(PRIV_TIMECAF));
+        art->private = xcalloc(1, sizeof(PRIV_TIMECAF));
+    } else if (art->private == NULL) {
+        art->private = xcalloc(1, sizeof(PRIV_TIMECAF));
     }
     newpriv = (PRIV_TIMECAF *) art->private;
     newpriv->top = priv.top;

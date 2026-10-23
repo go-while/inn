@@ -10,7 +10,10 @@
 # Copyright (C) 1995-1997 Miquel van Smoorenburg - Cistron Internet Services
 #
 # Copyright (C) 2003 Marco d'Itri <md@linux.it>
-#   Nearly rewritten. Added syslog support, real errors checking and more.
+#   Nearly rewritten.  Added syslog support, real errors checking and more.
+#
+# Various bug fixes, code and documentation improvements since then
+# in 2005, 2007-2009, 2011, 2012, 2016, 2021-2024, 2026.
 #
 # This program is free software; you can redistribute it and/or modify it
 # under the terms of the GNU General Public License as published by the Free
@@ -261,6 +264,8 @@ sub ctlinnd {
 
 __END__
 
+=encoding utf-8
+
 =head1 NAME
 
 send-uucp - Send Usenet articles via UUCP
@@ -485,7 +490,7 @@ Supposing the home directory of the C<uucp> user is F</var/spool/uucp>,
 you need to configure the SSH keys in the F<.ssh> subdirectory.  First,
 add the public keys of all remote news servers in F<authorized_keys>.
 A typical entry is the following one, which should be in 1 line (it is
-wrapped here for a proper display in man page):
+wrapped here for a proper display in the manual page):
 
     no-port-forwarding,no-X11-forwarding,no-agent-forwarding,
     command="/usr/sbin/uucico -l",from="news.server.to.feed"
@@ -541,7 +546,7 @@ B<uudemon.hr> is called hourly in F</etc/cron.d/uucp> to poll remote
 news servers, and B<uudemon.day> daily in F</etc/cron.daily/uucp>).
 
 Like for B<send-uucp>, adjust the launch time to maximize the number
-and the freshness of batches to exchanges.
+and the freshness of batches to exchange.
 
 =item 18.
 
@@ -579,9 +584,10 @@ The log file used if the syslog facility is not available.
 =head1 HISTORY
 
 This program was originally written by Edvard Tuinder <ed@elm.net> and then
-maintained and extended by Miquel van Smoorenburg <miquels@cistron.nl>.
-Marco d'Itri <md@linux.it> cleaned up the code for inclusion in INN.  This
-manual page was written by Mark Brown <broonie@sirena.org.uk>.
+maintained and extended by Miquel van Smoorenburg <miquels@cistron.nl>.  Marco
+d'Itri <md@linux.it> cleaned up the code for inclusion in INN.  This manual
+page was originally written by Mark Brown <broonie@sirena.org.uk>, and the
+detailed procedure to set up a UUCP feed added by Julien Élie.
 
 =head1 SEE ALSO
 

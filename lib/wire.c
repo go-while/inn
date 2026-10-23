@@ -1,7 +1,10 @@
 /*
 **  Wire format article utilities.
 **
-**  Originally written by Alex Kiernan (alex.kiernan@thus.net)
+**  Originally written by Alex Kiernan (alex.kiernan@thus.net) in 2002.
+**
+**  Various bug fixes, code and documentation improvements since then
+**  in 2002-2006, 2009, 2010, 2021, 2026.
 **
 **  These routines manipulate wire format articles; in particular, they should
 **  be safe in the presence of embedded NULs.  They assume wire format
@@ -20,6 +23,7 @@
 #include "portable/system.h"
 
 #include <assert.h>
+#include <errno.h>
 
 #include "inn/libinn.h"
 #include "inn/wire.h"
@@ -41,7 +45,7 @@ wire_findbody(const char *article, size_t length)
 
     /* Jump from \r to \r and give up if we're too close to the end. */
     end = article + length;
-    for (p = (char *) article; (p + 4) <= end; ++p) {
+    for (p = (char *) article; (size_t) (end - p) >= 4; ++p) {
         p = memchr(p, '\r', end - p - 3);
         if (p == NULL)
             break;
@@ -65,8 +69,10 @@ wire_nextline(const char *article, const char *end)
 {
     char *p;
 
-    for (p = (char *) article; (p + 2) <= end; ++p) {
-        p = memchr(p, '\r', end - p - 2);
+    if (article > end)
+        return NULL;
+    for (p = (char *) article; end - p >= 2; ++p) {
+        p = memchr(p, '\r', end - p - 1);
         if (p == NULL)
             break;
         if (p[1] == '\n') {
@@ -105,7 +111,7 @@ skip_fws_bounded(char *text, const char *end)
     char *p;
 
     for (p = text; p <= end; p++) {
-        if (p < end + 1 && p[0] == '\r' && p[1] == '\n' && ISWHITE(p[2]))
+        if (end - p >= 2 && p[0] == '\r' && p[1] == '\n' && ISWHITE(p[2]))
             p += 2;
         if (!ISWHITE(*p))
             return p;
@@ -131,6 +137,8 @@ wire_findheader(const char *article, size_t length, const char *header,
     ptrdiff_t headerlen;
 
     headerlen = strlen(header);
+    if (length == 0)
+        return NULL;
     end = article + length - 1;
 
     /* There has to be enough space left in the article for at least the
@@ -188,23 +196,36 @@ char *
 wire_from_native(const char *article, size_t len, size_t *newlen)
 {
     size_t bytes;
+    size_t extra;
+    size_t extra_limit;
     char *newart;
     const char *p;
     char *dest;
     bool at_start = true;
 
-    /* First go thru article and count number of bytes we need.  Add a CR for
-       every LF and an extra character for any period at the beginning of a
-       line for dot-stuffing.  Add 3 characters at the end for .\r\n. */
-    for (bytes = 0, p = article; p < article + len; p++) {
+    *newlen = 0;
+    if (len > SIZE_MAX - 4) {
+        errno = EOVERFLOW;
+        return NULL;
+    }
+    extra_limit = SIZE_MAX - 4 - len;
+
+    /* First go through article and count number of bytes we need.  Add a CR
+       for every LF and an extra character for any period at the beginning of a
+       line for dot-stuffing.  Each input byte adds at most one extra byte,
+       so extra cannot overflow.  Add 3 characters at the end for .\r\n. */
+    for (extra = 0, p = article; p < article + len; p++) {
         if (at_start && *p == '.')
-            bytes++;
-        bytes++;
+            extra++;
         at_start = (*p == '\n');
         if (at_start)
-            bytes++;
+            extra++;
     }
-    bytes += 3;
+    if (extra > extra_limit) {
+        errno = EOVERFLOW;
+        return NULL;
+    }
+    bytes = len + extra + 3;
 
     /* Now copy the article, making the required changes. */
     newart = xmalloc(bytes + 1);
@@ -252,9 +273,9 @@ wire_to_native(const char *article, size_t len, size_t *newlen)
     }
     end = article + len - 3;
 
-    /* First go thru article and count number of bytes we need.  Once we reach
-       .\r\n, we're done.  We'll remove one . from .. at the start of a line
-       and change CRLF to just LF. */
+    /* First go through article and count number of bytes we need.  Once we
+       reach .\r\n, we're done.  We'll remove one . from .. at the start of a
+       line and change CRLF to just LF. */
     for (bytes = 0, p = article; p < article + len;) {
         if (p == end && p[0] == '.' && p[1] == '\r' && p[2] == '\n')
             break;

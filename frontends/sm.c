@@ -1,5 +1,10 @@
 /*
 **  Provide a command line interface to the storage manager.
+**
+**  Original implementation written by Clayton O'Neill in 1997.
+**
+**  Various bug fixes, code and documentation improvements since then
+**  in 1997-2002, 2004-2006, 2009, 2015, 2020, 2021, 2026.
 */
 
 #include "portable/system.h"
@@ -10,6 +15,8 @@
 #include "inn/innconf.h"
 #include "inn/libinn.h"
 #include "inn/messages.h"
+#include "inn/newsuser.h"
+#include "inn/paths.h"
 #include "inn/qio.h"
 #include "inn/storage.h"
 #include "inn/wire.h"
@@ -141,6 +148,8 @@ store_article(int fd)
         sysdie("cannot read article");
     }
     text = wire_from_native(article->data, article->left, &size);
+    if (text == NULL)
+        sysdie("cannot convert article to wire format");
     buffer_free(article);
     result = store_article_common(text, size);
     free(text);
@@ -259,6 +268,10 @@ process_token(const char *id, const struct options *options)
             warn("could not remove %s: %s", id, SMerrorstr);
             return false;
         }
+        /* Record the cancel so a later expire run can drop the history
+         * entry without an SMretrieve.  Best-effort; no-op when
+         * expiretombstone is disabled. */
+        SMcanceltombstone(token);
     } else {
         article = SMretrieve(token, options->header ? RETR_HEAD : RETR_ALL);
         if (article == NULL) {
@@ -337,7 +350,7 @@ main(int argc, char *argv[])
         die("-i cannot be used with -r or -d");
     if (options.artinfo && (options.header || options.raw || options.rnews))
         die("-i cannot be used with -H, -R, or -S");
-    if (options.delete &&(options.header || options.rnews))
+    if (options.delete && (options.header || options.rnews))
         die("-r or -d cannot be used with -H or -S");
     if (options.raw && options.rnews)
         die("-R cannot be used with -S");
@@ -360,6 +373,17 @@ main(int argc, char *argv[])
         if (!SMsetup(SM_RDWR, &value))
             die("cannot set up storage manager");
     }
+
+    /* On the -r/-d path with the cancel tombstone enabled, drop to
+     * the news user/group so cancels.tombstone is created (or
+     * appended) with ownership consistent with innd's writes.
+     * Bypassed under the INN_TESTSUITE env var so the test harness
+     * can run sm without a real news user on the system.  All other
+     * sm modes (-i, -c, -H, -R, -s, retrieval) preserve the
+     * historical behaviour of running as the invoking user. */
+    if (options.delete && innconf->expiretombstone
+        && getenv(INN_ENV_TESTSUITE) == NULL)
+        ensure_news_user_grp(true, true);
     if (!SMinit())
         die("cannot initialize storage manager: %s", SMerrorstr);
 

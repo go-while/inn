@@ -232,6 +232,11 @@ Process(char *article, size_t artlen)
 
     /* Convert the article to wire format. */
     wirefmt = wire_from_native(article, artlen, &length);
+    if (wirefmt == NULL) {
+        Reject(article, artlen, "bad_article %s",
+               "too large after wire conversion");
+        return true;
+    }
 
     /* Make sure that all the headers are there, note the ID. */
     for (hp = RequiredHeaders; hp < ARRAY_END(RequiredHeaders); hp++) {
@@ -376,7 +381,7 @@ ReadRemainder(int fd, char first, char second)
     left = size - used;
     skipnl = 0;
 
-    /* Read the input, coverting line ends as we go if necessary. */
+    /* Read the input, converting line ends as we go if necessary. */
     while ((n = read(fd, buf, sizeof(buf))) > 0) {
         p = article + used;
         for (i = 0; i < n; i++) {

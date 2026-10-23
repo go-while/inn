@@ -4,7 +4,7 @@ readers.conf - Access control and configuration for nnrpd
 
 =head1 IN A NUTSHELL
 
-The F<readers.conf> file parameters who is allowed to connect as a news
+The F<readers.conf> file determines who is allowed to connect as a news
 reader and what they're allowed to do after they connect.  Bear in mind
 that in F<readers.conf>, authentication and authorization are configured in
 different blocks.  First, a user is authenticated, and assigned an identity
@@ -126,8 +126,8 @@ the absence of the I<key> parameter) to put all of the auth groups first,
 and all of the access groups below.
 
 A user identity, as established by an auth group, looks like an e-mail address
-if a domain is specified (like "<username>@<domain>") or otherwise just
-"<username>".
+if a domain is specified (like C<< <username>@<domain> >>) or otherwise just
+C<< <username> >>.
 
 If I<nnrpdauthsender> is set in F<inn.conf>, the user identity is also put
 into the Sender header field of posts made by that user.  See the documentation
@@ -267,6 +267,34 @@ the syntax:
 The file named <filename> is then included.  This syntax is allowed
 only at top-level.
 
+Auth and access blocks can also be wrapped in a C<group> block so that
+common parameter settings do not have to be repeated in every one of
+them:
+
+    group <name> {
+        <parameter>: <value>
+        # ...possibly other settings shared by the blocks below
+
+        auth <name> {
+            # ...
+        }
+
+        auth <name> {
+            # ...
+        }
+    }
+
+As with auth and access blocks, the <name> of a group is only for
+documentation purposes.  Any parameter set directly in a group block is
+used as the starting value for every auth or access block (and any
+nested group) declared inside it; each of those blocks may still
+override that value with a setting of its own.  Groups may themselves be
+nested inside other groups, in which case they inherit the enclosing
+group's settings the same way.  This is purely a convenience to avoid
+repeating identical parameter values across several auth or access
+blocks; it has no other effect on how auth and access blocks are
+matched.
+
 Below is the full list of allowable parameters for auth groups and access
 groups, and after that are some examples that may make this somewhat
 clearer.
@@ -320,7 +348,7 @@ group will not match the connection and is ignored.
 Note that if you have a large number of patterns that can't be merged into
 broader patterns (such as a large number of individual systems scattered
 around the net that should have access), the I<hosts> parameter may exceed
-the maximum line length of 8,192 characters.  In that case, you'll need to
+the maximum line length of 8,191 characters.  In that case, you'll need to
 break that auth group into multiple auth groups, each with a portion of
 the hosts listed in its I<hosts> parameter, and each assigning the same user
 identity.
@@ -370,43 +398,50 @@ found in F<doc/hook-perl>.
 
 =item I<python_access>
 
-A Python script for dynamically generating an access group.  If an auth
-group matches successfully and contains a I<python_access> parameter, then
-the argument script (without its C<.py> extension) will be used to create
-an access group.  This group will then determine the access rights of the
-client, overriding any access groups in F<readers.conf>.  If and only if a
-successful auth group contains the I<python_access> parameter, F<readers.conf>
-access groups are ignored and the client's rights are instead determined
-dynamically.  This parameter is only valid if INN is compiled with Python
-support (B<--with-python> passed to C<configure>).  More information may be
-found in the file F<doc/hook-python>.
+A Python script for dynamically generating an access group.  If an auth group
+matches successfully and contains a I<python_access> parameter, then the
+argument script (without its C<.py> extension) located in the I<pathfilter>
+directory will be used to create an access group.  This group will then
+determine the access rights of the client, overriding any access groups in
+F<readers.conf>.
+
+If and only if a successful auth group contains the I<python_access>
+parameter, F<readers.conf> access groups are ignored and the client's rights
+are instead determined dynamically.
+
+This parameter is only valid if INN is compiled with Python support
+(B<--with-python> passed to C<configure>).  More information may be found in
+the file F<doc/hook-python>.
 
 =item I<python_auth>
 
 A Python script for authentication.  The I<python_auth> parameter works
 exactly like I<auth>, except that it calls the named script (without its
-C<.py> extension) using the Python hook rather than an external program.
-Multiple/mixed use of the I<auth>, I<perl_auth>, and I<python_auth>
-parameters is permitted within any auth group; each line is tried
-in the order it appears.  I<python_auth> has more power than I<auth>
-in that it provides the authentication program with additional information
-about the client and the ability to return an error string and a username.
+C<.py> extension) located in the I<pathfilter> directory using the Python
+hook rather than an external program.  Multiple/mixed use of the I<auth>,
+I<perl_auth>, and I<python_auth> parameters is permitted within any auth
+group; each line is tried in the order it appears.  I<python_auth> has
+more power than I<auth> in that it provides the authentication program with
+additional information about the client and the ability to return an error
+string and a username.
+
 This parameter is only valid if INN is compiled with Python support
-(B<--with-python> passed to C<configure>).  More information may be
-found in F<doc/hook-python>.
+(B<--with-python> passed to C<configure>).  More information may be found in
+F<doc/hook-python>.
 
 =item I<python_dynamic>
 
 A Python script for applying access control dynamically on a per newsgroup
-basis.  If an auth group matches successfully and contains a
-I<python_dynamic> parameter, then the argument script (without its
-C<.py> extension) will be used to determine the clients rights each time
-the user attempts to view a newsgroup, or read or post an article.  Access
-rights as determined by I<python_dynamic> override the values of access
-group parameters such as I<newsgroups>, I<read> and I<post>.  This parameter
-is only valid if INN is compiled with Python support (B<--with-python>
-passed to C<configure>).  More information may be found in the file
-F<doc/hook-python>.
+basis.  If an auth group matches successfully and contains a I<python_dynamic>
+parameter, then the argument script (without its C<.py> extension) located
+in the I<pathfilter> directory will be used to determine the client's rights
+each time the user attempts to view a newsgroup, or read or post an article.
+Access rights as determined by I<python_dynamic> override the values of access
+group parameters such as I<newsgroups>, I<read> and I<post>.
+
+This parameter is only valid if INN is compiled with Python support
+(B<--with-python> passed to C<configure>).  More information may be found in
+the file F<doc/hook-python>.
 
 =item I<require_encryption>
 
@@ -495,7 +530,7 @@ Injection-Info).
 =item L
 
 The client may post to newsgroups that are set to disallow local posting
-(status fields C<j>, C<n> and C<x> in the active(5) file). 
+(status fields C<j>, C<n> and C<x> in the active(5) file).
 
 =item N
 
@@ -564,12 +599,12 @@ I<newsmaster> does not already contain an C<@>.
 
 =item I<groupexactcount>
 
-This parameter controls the threshold below with B<nnrpd> should give the
+This parameter controls the threshold below which B<nnrpd> should give the
 exact number of still existing articles present in newsgroups instead of
 an estimate.  The exact number is usually updated once a day during the
-expiry process by B<expirover> (run by B<news.daily>), and is updated when new
-articles arrive but not necessarily when articles are cancelled or overwritten
-in self-expiring storage methods like CNFS.
+expiry process by B<expireover> (run by B<news.daily>), and is updated
+when new articles arrive but not necessarily when articles are cancelled or
+overwritten in self-expiring storage methods like CNFS.
 
 When the estimated count of articles is strictly smaller than
 I<groupexactcount>, B<nnrpd> will recount the number of still existing
@@ -713,7 +748,7 @@ will fail to start.
 You may also want to set the I<complaints>, I<domain>, I<fromhost>, and
 I<newsmaster> parameters to specific values if you use this parameter.
 
-Note that setting this parameter requires the server modify all posts before
+Note that setting this parameter requires the server to modify all posts before
 presenting them to the client and therefore may decrease performance slightly.
 
 =back
@@ -811,7 +846,7 @@ Note that the above access realm could also be written without the
 I<users> key, in which case it applies to any user identity (though in
 this example, the user identity that will be assigned to all matching
 connections is C<< <EXAMPLE> >>).  It is however recommended to keep
-an explicit I<users> key so as to better view to whom the access block
+an explicit I<users> key so as to better see to whom the access block
 applies.
 
 As the only available auth realm only matches hosts in the "example.com"
@@ -833,7 +868,7 @@ auth and access group:
 
 If those are put in the file after the above example, they'll take
 precedence (because they're later in the file) for any user coming from a
-machine in the lab.example.com domain, everyone will only have read
+machine in the lab.example.com domain: everyone will only have read
 access, not posting access.
 
 Here's a similar example for a news server that accepts connections from
@@ -873,7 +908,7 @@ connections before username/password is sent, and the C<auth: ckpasswd>
 one only matches after; order would matter if either group applied to
 both cases.  The order of the access groups in this case does matter,
 provided the I<newsgroups> lines differ; the access group with no I<users>
-line needs to be first, with the C<< users: <LOCAL> >> group after.
+line needs to be first, with the C<< users: <EXAMPLE> >> group after.
 
 Here's an example of another common case: a server that only allows
 connections from a local domain and has an additional hierarchy that's
@@ -1014,6 +1049,34 @@ run a Perl or Python filter to reject any messages crossposted out of your
 local hierarchy, and any messages containing a Supersedes header field.  This
 will keep messages posted to your public hierarchy from hurting any of the
 rest of Usenet if they leak out.
+
+For more complex cases, or if you just prefer to use a database to store
+authentication and/or authorization information, you can use Perl or Python
+scripts to dynamically authenticate the users and/or generate their access
+blocks.  You may then put all the related information (user, password,
+newsgroups for reading, newsgroups for posting, etc.) for instance in an
+SQLite database, and use an F<nnrpd_auth.pl> or F<nnrpd_auth.py> script to
+authenticate the users, and/or an F<nnrpd_access.pl> or F<nnrpd_access.py>
+script to grant the access.  Then F<readers.conf> only needs defining:
+
+    auth checkcredentials {
+        perl_auth: "/path/to/script/nnrpd_auth.pl"
+        perl_access: "/path/to/script/nnrpd_access.pl"
+    }
+
+or:
+
+    auth checkcredentials {
+        python_auth: "nnrpd_auth"
+        python_access: "nnrpd_access"
+    }
+
+The advantage of these external scripts is that you can code whatever rules
+you want, possibly based on a database shared between your news service and
+other services you may provide to your users.  You can more easily handle
+hundreds or thousands of users with external scripts than with the mere use
+of F<readers.conf> stock blocks and a flat file for the credentials of each
+listed user.
 
 =head1 SECURITY CONSIDERATIONS
 

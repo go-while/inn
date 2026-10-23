@@ -8,6 +8,9 @@
 **  Copyright (c) 2002, Peter A. Friend
 **  All rights reserved.
 **
+**  Various bug fixes, code and documentation improvements since then
+**  in 2021, 2022, 2024, 2026.
+**
 **  Redistribution and use in source and binary forms, with or without
 **  modification, are permitted provided that the following conditions are
 **  met:
@@ -37,7 +40,7 @@
 */
 
 #ifndef INN_TST_H
-#define INN_TST_H 1
+#define INN_TST_H
 
 #include "inn/macros.h"
 

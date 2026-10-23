@@ -5,6 +5,10 @@
 **
 **  Written by Ilya Etingof <ilya@glas.net>, 1999.
 **
+**  Various bug fixes, code and documentation improvements since then
+**  in 2000, 2002-2006, 2008-2011, 2013, 2015, 2017, 2018, 2020-2022, 2024,
+**  2026.
+**
 **  This code bases on Python work for innd filtering done by
 **  G.J. Andruk <meowing@banet.net>.  Also it borrows some ideas from
 **  TCL/Perl work done by Bob Heiney and Christophe Wolfhugel.
@@ -613,10 +617,8 @@ PY_syslog(PyObject *self UNUSED, PyObject *args)
 **  definitions, so we have to add casts for all of the string parameters that
 **  we're initializing with constant strings.
 */
-#    define METHOD(name, func, flags, help)                   \
-        {                                                     \
-            (char *) (name), (func), (flags), (char *) (help) \
-        }
+#    define METHOD(name, func, flags, help) \
+        {(char *) (name), (func), (flags), (char *) (help)}
 
 /* clang-format off */
 static PyMethodDef nnrpdPyMethods[] = {

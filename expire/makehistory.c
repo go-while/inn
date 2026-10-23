@@ -45,12 +45,14 @@ getloadavg(double loadavg[], int nelem)
 #endif
 
 static const char usage[] = "\
-Usage: makehistory [-abFIOSx] [-f file] [-l count] [-L load] [-s size] [-T tmpdir]\n\
+Usage: makehistory [-abFIOSx] [-f file] [-l count] [-L load] [-s size]\n\
+                   [-T tmpdir]\n\
 \n\
-    -a          open output history file in append mode\n\
+    -a          open output history database in append mode\n\
     -b          delete bad articles from spool\n\
     -F          fork when writing overview\n\
-    -f file     write history entries to file (default $pathdb/history)\n\
+    -f file     write history entries to file\n\
+                (default $pathhistory/history{.sqlite})\n\
     -I          do not create overview for articles numbered below lowmark\n\
     -l count    size of overview updates (default 10000)\n\
     -L load     pause when load average exceeds threshold\n\
@@ -128,7 +130,7 @@ GetMessageID(char *p)
     if (p[0] != '<' || p[strlen(p) - 1] != '>')
         return "";
 
-    /* Copy into re-used memory space, including NUL. */
+    /* Copy into reused memory space, including NUL. */
     buffer_set(&buffer, p, strlen(p) + 1);
     return buffer.data;
 }
@@ -286,6 +288,15 @@ FlushOverTmpFile(void)
             *r++ = '\0';
             arrived = (time_t) atoll(line);
             expires = (time_t) atoll(p);
+        }
+        /* Validate before TextToToken: that function returns an
+         * all-zero TOKEN on malformed input rather than an error
+         * sentinel, so a bad line would silently insert a bogus
+         * overview entry. */
+        if (!IsToken(q)) {
+            warn("sorted overview file %s has a malformed token at %d",
+                 SortedTmpPath, count);
+            continue;
         }
         token = TextToToken(q);
         if (OVadd(token, r, strlen(r), arrived, expires) == OVADDFAILED) {
@@ -657,7 +668,7 @@ DoArt(ARTHANDLE *art)
             /* Parse the article only once. */
             if (!hasCounts
                 && (p = wire_findbody(art->data, art->len)) != NULL) {
-                end = art->data + art->len;
+                end = art->data + art->len - 1;
                 /* p is at the beginning of the body, if any. */
                 for (; *p != '\0';) {
                     /* p is at the beginning of a new line, if any. */
@@ -902,7 +913,7 @@ main(int argc, char **argv)
     /* Set defaults. */
     if (!innconf_read(NULL))
         exit(1);
-    HistoryPath = concatpath(innconf->pathdb, INN_PATH_HISTORY);
+    HistoryPath = concatpath(innconf->pathhistory, INN_PATH_HISTORY);
     ActivePath = concatpath(innconf->pathdb, INN_PATH_ACTIVE);
     TmpDir = innconf->pathtmp;
     RebuiltflagPath = concatpath(innconf->pathrun, INN_PATH_REBUILDOVERVIEW);
@@ -969,8 +980,8 @@ main(int argc, char **argv)
 
     if (!NoHistory) {
         if ((p = strrchr(HistoryPath, '/')) == NULL) {
-            /* Find the default history file directory. */
-            HistoryDir = innconf->pathdb;
+            /* Find the default history database directory. */
+            HistoryDir = innconf->pathhistory;
         } else {
             *p = '\0';
             HistoryDir = xstrdup(HistoryPath);
@@ -1055,7 +1066,7 @@ main(int argc, char **argv)
     }
 
     if (!NoHistory) {
-        /* Close history file. */
+        /* Close history database. */
         if (!HISclose(History))
             sysdie("cannot close history file");
     }

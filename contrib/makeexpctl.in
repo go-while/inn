@@ -3,6 +3,7 @@
 #
 # Create expire.ctl script based on recently read articles.  Argument gives
 # scale factor to use to adjust expires.
+# To be used in conjunction with contrib/findreadgroups.
 
 use warnings;
 
@@ -32,7 +33,7 @@ if ($scale <= 0) {
 rename($expirectl, "$expirectl.OLD") || die "rename $expirectl failed!\n";
 open(OUTFILE, ">$expirectl") || die "open $expirectl for write failed!\n";
 
-print OUTFILE <<'EOF' ;
+print OUTFILE <<'EOF';
 ##  expire.ctl - expire control file
 ##  Format:
 ##      /remember/:<keep>

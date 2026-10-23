@@ -1,6 +1,9 @@
 ##  Implementation of the binary protocol used to communicate with the
 ##  ovsqlite-server daemon.
+##
 ##  Original implementation written by Bo Lindbergh in December 2023.
+##  Various bug fixes, code and documentation improvements since then
+##  in 2024-2026.
 
 package INN::ovsqlite_client;
 
@@ -359,7 +362,7 @@ BEGIN {
             $addr = pack_sockaddr_un($path);
             $cookie = "";
         } elsif (-f _ && $stat[7] == 18) {
-            my ($fh, $fhbuf, $got, $port, $fhcookie);
+            my ($fh, $fhbuf, $got, $port);
 
             open($fh, "<", $path)
               or croak "$path: open: $!";
@@ -370,7 +373,7 @@ BEGIN {
             $got == 18
               or croak "$path: Unexpected EOF";
             close($fh);
-            ($port, $fhcookie) = unpack("n a16", $fhbuf);
+            ($port, $cookie) = unpack("n a16", $fhbuf);
             $pf = PF_INET;
             $addr = pack_sockaddr_in($port, INADDR_LOOPBACK);
         } else {
@@ -397,12 +400,12 @@ BEGIN {
             {
                 name    => "cutofflow",
                 default => 0,
-            },
+            }
         ],
         [
             {
                 name => "errmsg",
-            },
+            }
         ],
     );
 
@@ -450,7 +453,7 @@ BEGIN {
         [
             {
                 name => "errmsg",
-            },
+            }
         ],
     );
 
@@ -487,7 +490,7 @@ BEGIN {
             {
                 name     => "groupname",
                 required => 1,
-            },
+            }
         ],
         [
             {
@@ -541,12 +544,12 @@ BEGIN {
             {
                 name     => "groupname",
                 required => 1,
-            },
+            }
         ],
         [
             {
                 name => "errmsg",
-            },
+            }
         ],
     );
 
@@ -656,7 +659,7 @@ BEGIN {
         [
             {
                 name => "errmsg",
-            },
+            }
         ],
     );
 
@@ -730,7 +733,7 @@ BEGIN {
         [
             {
                 name => "errmsg",
-            },
+            }
         ],
     );
 
@@ -828,7 +831,7 @@ BEGIN {
         [
             {
                 name => "errmsg",
-            },
+            }
         ],
     );
 
@@ -1001,7 +1004,7 @@ BEGIN {
         [
             {
                 name => "errmsg",
-            },
+            }
         ],
     );
 
@@ -1036,7 +1039,7 @@ BEGIN {
             };
             $code == response_artlist_done
               and last;
-            $low = $articles->[-1]->{artnum} + 1;
+            $low = $articles->[-1]{artnum} + 1;
         }
         $search_group_all_out->(
             $errmsg,
@@ -1052,12 +1055,12 @@ BEGIN {
             {
                 name     => "groupname",
                 required => 1,
-            },
+            }
         ],
         [
             {
                 name => "errmsg",
-            },
+            }
         ],
     );
 
@@ -1100,7 +1103,7 @@ BEGIN {
         [
             {
                 name => "errmsg",
-            },
+            }
         ],
     );
 
@@ -1138,7 +1141,7 @@ BEGIN {
         [
             {
                 name => "errmsg",
-            },
+            }
         ],
     );
 
@@ -1165,12 +1168,12 @@ BEGIN {
             {
                 name     => "callback",
                 required => 1,
-            },
+            }
         ],
         [
             {
                 name => "errmsg",
-            },
+            }
         ],
     );
 
@@ -1224,7 +1227,7 @@ INN::ovsqlite_client - Talk to ovsqlite-server from Perl
     use INN::ovsqlite_client qw(:all);
 
     my $client = INN::ovsqlite_client::->new(
-        port => "/usr/local/news/run/ovsqlite.sock",
+        path => "/usr/local/news/run/ovsqlite.sock",
     );
 
     $client->search_group_all(
@@ -1448,7 +1451,7 @@ iterating or a false value to terminate.
 
 =item add_article
 
-    $code = $client->add_artice(
+    $code = $client->add_article(
         groupname  => $groupname,
         artnum     => $artnum,
         token      => $token,
@@ -1518,7 +1521,7 @@ Z<>
         errmsg     => $errmsg,        # optional output
     );
 
-This convenience methods calls C<search_group> repeatedly to fetch information
+This convenience method calls C<search_group> repeatedly to fetch information
 for all specified articles.  The callback function is called with the
 I<articles> array reference as the only argument.  It should return a true
 value to keep iterating or a false value to terminate.

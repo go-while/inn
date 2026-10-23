@@ -1,11 +1,17 @@
 /*
-** Interface to history API modules
+**  Interface to history API modules.
+**
+**  Written by Alex Kiernan in 2001.
+**
+**  Various bug fixes, code and documentation improvements since then
+**  in 2001-2003, 2009, 2020-2022, 2026.
 */
 
 #ifndef HISINTERFACE_H
-#define HISINTERFACE_H 1
+#define HISINTERFACE_H
 
 #include "config.h"
+#include "inn/libinn.h"
 #include <sys/types.h>
 
 struct token;
@@ -27,7 +33,7 @@ typedef struct hismethod {
     bool (*expire)(void *, const char *, const char *, bool, void *, time_t,
                    bool (*)(void *, time_t, time_t, time_t, struct token *));
     bool (*walk)(void *, const char *, void *,
-                 bool (*)(void *, time_t, time_t, time_t,
+                 bool (*)(void *, const HASH *, time_t, time_t, time_t,
                           const struct token *));
     bool (*remember)(void *, const char *, time_t, time_t);
     bool (*ctl)(void *, int, void *);

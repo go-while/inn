@@ -1,5 +1,10 @@
 /*
 **  Storage manager module for Cyclic News File System method.
+**
+**  Rewritten and cleaned by Scott Fritchie from its INN 1.5.1 incarnation
+**  in 1998.
+**  Various bug fixes, code and documentation improvements since then
+**  in 1998-2011, 2014, 2015, 2017-2026.
 */
 
 #include "portable/system.h"
@@ -8,9 +13,7 @@
 #include <ctype.h>
 #include <errno.h>
 #include <fcntl.h>
-#if HAVE_LIMITS_H
-#    include <limits.h>
-#endif
+#include <limits.h>
 #include <netinet/in.h>
 #include <sys/stat.h>
 #include <sys/uio.h>
@@ -65,6 +68,29 @@ static int metabuff_update = METACYCBUFF_UPDATE;
 static int refresh_interval = REFRESH_INTERVAL;
 
 static CYCBUFF *CNFSgetcycbuffbyname(char *name);
+
+static bool
+CNFSReadFully(int fd, void *buffer, size_t length, off_t offset)
+{
+    char *p = buffer;
+
+    while (length > 0) {
+        ssize_t count;
+
+        do {
+            count = pread(fd, p, length, offset);
+        } while (count < 0 && errno == EINTR);
+        if (count <= 0) {
+            if (count == 0)
+                errno = EIO;
+            return false;
+        }
+        p += count;
+        length -= count;
+        offset += count;
+    }
+    return true;
+}
 
 
 /*
@@ -551,7 +577,7 @@ CNFSparse_metapart_line(char *l)
                          (metacycbuff->count + 1) * sizeof(CYCBUFF *));
         metacycbuff->members[metacycbuff->count++] = rp;
     }
-    /* Gotta deal with the last cycbuff on the list */
+    /* Now deal with the last cycbuff on the list. */
     cycbuff = l;
     if ((rp = CNFSgetcycbuffbyname(cycbuff)) == NULL) {
         warn("CNFS: bogus cycbuff '%s' (metacycbuff '%s')", cycbuff,
@@ -760,8 +786,8 @@ CNFSinit_disks(CYCBUFF *cycbuff)
         /*
         ** The minimum article offset will be the size of the bitfield itself,
         ** len / (blocksize * 8), plus however many additional blocks the
-        *CYCBUFF
-        ** external header occupies ... then round up to the next block.
+        ** *CYCBUFF external header occupies... then round up to the next
+        ** block.
         */
         minartoffset = cycbuff->len / (cycbuff->blksz * 8) + CNFS_BEFOREBITF;
         tonextblock =
@@ -1002,11 +1028,10 @@ CNFSread_config(void)
 static void
 cnfs_mapcntl(void *p, size_t length, int flags)
 {
-    char *start, *end;
+    const size_t mask = ~(size_t) (pagesize - 1);
+    char *start = (char *) ((uintptr_t) p & mask);
+    char *end = (char *) (((uintptr_t) p + length + pagesize - 1) & mask);
 
-    start = (char *) ((uintptr_t) p & ~(size_t) (pagesize - 1));
-    end = (char *) (((uintptr_t) p + length + pagesize)
-                    & ~(size_t) (pagesize - 1));
     if (flags == MS_INVALIDATE) {
         msync(start, end - start, flags);
     } else {
@@ -1582,7 +1607,8 @@ cnfs_retrieve(const TOKEN token, const RETRTYPE amount)
     } else {
         private->base = xmalloc(ntohl(cah.size));
         pagefudge = 0;
-        if (pread(cycbuff->fd, private->base, ntohl(cah.size), offset) < 0) {
+        if (!CNFSReadFully(cycbuff->fd, private->base, ntohl(cah.size),
+                           offset)) {
             SMseterror(SMERR_UNDEFINED, "read failed");
             syswarn("CNFS: could not read token %s %s:0x%s:%u",
                     TokenToText(token), cycbuffname,
@@ -1977,7 +2003,8 @@ cnfs_next(ARTHANDLE *article, const RETRTYPE amount)
     } else {
         private->base = xmalloc(ntohl(cah.size));
         pagefudge = 0;
-        if (pread(cycbuff->fd, private->base, ntohl(cah.size), offset) < 0) {
+        if (!CNFSReadFully(cycbuff->fd, private->base, ntohl(cah.size),
+                           offset)) {
             art->data = NULL;
             art->len = 0;
             art->token = NULL;

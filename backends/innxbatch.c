@@ -24,7 +24,7 @@
 **  We do not use any file locking. At worst, a batch could be transmitted
 **  twice in parallel by two independent invocations of innxbatch.
 **  To prevent this, innxbatch should be invoked by a shell script that uses
-**  shlock(1) to achieve mutual exclusion.
+**  shlock(8) to achieve mutual exclusion.
 */
 
 #include "portable/system.h"
@@ -490,14 +490,19 @@ main(int ac, char *av[])
 
         if (fstat(fd, &statbuf)) {
             syswarn("cannot stat %s, skipping", XBATCHname);
-            close(i);
+            close(fd);
             continue;
         }
 
-        XBATCHsize = statbuf.st_size;
+        if (statbuf.st_size < 0 || (uintmax_t) statbuf.st_size > INT_MAX) {
+            warn("batch file %s is too large, skipping", XBATCHname);
+            close(fd);
+            continue;
+        }
+        XBATCHsize = (int) statbuf.st_size;
         if (XBATCHsize == 0) {
             warn("batch file %s is zero length, skipping", XBATCHname);
-            close(i);
+            close(fd);
             unlink(XBATCHname);
             continue;
         } else if (XBATCHsize > XBATCHbuffersize) {

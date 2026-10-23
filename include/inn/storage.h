@@ -1,9 +1,14 @@
 /*
 **  Here be declarations related to the storage subsystem.
+**
+**  New storage API written by Clayton O'Neill in 1997.
+**
+**  Various bug fixes, code and documentation improvements since then
+**  in 1997-2003, 2005, 2006, 2008, 2009, 2015, 2021, 2022, 2024, 2026.
 */
 
 #ifndef INN_STORAGE_H
-#define INN_STORAGE_H 1
+#define INN_STORAGE_H
 
 #include "inn/macros.h"
 #include "inn/options.h"
@@ -59,22 +64,19 @@ typedef struct {
 } ARTHANDLE;
 
 /* Initializer for the ARTHANDLE structure. */
-#define ARTHANDLE_INITIALIZER                       \
-    {                                               \
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 \
-    }
+#define ARTHANDLE_INITIALIZER {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}
 
-#define SMERR_NOERROR    0
-#define SMERR_INTERNAL   1
-#define SMERR_UNDEFINED  2
-#define SMERR_NOENT      3
-#define SMERR_TOKENSHORT 4
-#define SMERR_NOBODY     5
-#define SMERR_UNINIT     6
-#define SMERR_CONFIG     7
-#define SMERR_BADHANDLE  8
-#define SMERR_BADTOKEN   9
-#define SMERR_NOMATCH    10
+#define SMERR_NOERROR         0
+#define SMERR_INTERNAL        1
+#define SMERR_UNDEFINED       2
+#define SMERR_NOENT           3
+#define SMERR_TOKENSHORT      4
+#define SMERR_NOBODY          5
+#define SMERR_UNINIT          6
+#define SMERR_CONFIG          7
+#define SMERR_BADHANDLE       8
+#define SMERR_BADTOKEN        9
+#define SMERR_NOMATCH         10
 
 extern int SMerrno;
 extern char *SMerrorstr;
@@ -109,6 +111,28 @@ ARTHANDLE *SMretrieve(const TOKEN token, const RETRTYPE amount);
 ARTHANDLE *SMnext(ARTHANDLE *article, const RETRTYPE amount);
 void SMfreearticle(ARTHANDLE *article);
 bool SMcancel(TOKEN token);
+
+/*
+ * Best-effort: append a token to the out-of-band cancel tombstone log
+ * (${pathdb}/cancels.tombstone) so a later expire run can drop the
+ * matching history entry without an SMretrieve(RETR_STAT).  Intended
+ * for callers that cancel articles outside the expireover/expirerm
+ * pipeline (innd's ARTcancel and sm -r).  No-op when
+ * innconf->expiretombstone is false or token has type TOKEN_EMPTY.
+ *
+ * Concurrency: appenders take a non-blocking shared (F_RDLCK) fcntl
+ * lock; expire's consumer takes an exclusive lock briefly during
+ * snapshot/rename.  POSIX O_APPEND atomicity for sub-PIPE_BUF
+ * writes keeps single-line tokens from interleaving across
+ * concurrent appenders.
+ *
+ * Returns true on success (token appended, flushed, file closed),
+ * false on any failure path.  Failures are logged via syswarn;
+ * callers can ignore the return value (the cancel itself has
+ * already succeeded by the time this is called).
+ */
+bool SMcanceltombstone(TOKEN token);
+
 bool SMprobe(PROBETYPE type, TOKEN *token, void *value);
 bool SMflushcacheddata(FLUSHTYPE type);
 void SMprintfiles(FILE *file, TOKEN token, char **xref, int ngroups);

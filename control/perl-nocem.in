@@ -14,7 +14,7 @@
 # Documentation improved by Jeffrey M. Vinocur (2002), Russ Allbery (2006)
 # and Julien Élie (2007).
 # Various bug fixes, code and documentation improvements by Julien Élie
-# in 2007-2009, 2013, 2014, 2016, 2018, 2020-2024.
+# in 2007-2009, 2013, 2014, 2016, 2018, 2020-2026.
 ##############################################################################
 
 require 5.00403;
@@ -248,7 +248,7 @@ sub do_nocem {
               . "(%d ids, %d skipped, %.5f s, %.1f/s)",
             $msgid, $nid, $issuer, $type, $nr, $skipped, $diff,
             ($nr + $skipped) / $diff,
-        ),
+        )
     );
 }
 
@@ -341,7 +341,7 @@ sub read_nocem {
 
             my ($id, $grp) = /^(\S*)\s+(\S+.*)$/;
             next if not $grp;
-            $skipped++ if $id;
+            $skipped++ if $id and $id =~ /<\S+>/;
         }
 
         # innreport will parse "unwanted notice" lines.
@@ -350,7 +350,7 @@ sub read_nocem {
                 "Article %s: %s notice %s by %s for %s (%d ids)",
                 $msgid, $opt_u ? "skipped" : "unwanted", $hdrs{'notice-id'},
                 $hdrs{issuer}, $hdrs{type}, $skipped,
-            ),
+            )
         );
         return;
     }
@@ -376,6 +376,17 @@ sub read_nocem {
         $inbody = 0 if /^\@\@END NCM BODY/;
         next if not $inbody or /^#/;
 
+        # Expected standard patterns:
+        # <mid> group
+        # <mid> group1 group2
+        # <mid> group1
+        #       group2
+        #       group3 group4
+        #
+        # One or more tabulations precede the list of newsgroups.
+        # perl-nocem also accepts spaces instead of tabulations, and
+        # comma-separated lists of newsgroups like in:
+        # <mid> group1,group2
         my ($id, $grp) = /^(\S*)\s+(\S+.*)$/;
         next if not $grp;
         # Convert the whitespace-separated list of newsgroups to a
@@ -388,11 +399,13 @@ sub read_nocem {
                 } else {
                     $skipped++;
                 }
+                $lastid = '';
             }
+            next if $id !~ /<\S+>/;    # Malformatted Message-ID.
             $lastid = $id;
             $lastgrp = $grp;
         } else {
-            $lastgrp .= ',' . $grp;
+            $lastgrp .= ',' . $grp if $lastid;
         }
     }
     if ($lastid) {
@@ -679,26 +692,46 @@ sub cancel_nntp {
             logmsg("connect: $!", 'err');
             goto ERR;
         }
-        if (($r = <NNTP>) !~ /^200 /) {
+        if (not defined($r = <NNTP>)) {
+            logmsg("Cannot cancel $_: No greeting from server", 'err');
+            goto ERR;
+        }
+        if ($r !~ /^200 /) {
             $r =~ s/\r\n$//;
             logmsg("Bad reply from server: $r", 'err');
             goto ERR;
         }
+
         select NNTP;
         $| = 1;
         select STDOUT;
         print NNTP "MODE CANCEL\r\n";
-        if (($r = <NNTP>) !~ /^284 /) {
+        if (not defined($r = <NNTP>)) {
+            logmsg(
+                "Cannot cancel $_: No response from server to MODE CANCEL",
+                'err',
+            );
+            goto ERR;
+        }
+        if ($r !~ /^284 /) {
             $r =~ s/\r\n$//;
             logmsg("MODE CANCEL not supported: $r", 'err');
             goto ERR;
         }
         $nntp_open = 1;
     }
+
     foreach (@$ids) {
         logmsg("Cancelling $_", 'debug');
         print NNTP "$_\r\n";
-        if (($r = <NNTP>) !~ /^289/) {
+        if (not defined($r = <NNTP>)) {
+            logmsg(
+                "Cannot cancel $_: No response from server to cancel request",
+                'err',
+            );
+            goto ERR;
+        }
+        if ($r !~ /^289/) {
             $r =~ s/\r\n$//;
             logmsg("Cannot cancel $_: $r", 'err');
             goto ERR;
@@ -1016,7 +1049,7 @@ to several variables: the Message-ID C<$msgid> of the NoCeM message, the
 Message-ID C<$artid> of the article to cancel, the comma-separated list
 of newsgroups C<$groups> to which the article to cancel was posted, the
 hash reference C<$hdrs> to the pseudo header fields of the NoCeM notice,
-in lowercase value.  The article is kept if the function returns C<0>, and
+with lowercase keys.  The article is kept if the function returns C<0>, and
 cancelled otherwise.
 
 Here is an illustration of what this function can do, when defined in
@@ -1046,7 +1079,7 @@ I<filename> and the B<-i> flag is used:
         # In case the server only carries fr.* and news.*, this
         # rule permits discarding NoCeM notices related to
         # newsgroups not carried by the server, and therefore
-        # neither treating nor remembering in the history file
+        # neither treating nor remembering in the history database
         # Message-IDs of articles which won't reach the server.
         return 0 if not $carried;
 
@@ -1075,7 +1108,7 @@ and gpgv(1) commands unless I<keyring> is an empty string.
 
 =item B<-l>
 
-By default, B<perl-nocem> send logs to syslog(3).  In case the syslog facility
+By default, B<perl-nocem> sends logs to syslog(3).  In case the syslog facility
 is not available or this flag is used, logs are sent to F<perl-nocem.log>
 in I<pathlog>.  Error log level will still additionally be sent to syslog if
 available.

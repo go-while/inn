@@ -1,6 +1,10 @@
 /*
 **  Transmit articles to remote site.
+**  Originally written by Rich $alz.
 **  Modified for NNTP streaming: 1996-01-03 Jerry Aguirre.
+**
+**  Various bug fixes, code and documentation improvements since then
+**  in 1997-2007, 2009-2011, 2014, 2015, 2017, 2021, 2022, 2024, 2026.
 */
 
 #include "portable/system.h"
@@ -169,7 +173,7 @@ static void ExitWithStats(int) __attribute__((__noreturn__));
 
 
 /*
-**  Return true if the history file has the article expired.
+**  Return true if the history database has the article expired.
 */
 static bool
 Expired(char *MessageID)
@@ -302,17 +306,26 @@ strel(int i)
 static bool
 REMwrite(char *p, int i, bool escdot)
 {
-    int size;
+    size_t capacity, needed, size;
 
-    /* Buffer too full? */
-    if (REMbuffend - REMbuffptr < i + 3) {
+    if (i < 0)
+        return false;
+
+    /* Space for the payload, optional dot-escape, and CRLF. */
+    needed = (size_t) i + 3;
+    if ((size_t) (REMbuffend - REMbuffptr) < needed) {
         if (!REMflush())
             return false;
-        if (REMbuffend - REMbuffer < i + 3) {
-            /* Line too long -- grow buffer. */
-            size = i * 2;
+        capacity = (size_t) (REMbuffend - REMbuffer);
+        if (capacity < needed) {
+            /* Line too long -- grow buffer without overflowing size_t. */
+            if (needed > SIZE_MAX / 2)
+                size = needed;
+            else
+                size = needed * 2;
             REMbuffer = xrealloc(REMbuffer, size);
-            REMbuffend = &REMbuffer[size];
+            REMbuffptr = REMbuffer;
+            REMbuffend = REMbuffer + size;
         }
     }
 
@@ -1049,14 +1062,21 @@ article_open(const char *path, const char *id)
             return NULL;
         if (fstat(fd, &st) < 0) {
             syswarn("requeue %s", path);
+            close(fd);
+            Requeue(path, id);
+            return NULL;
+        }
+        if (st.st_size < 0 || (uintmax_t) st.st_size > SIZE_MAX) {
+            warn("requeue %s: article is too large", path);
+            close(fd);
             Requeue(path, id);
             return NULL;
         }
         article = xmalloc(sizeof(ARTHANDLE));
         article->type = TOKEN_EMPTY;
-        article->len = st.st_size;
+        article->len = (size_t) st.st_size;
         data = xmalloc(article->len);
-        if (xread(fd, data, article->len) < 0) {
+        if (xread(fd, data, st.st_size) < 0) {
             syswarn("requeue %s", path);
             free(data);
             free(article);
@@ -1075,6 +1095,13 @@ article_open(const char *path, const char *id)
         }
         if (p[-1] != '\r') {
             p = wire_from_native(data, article->len, &length);
+            if (p == NULL) {
+                syswarn("requeue %s: cannot convert article", path);
+                free(data);
+                free(article);
+                Requeue(path, id);
+                return NULL;
+            }
             free(data);
             data = p;
             article->len = length;
@@ -1117,6 +1144,7 @@ main(int ac, char *av[])
     volatile int port = NNTP_PORT;
     bool val;
     char *path;
+    size_t patharticleslen;
     volatile unsigned int ConnectTimeout;
     volatile unsigned int TotalTimeout;
 
@@ -1126,6 +1154,7 @@ main(int ac, char *av[])
     /* Set defaults. */
     if (!innconf_read(NULL))
         exit(1);
+    patharticleslen = strlen(innconf->patharticles);
 
     ConnectTimeout = 0;
     TotalTimeout = 0;
@@ -1351,7 +1380,7 @@ main(int ac, char *av[])
         alarm(TotalTimeout);
     }
 
-    path = concatpath(innconf->pathdb, INN_PATH_HISTORY);
+    path = concatpath(innconf->pathhistory, INN_PATH_HISTORY);
     History = HISopen(path, innconf->hismethod, HIS_RDONLY);
     free(path);
 
@@ -1388,11 +1417,10 @@ main(int ac, char *av[])
             continue;
 
         /* Split the line into possibly two fields. */
-        if (Article[0] == '/' && Article[strlen(innconf->patharticles)] == '/'
-            && strncmp(Article, innconf->patharticles,
-                       strlen(innconf->patharticles))
-                   == 0)
-            Article += strlen(innconf->patharticles) + 1;
+        if (Article[0] == '/'
+            && strncmp(Article, innconf->patharticles, patharticleslen) == 0
+            && Article[patharticleslen] == '/')
+            Article += patharticleslen + 1;
         if ((MessageID = strchr(Article, ' ')) != NULL) {
             *MessageID++ = '\0';
             if (*MessageID != '<' || (p = strrchr(MessageID, '>')) == NULL

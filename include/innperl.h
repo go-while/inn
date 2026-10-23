@@ -1,9 +1,13 @@
 /*
 **  Declarations for embedded Perl.
+**
+**  Put into a separate header file in 2002.
+**  Various bug fixes, code and documentation improvements since then
+**  in 2002, 2003, 2015, 2021, 2024-2026.
 */
 
 #ifndef INNPERL_H
-#define INNPERL_H 1
+#define INNPERL_H
 
 /* Skip this entire file if DO_PERL (./configure --with-perl) isn't set. */
 #if DO_PERL
@@ -12,7 +16,7 @@
 
 /* Suppress warnings triggered by Perl macros like PUSHMARK or POPp. */
 #    if defined(__llvm__) || defined(__clang__)
-#        if LLVM_VERSION_MAJOR > 11
+#        if __clang_major__ > 11
 #            pragma GCC diagnostic ignored "-Wcompound-token-split-by-macro"
 #        endif
 #        pragma GCC diagnostic ignored "-Wgnu-statement-expression"

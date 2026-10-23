@@ -12,6 +12,11 @@
 **  not.  (Externally visible unfortunately means everything that needs to be
 **  visible outside of this object file, not just interfaces exported to
 **  consumers of the overview API.)
+**
+**  Initial implementation in 2002 by Russ Allbery.
+**
+**  Various bug fixes, code and documentation improvements since then
+**  in 2002, 2003, 2005-2007, 2009, 2011, 2014, 2017, 2019, 2021, 2026.
 */
 
 #include "portable/system.h"
@@ -48,7 +53,7 @@ static int file_open(const char *base, const char *suffix, bool writable,
                      bool append);
 static bool file_open_index(struct group_data *, const char *suffix);
 static bool file_open_data(struct group_data *, const char *suffix);
-static void *map_file(int fd, size_t length, const char *base,
+static void *map_file(int fd, off_t length, const char *base,
                       const char *suffix);
 static bool map_index(struct group_data *data);
 static bool map_data(struct group_data *data);
@@ -177,6 +182,7 @@ file_open_index(struct group_data *data, const char *suffix)
     if (fstat(data->indexfd, &st) < 0) {
         syswarn("tradindexed: cannot stat %s.%s", data->path, suffix);
         close(data->indexfd);
+        data->indexfd = -1;
         return false;
     }
     data->indexinode = st.st_ino;
@@ -249,10 +255,14 @@ tdx_data_open_files(struct group_data *data)
     return true;
 
 fail:
-    if (data->indexfd >= 0)
+    if (data->indexfd >= 0) {
         close(data->indexfd);
-    if (data->datafd >= 0)
+        data->indexfd = -1;
+    }
+    if (data->datafd >= 0) {
         close(data->datafd);
+        data->datafd = -1;
+    }
     return false;
 }
 
@@ -263,25 +273,29 @@ fail:
 **  error reporting.
 */
 static void *
-map_file(int fd, size_t length, const char *base, const char *suffix)
+map_file(int fd, off_t length, const char *base, const char *suffix)
 {
     char *data;
+    size_t size;
 
+    if (length < 0 || (uintmax_t) length > SIZE_MAX) {
+        errno = EOVERFLOW;
+        syswarn("tradindexed: %s.%s is too large", base, suffix);
+        return NULL;
+    }
     if (length == 0)
         return NULL;
+    size = (size_t) length;
 
     if (!innconf->tradindexedmmap) {
-        ssize_t status;
-
-        data = xmalloc(length);
-        status = read(fd, data, length);
-        if ((size_t) status != length) {
+        data = xmalloc(size);
+        if (lseek(fd, 0, SEEK_SET) < 0 || xread(fd, data, length) < 0) {
             syswarn("tradindexed: cannot read data file %s.%s", base, suffix);
             free(data);
             return NULL;
         }
     } else {
-        data = mmap(NULL, length, PROT_READ, MAP_SHARED, fd, 0);
+        data = mmap(NULL, size, PROT_READ, MAP_SHARED, fd, 0);
         if (data == MAP_FAILED) {
             syswarn("tradindexed: cannot mmap %s.%s", base, suffix);
             return NULL;
@@ -303,7 +317,12 @@ map_index(struct group_data *data)
     r = fstat(data->indexfd, &st);
     if (r == -1) {
         if (errno == ESTALE) {
-            r = file_open_index(data, NULL);
+            if (!file_open_index(data, NULL))
+                return false;
+            r = fstat(data->indexfd, &st);
+            if (r == -1)
+                syswarn("tradindexed: cannot stat reopened %s.IDX",
+                        data->path);
         } else {
             syswarn("tradindexed: cannot stat %s.IDX", data->path);
         }
@@ -312,7 +331,7 @@ map_index(struct group_data *data)
         return false;
     data->indexlen = st.st_size;
     data->index = map_file(data->indexfd, data->indexlen, data->path, "IDX");
-    return (data->index == NULL && data->indexlen > 0) ? false : true;
+    return data->index != NULL || data->indexlen == 0;
 }
 
 
@@ -328,7 +347,12 @@ map_data(struct group_data *data)
     r = fstat(data->datafd, &st);
     if (r == -1) {
         if (errno == ESTALE) {
-            r = file_open_data(data, NULL);
+            if (!file_open_data(data, NULL))
+                return false;
+            r = fstat(data->datafd, &st);
+            if (r == -1)
+                syswarn("tradindexed: cannot stat reopened %s.DAT",
+                        data->path);
         } else {
             syswarn("tradindexed: cannot stat %s.DAT", data->path);
         }
@@ -337,7 +361,7 @@ map_data(struct group_data *data)
         return false;
     data->datalen = st.st_size;
     data->data = map_file(data->datafd, data->datalen, data->path, "DAT");
-    return (data->data == NULL && data->indexlen > 0) ? false : true;
+    return data->data != NULL || data->datalen == 0;
 }
 
 
@@ -354,7 +378,7 @@ unmap_file(void *data, off_t length, const char *base, const char *suffix)
     if (!innconf->tradindexedmmap)
         free(data);
     else {
-        if (munmap(data, length) < 0)
+        if (munmap(data, (size_t) length) < 0)
             syswarn("tradindexed: cannot munmap %s.%s", base, suffix);
     }
     return;
@@ -501,14 +525,17 @@ bool
 tdx_search(struct search *search, struct article *artdata)
 {
     struct index_entry *entry;
-    size_t max;
+    size_t count, max;
 
     if (search == NULL || search->data == NULL)
         return false;
     if (search->data->index == NULL || search->data->data == NULL)
         return false;
 
-    max = (search->data->indexlen / sizeof(struct index_entry)) - 1;
+    count = search->data->indexlen / sizeof(struct index_entry);
+    if (search->current >= count)
+        return false;
+    max = count - 1;
     entry = search->data->index + search->current;
     while (search->current <= search->limit && search->current <= max) {
         if (entry->length != 0)
@@ -525,7 +552,9 @@ tdx_search(struct search *search, struct article *artdata)
        seems not to be an issue in limited testing, although write caching
        that leads to on-disk IDX and DAT being out of sync could trigger a
        problem here. */
-    if (entry->offset + entry->length > search->data->datalen) {
+    if (entry->offset < 0 || entry->length < 0
+        || entry->offset > search->data->datalen
+        || (off_t) entry->length > search->data->datalen - entry->offset) {
         search->data->remapoutoforder = true;
         warn("Invalid or inaccessible entry for article %lu in %s.IDX:"
              " offset %lu length %lu datalength %lu",
@@ -703,21 +732,22 @@ tdx_data_pack_start(struct group_data *data, ARTNUM artnum)
         goto fail;
     }
     if (close(fd) < 0) {
+        fd = -1;
         syswarn("tradindexed: cannot close %s.IDX-NEW", data->path);
         goto fail;
     }
+    fd = -1;
     data->base = base;
     data->indexinode = st.st_ino;
     return true;
 
 fail:
-    if (fd >= 0) {
+    if (fd >= 0)
         close(fd);
-        idxfile = concat(data->path, ".IDX-NEW", (char *) 0);
-        if (unlink(idxfile) < 0)
-            syswarn("tradindexed: cannot unlink %s", idxfile);
-        free(idxfile);
-    }
+    idxfile = concat(data->path, ".IDX-NEW", (char *) 0);
+    if (unlink(idxfile) < 0)
+        syswarn("tradindexed: cannot unlink %s", idxfile);
+    free(idxfile);
     return false;
 }
 
@@ -844,7 +874,7 @@ tdx_data_expire_start(const char *group, struct group_data *data,
                       struct group_entry *index, struct history *history)
 {
     struct group_data *new_data;
-    struct search *search;
+    struct search *search = NULL;
     struct article article;
     ARTNUM high;
 
@@ -857,9 +887,12 @@ tdx_data_expire_start(const char *group, struct group_data *data,
        so that we can treat all errors on opening a search as errors. */
     high = index->high > 0 ? index->high : data->base;
     new_data->high = high;
+    data->refcount++;
     search = tdx_search_open(data, data->base, high, high);
-    if (search == NULL)
+    if (search == NULL) {
+        data->refcount--;
         goto fail;
+    }
 
     /* Loop through all of the articles in the group, adding the ones that are
        still valid to the new index. */
@@ -892,10 +925,16 @@ tdx_data_expire_start(const char *group, struct group_data *data,
     }
 
     /* Done; the rest happens in tdx_data_rebuild_finish. */
+    tdx_search_close(search);
+    data->refcount--;
     tdx_data_close(new_data);
     return true;
 
 fail:
+    if (search != NULL) {
+        tdx_search_close(search);
+        data->refcount--;
+    }
     tdx_data_delete(group, "-NEW");
     tdx_data_close(new_data);
     return false;
@@ -995,7 +1034,8 @@ entry_audit(struct group_data *data, struct index_entry *entry,
             goto clear;
         return;
     }
-    if (entry->offset > data->datalen || entry->length > data->datalen) {
+    if (entry->offset < 0 || entry->offset > data->datalen
+        || (off_t) entry->length > data->datalen) {
         warn("tradindexed: offset %lu or length %lu out of bounds for %s:%lu",
              (unsigned long) entry->offset, (unsigned long) entry->length,
              group, article);
@@ -1003,7 +1043,7 @@ entry_audit(struct group_data *data, struct index_entry *entry,
             goto clear;
         return;
     }
-    if (entry->offset + entry->length > data->datalen) {
+    if ((off_t) entry->length > data->datalen - entry->offset) {
         warn("tradindexed: offset %lu plus length %lu out of bounds for"
              " %s:%lu",
              (unsigned long) entry->offset, (unsigned long) entry->length,
@@ -1047,8 +1087,10 @@ tdx_data_audit(const char *group, struct group_entry *index, bool fix)
     bool changed = false;
 
     data = tdx_data_new(group, true);
-    if (!tdx_data_open_files(data))
+    if (!tdx_data_open_files(data)) {
+        tdx_data_close(data);
         return;
+    }
     if (!map_index(data))
         goto end;
     if (!map_data(data))

@@ -1,5 +1,10 @@
 /*
 **  Storage manager module for traditional spool format.
+**
+**  Originally written by Richard Michael Todd <rmtodd@mailhost.ecn.ou.edu>
+**  in 1998.
+**  Various bug fixes, code and documentation improvements since then
+**  in 1998-2010, 2014, 2015, 2017, 2021-2026.
 */
 
 #include "portable/system.h"
@@ -28,8 +33,8 @@
 #include "tradspool.h"
 
 typedef struct {
-    char *artbase;       /* start of the article data -- may be mmaped */
-    unsigned int artlen; /* art length. */
+    char *artbase; /* start of the article data -- may be mmaped */
+    size_t artlen; /* art length. */
     int nextindex;
     char *curdirname;
     DIR *curdir;
@@ -722,7 +727,7 @@ tradspool_store(const ARTHANDLE article, const STORAGECLASS class)
     close(fd);
 
     /* Blah, this is ugly.  Have to make symlinks under other pathnames for
-     * backwards compatibility purposes. */
+     * backward compatibility purposes. */
     if (numxrefs > 1) {
         for (i = 1; i < numxrefs; ++i) {
             if ((p = strchr(xrefs[i], ':')) == NULL)
@@ -808,15 +813,23 @@ OpenArticle(const char *path, RETRTYPE amount)
         close(fd);
         return NULL;
     }
+    /* Keep the historical per-article policy limit even though artlen is a
+       size_t.  Larger corrupt spool files must not reach fatal xmalloc. */
+    if (sb.st_size < 0 || (uintmax_t) sb.st_size > UINT_MAX) {
+        SMseterror(SMERR_UNDEFINED, "article is too large");
+        free(art);
+        close(fd);
+        return NULL;
+    }
 
     art->arrived = sb.st_mtime;
 
     private = xmalloc(sizeof(PRIV_TRADSPOOL));
     art->private = (void *) private;
-    private->artlen = sb.st_size;
+    private->artlen = (size_t) sb.st_size;
     if (innconf->articlemmap) {
         if ((private->artbase =
-                 mmap(NULL, sb.st_size, PROT_READ, MAP_SHARED, fd, 0))
+                 mmap(NULL, private->artlen, PROT_READ, MAP_SHARED, fd, 0))
             == MAP_FAILED) {
             SMseterror(SMERR_UNDEFINED, NULL);
             syswarn("tradspool: could not mmap article %s", path);
@@ -826,9 +839,9 @@ OpenArticle(const char *path, RETRTYPE amount)
             return NULL;
         }
         if (amount == RETR_ALL)
-            madvise(private->artbase, sb.st_size, MADV_WILLNEED);
+            madvise(private->artbase, private->artlen, MADV_WILLNEED);
         else
-            madvise(private->artbase, sb.st_size, MADV_SEQUENTIAL);
+            madvise(private->artbase, private->artlen, MADV_SEQUENTIAL);
 
         /* consider coexisting both wireformatted and nonwireformatted */
         p = memchr(private->artbase, '\n', private->artlen);
@@ -846,6 +859,15 @@ OpenArticle(const char *path, RETRTYPE amount)
         } else {
             wfarticle =
                 wire_from_native(private->artbase, private->artlen, &wflen);
+            if (wfarticle == NULL) {
+                SMseterror(SMERR_UNDEFINED,
+                           "article is too large after wire formatting");
+                munmap(private->artbase, private->artlen);
+                free(art->private);
+                free(art);
+                close(fd);
+                return NULL;
+            }
             munmap(private->artbase, private->artlen);
             private->artbase = wfarticle;
             private->artlen = wflen;
@@ -854,7 +876,7 @@ OpenArticle(const char *path, RETRTYPE amount)
     } else {
         private->mmapped = false;
         private->artbase = xmalloc(private->artlen);
-        if (read(fd, private->artbase, private->artlen) < 0) {
+        if (xread(fd, private->artbase, sb.st_size) < 0) {
             SMseterror(SMERR_UNDEFINED, NULL);
             syswarn("tradspool: could not read article %s", path);
             free(private->artbase);
@@ -867,6 +889,7 @@ OpenArticle(const char *path, RETRTYPE amount)
         if (p == NULL || p == private->artbase) {
             SMseterror(SMERR_UNDEFINED, NULL);
             syswarn("tradspool: apparently corrupt article %s", path);
+            free(private->artbase);
             free(art->private);
             free(art);
             close(fd);
@@ -876,6 +899,15 @@ OpenArticle(const char *path, RETRTYPE amount)
             /* need to make a wireformat copy of the article */
             wfarticle =
                 wire_from_native(private->artbase, private->artlen, &wflen);
+            if (wfarticle == NULL) {
+                SMseterror(SMERR_UNDEFINED,
+                           "article is too large after wire formatting");
+                free(private->artbase);
+                free(art->private);
+                free(art);
+                close(fd);
+                return NULL;
+            }
             free(private->artbase);
             private->artbase = wfarticle;
             private->artlen = wflen;
@@ -1006,7 +1038,7 @@ tradspool_cancel(TOKEN token)
 
     xrefhdr = wire_findheader(article->data, article->len, "Xref", true);
     if (xrefhdr == NULL) {
-        /* for backwards compatibility; there is no Xref unless crossposted
+        /* for backward compatibility; there is no Xref unless crossposted
            for 1.4 and 1.5 */
         if (unlink(path) < 0)
             result = false;
@@ -1192,7 +1224,7 @@ tradspool_next(ARTHANDLE *article, const RETRTYPE amount)
         xrefhdr = wire_findheader(art->data, art->len, "Xref", true);
         if (xrefhdr != NULL) {
             if ((xrefs = CrackXref(xrefhdr, &numxrefs)) == NULL
-                || numxrefs == 0) {
+                || numxrefs < 2) {
                 art->len = 0;
             } else {
                 /* assumes first one is the original */
@@ -1261,7 +1293,7 @@ tradspool_next(ARTHANDLE *article, const RETRTYPE amount)
                 art->expires -= time(NULL);
             free(x);
         }
-        /* for backwards compatibility; assumes no Xref unless crossposted
+        /* for backward compatibility; assumes no Xref unless crossposted
            for 1.4 and 1.5: just fall through */
     }
     newpriv = (PRIV_TRADSPOOL *) art->private;

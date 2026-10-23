@@ -1,6 +1,11 @@
 /*
 **  How to figure out where a user comes from, and what that user can do once
 **  we know who he is.
+**
+**  Originally written by Aidan Cully <aidan@panix.com> in 1998
+**
+**  Various bug fixes, code and documentation improvements since then
+**  in 1998-2006, 2008-2011, 2013-2016, 2021-2023, 2026.
 */
 
 #include "portable/system.h"
@@ -9,7 +14,18 @@
 #include <signal.h>
 #include <sys/wait.h>
 
-#if defined(HAVE_BLACKLIST)
+#if defined(HAVE_BLOCKLIST)
+#    include <blocklist.h>
+#    include <errno.h>
+/* Some systems may not define these pretty names (NetBSD 10 has them). */
+#    ifndef BLOCKLIST_API_ENUM
+enum {
+    BLOCKLIST_AUTH_OK = 0,
+    BLOCKLIST_AUTH_FAIL
+};
+#    endif
+#elif defined(HAVE_BLACKLIST)
+/* blocklist was known as blacklist before FreeBSD 15 and NetBSD 10. */
 #    include <blacklist.h>
 #    include <errno.h>
 /* Some systems (like NetBSD 9.2) do not define these pretty names. */
@@ -95,8 +111,8 @@ static void GrowArray(void *, void *);
 static void PERMvectortoaccess(ACCESSGROUP *acc, const char *name,
                                struct vector *acccess_vec) UNUSED;
 
-#if defined(HAVE_BLACKLIST)
-static void BlacklistReport(const char *user);
+#if defined(HAVE_BLACKLIST) || defined(HAVE_BLOCKLIST)
+static void BlocklistReport(const char *user);
 #endif
 
 /* Global variables. */
@@ -458,6 +474,8 @@ copy_accessgroup(ACCESSGROUP *orig)
         ret->backoff_db = xstrdup(orig->backoff_db);
     if (orig->newsmaster)
         ret->newsmaster = xstrdup(orig->newsmaster);
+    if (orig->addcanlockuser)
+        ret->addcanlockuser = xstrdup(orig->addcanlockuser);
     return (ret);
 }
 
@@ -596,6 +614,8 @@ free_accessgroup(ACCESSGROUP *del)
         free(del->backoff_db);
     if (del->newsmaster)
         free(del->newsmaster);
+    if (del->addcanlockuser)
+        free(del->addcanlockuser);
     free(del);
 }
 
@@ -1640,8 +1660,8 @@ PERMlogin(char *uname, char *pass, int *code, char *errorstr)
     while (runame == NULL && i-- > 0)
         runame = AuthenticateUser(auth_realms[i], uname, pass, code, errorstr);
 
-#if defined(HAVE_BLACKLIST)
-    BlacklistReport(runame);
+#if defined(HAVE_BLACKLIST) || defined(HAVE_BLOCKLIST)
+    BlocklistReport(runame);
 #endif
 
     if (runame != NULL) {
@@ -1691,6 +1711,10 @@ PERMgetpermissions(void)
     char *cp, **list;
     char *user[2];
     static ACCESSGROUP *noaccessconf;
+
+    free(VirtualPath);
+    VirtualPath = NULL;
+    VirtualPathlen = 0;
 
     if (ConfigBit == NULL) {
         if (PERMMAX % 8 == 0)
@@ -1858,8 +1882,6 @@ PERMgetpermissions(void)
                       NNTP_FAIL_TERMINATING);
                 ExitWithStats(1, true);
             }
-            if (VirtualPath)
-                free(VirtualPath);
             if (strcasecmp(innconf->pathhost, PERMaccessconf->pathhost) == 0) {
                 /* Use domain, if pathhost in access realm matches one in
                  * inn.conf to differentiate virtual host. */
@@ -1881,8 +1903,7 @@ PERMgetpermissions(void)
                     concat(PERMaccessconf->pathhost, "!", (char *) 0);
             }
             VirtualPathlen = strlen(VirtualPath);
-        } else
-            VirtualPathlen = 0;
+        }
     } else {
         if (!noaccessconf)
             noaccessconf = xmalloc(sizeof(ACCESSGROUP));
@@ -2250,15 +2271,49 @@ AuthenticateUser(AUTHGROUP *auth, char *username, char *password,
 }
 
 
-#if defined(HAVE_BLACKLIST)
+#if defined(HAVE_BLOCKLIST)
 void
-BlacklistReport(const char *user)
+BlocklistReport(const char *user)
+{
+    int ret;
+    struct blocklist *cookie;
+
+    /* Only try reporting if nnrpd is started with -B. */
+    if (!BlocklistEnabled)
+        return;
+
+    /* One nnrpd process only handles one login attempt.  Connect to
+     * blocklistd, report and disconnect to avoid keeping the blocklistd
+     * connection open and unused. */
+    cookie = blocklist_open();
+    if (cookie == NULL) {
+        syslog(L_ERROR, "could not connect to blocklistd: %s",
+               strerror(errno));
+        return;
+    }
+
+    /* nnrpd always uses STDIN for client input. */
+    if (user != NULL)
+        ret = blocklist_r(cookie, BLOCKLIST_AUTH_OK, STDIN_FILENO,
+                          "login successful");
+    else
+        ret = blocklist_r(cookie, BLOCKLIST_AUTH_FAIL, STDIN_FILENO,
+                          "login failed");
+    if (ret == -1)
+        syslog(L_ERROR, "blocklistd communication failed: %s",
+               strerror(errno));
+
+    blocklist_close(cookie);
+}
+#elif defined(HAVE_BLACKLIST)
+void
+BlocklistReport(const char *user)
 {
     int ret;
     struct blacklist *cookie;
 
     /* Only try reporting if nnrpd is started with -B. */
-    if (!BlacklistEnabled)
+    if (!BlocklistEnabled)
         return;
 
     /* One nnrpd process only handles one login attempt.  Connect to

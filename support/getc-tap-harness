@@ -2,6 +2,11 @@
 
 ##  Synchronize INN files maintained in c-tap-harness with upstream.
 ##
+##  Initial version written in September 2014 by Julien ÉLIE.
+##
+##  Various bug fixes, code and documentation improvements since then
+##  in 2014-2016, 2018, 2021, 2022, 2024-2026.
+##
 ##  This script downloads the latest version of the files maintained
 ##  in the C TAP Harness package that INN uses for its test driver suite.
 ##  These files are available at
@@ -15,7 +20,7 @@
 ##  if all looks right, commit the changes.
 
 ##  URL where the files can be downloaded.
-URL_START="https://git.eyrie.org/?p=devel/c-tap-harness.git;a=blob_plain;hb=HEAD;f="
+URL_START="https://raw.githubusercontent.com/rra/c-tap-harness/refs/heads/main/"
 
 ##  This function downloads the files and copies them to the expected
 ##  location in the INN source code, after having performed a few minimal
@@ -178,6 +183,8 @@ void ok_double(int n, double wanted, double seen);\
 
         case "$3" in
         *.c | *.h)
+            # Remove values in header guards (for clang-format recognition).
+            sed -i -e 's/^\(#define .*_H\) 1/\1/' ../$2/$3
             clang-format --style=file -i ../$2/$3
             ;;
         *.sh)

@@ -5,6 +5,12 @@
 **  basis, one has to use overview-driven expiration.  This contains all of
 **  the code to do that.  It provides OVgroupbasedexpire and OVhisthasmsgid
 **  for the use of various overview methods.
+**
+**  Written by Katsuhiro Kondou in 1999.
+**  Splitten from ov.c into a separate expire.c file by Russ Allbery in 2002.
+**
+**  Various bug fixes, code and documentation improvements since then
+**  in 2002-2004, 2006, 2007, 2009, 2010, 2013, 2015-2017, 2020-2022, 2026.
 */
 
 #include "portable/system.h"
@@ -12,8 +18,10 @@
 #include <ctype.h>
 #include <errno.h>
 
+#include "inn/bloom.h"
 #include "inn/innconf.h"
 #include "inn/libinn.h"
+#include "inn/messages.h"
 #include "inn/ov.h"
 #include "inn/overview.h"
 #include "inn/paths.h"
@@ -26,6 +34,9 @@ enum KRP {
     Remove,
     Poison
 };
+
+/* Bloom filter token cache for fast OVhisthasmsgid lookups. */
+struct bloom_filter *OVtokencache = NULL;
 
 /* Statistics */
 long EXPprocessed;
@@ -100,6 +111,7 @@ static char *ACTIVE;
    This should be cleaned up with a better internal interface. */
 time_t OVnow;
 FILE *EXPunlinkfile;
+FILE *OVtombstonefile;
 bool OVignoreselfexpire;
 bool OVusepost;
 bool OVkeep;
@@ -158,19 +170,21 @@ EXPsplit(char *p, char sep, char **argv, int count)
     if (*p == '\0')
         return 0;
 
-    for (i = 1, *argv++ = p; *p;)
-        if (*p++ == sep) {
-            p[-1] = '\0';
-            for (; *p == sep; p++)
-                ;
-            if (!*p)
-                return i;
-            if (++i == count)
-                /* Overflow. */
-                return -1;
-            *argv++ = p;
-        }
-    return i;
+    i = 0;
+    for (;;) {
+        if (i >= count)
+            return -1;
+        argv[i++] = p;
+        while (*p != '\0' && *p != sep)
+            p++;
+        if (*p == '\0')
+            return i;
+        *p++ = '\0';
+        while (*p == sep)
+            p++;
+        if (*p == '\0')
+            return i;
+    }
 }
 
 /*
@@ -353,7 +367,8 @@ EXPreadfile(FILE *F)
             *p = '\0';
         else
             p = buff + strlen(buff);
-        while (--p >= buff) {
+        while (p > buff) {
+            p--;
             if (isspace((unsigned char) *p))
                 *p = '\0';
             else
@@ -363,6 +378,11 @@ EXPreadfile(FILE *F)
             continue;
         if ((j = EXPsplit(buff, ':', fields, ARRAY_SIZE(fields))) == -1) {
             fprintf(stderr, "Line %d too many fields\n", i);
+            free(patterns);
+            return false;
+        }
+        if (j == 0) {
+            fprintf(stderr, "Line %d bad format\n", i);
             free(patterns);
             return false;
         }
@@ -522,16 +542,53 @@ OVEXPremove(TOKEN token, bool deletedgroups, char **xref, int ngroups)
     }
     if (EXPunlinkfile && xref != NULL) {
         SMprintfiles(EXPunlinkfile, token, xref, ngroups);
-        if (!ferror(EXPunlinkfile))
+        if (!ferror(EXPunlinkfile)) {
+            /* Deferred-removal path: actual SMcancel happens later via
+             * expirerm/fastrm.  Record the token in the tombstone log
+             * now so the eventual expire run can consume it.  The
+             * .NEW -> final rename is performed by expirerm after
+             * fastrm succeeds (see expirerm.in); if expirerm fails or
+             * is skipped, the .NEW file is wiped by the next
+             * expireover and never consumed, so a partial rmfile
+             * never lets expire drop history for live articles. */
+            if (OVtombstonefile != NULL) {
+                fprintf(OVtombstonefile, "%s\n", TokenToText(token));
+                if (ferror(OVtombstonefile)) {
+                    syswarn("can't write tombstone log; ignoring it"
+                            " for rest of run");
+                    fclose(OVtombstonefile);
+                    OVtombstonefile = NULL;
+                }
+            }
             return;
-        fprintf(stderr, "Can't write to -z file, %s\n", strerror(errno));
-        fprintf(stderr, "(Will ignore it for rest of run.)\n");
+        }
+        syswarn("can't write to -z file; ignoring it for rest of run");
         fclose(EXPunlinkfile);
         EXPunlinkfile = NULL;
     }
-    if (!SMcancel(token) && SMerrno != SMERR_NOENT && SMerrno != SMERR_UNINIT)
-        fprintf(stderr, "Can't unlink %s: %s\n", TokenToText(token),
-                SMerrorstr);
+    /* Inline-cancel path.  Tombstone is written only on a successful
+     * SMcancel (or NOENT, where the article is already gone): the log
+     * must be a strict subset of articles actually removed.  Otherwise
+     * a non-NOENT/UNINIT failure (EIO, EBUSY, fs permission, etc.)
+     * would let the next expire drop the history entry while the
+     * article remains on disk: an undetectable permanent orphan.
+     * The inverse risk (cancelled but not logged on a crash between
+     * SMcancel and fprintf) leaves a history entry pointing at a
+     * missing article, which is recoverable by a periodic non-tombstone
+     * reconciliation run. */
+    if (SMcancel(token) || SMerrno == SMERR_NOENT) {
+        if (OVtombstonefile != NULL) {
+            fprintf(OVtombstonefile, "%s\n", TokenToText(token));
+            if (ferror(OVtombstonefile)) {
+                syswarn("can't write tombstone log; ignoring it for"
+                        " rest of run");
+                fclose(OVtombstonefile);
+                OVtombstonefile = NULL;
+            }
+        }
+    } else if (SMerrno != SMERR_UNINIT) {
+        warn("can't unlink %s: %s", TokenToText(token), SMerrorstr);
+    }
 }
 
 /*
@@ -573,7 +630,7 @@ ARTreadschema(void)
 
 /*
 **  Return a field from the overview line or NULL on error.  Return a copy
-**  since we might be re-using the line later.
+**  since we might be reusing the line later.
 */
 static char *
 OVERGetHeader(const char *p, int field)
@@ -648,6 +705,11 @@ OVfindheaderindex(void)
         krps = xmalloc(nGroups * sizeof(enum KRP));
         path = concatpath(innconf->pathetc, INN_PATH_EXPIRECTL);
         F = fopen(path, "r");
+        if (F == NULL) {
+            fprintf(stderr, "Can't read %s, %s\n", path, strerror(errno));
+            free(path);
+            exit(1);
+        }
         free(path);
         if (!EXPreadfile(F)) {
             fclose(F);
@@ -803,6 +865,20 @@ OVhisthasmsgid(struct history *h, const char *data)
     }
     if ((p = OVERGetHeader(data, Messageidindex)) == NULL)
         return false;
+
+    /* Fast path: if article is in the Bloom filter, it (probably) exists.
+     * Bloom hits skip the slow history lookup.  Bloom misses fall through
+     * to HISlookup to handle articles added after the filter was built.
+     * False positives (Bloom says "yes" for an expired article) are benign:
+     * the orphaned overview entry is cleaned up on the next run. */
+    if (OVtokencache) {
+        HASH hash = HashMessageID(p);
+        if (bloom_check(OVtokencache, &hash))
+            return true;
+    }
+
+    /* Slow path: per-article history lookup (original behavior).
+     * Only reached for Bloom misses or when no Bloom filter is loaded. */
     return HISlookup(h, p, NULL, NULL, NULL, NULL);
 }
 

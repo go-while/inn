@@ -5,6 +5,11 @@
 **  appropriate underlying overview method, as well as implementing those
 **  portions of the overview subsystem that are independent of storage
 **  method.
+**
+**  Written by Katsuhiro Kondou in 1999.
+**
+**  Various bug fixes, code and documentation improvements since then
+**  in 1999-2006, 2008-2011, 2021, 2022, 2024, 2026.
 */
 
 #include "portable/system.h"
@@ -179,8 +184,10 @@ OVadd(TOKEN token, char *data, int len, time_t arrived, time_t expires)
         overdatalen = BIG_BUFFER;
         overdata = xmalloc(overdatalen);
     }
-    if (len + 16 > overdatalen) {
-        overdatalen = len + 16;
+    /* 20 digits is enough for the largest possible ARTNUM (unsigned long)
+     * printed by "%lu", plus one byte for the following tab. */
+    if (len + 21 > overdatalen) {
+        overdatalen = len + 21;
         overdata = xrealloc(overdata, overdatalen);
     }
 
@@ -222,8 +229,10 @@ OVadd(TOKEN token, char *data, int len, time_t arrived, time_t expires)
         if ((next = memchr(group, ':', xreflen - (group - xrefdata))) == NULL)
             return OVADDFAILED;
         *next++ = '\0';
-        artnum = atoi(next);
-        if (artnum <= 0)
+        if (!isdigit((unsigned char) *next))
+            continue;
+        artnum = strtoul(next, NULL, 10);
+        if (artnum == 0)
             continue;
 
         /* Skip overview generation according to ovgrouppat. */
@@ -398,6 +407,9 @@ OVctl(OVCTLTYPE type, void *val)
         return true;
     case OVSTATALL:
         OVstatall = *(bool *) val;
+        return true;
+    case OVTOKENCACHE:
+        OVtokencache = *(struct bloom_filter **) val;
         return true;
     default:
         return ((*ov.ctl)(type, val));

@@ -4,10 +4,13 @@
 **
 **  Author: Kenichi Okada <okada@opaopa.org>
 **  Created: 2000-02-22
+**
+**  Various bug fixes, code and documentation improvements since then
+**  in 2002-2004, 2008, 2013-2018, 2020, 2021, 2024-2026.
 */
 
 #ifndef TLS_H
-#define TLS_H 1
+#define TLS_H
 
 #ifdef HAVE_OPENSSL
 
@@ -20,14 +23,7 @@
 #    include <openssl/ssl.h>
 #    include <openssl/x509.h>
 
-#    if !defined(OPENSSL_NO_EC) && defined(TLSEXT_ECPOINTFORMAT_uncompressed)
-#        include <openssl/ec.h>
-#        include <openssl/objects.h>
-#        define HAVE_OPENSSL_ECC
-#    endif
-
 /* Protocol support. */
-#    define INN_TLS_SSLv2   1
 #    define INN_TLS_SSLv3   2
 #    define INN_TLS_TLSv1   4
 #    define INN_TLS_TLSv1_1 8

@@ -1,0 +1,327 @@
+#! /bin/sh
+#
+# Integration test for ovsqlite direct reader mode.
+#
+# Starts a real ovsqlite-server, writes test data through it via the
+# writer program, kills the server, then verifies the reader program
+# can read the WAL-mode database directly without the server.
+#
+# Written by Kevin Bowling in 2026.
+
+count=1
+printcount() {
+    echo "$1 $count $2"
+    count=$(expr $count + 1)
+}
+
+# runtests preserves its caller's working directory.  Normalize to the test
+# build directory so this test works when runtests is called from either the
+# repository root or the tests directory.
+test_root=${C_TAP_BUILD:-}
+if [ -z "$test_root" ]; then
+    test_root=$(dirname "$0")
+    test_root=$(cd "$test_root/.." && pwd)
+fi
+if ! cd "$test_root"; then
+    echo "Bail out! cannot change to test directory $test_root"
+    exit 1
+fi
+
+# Find the right directory.
+dirs='../data data tests/data'
+for dir in $dirs; do
+    if [ -r "$dir/overview/basic" ]; then
+        testdata="$dir"
+        break
+    fi
+done
+if [ -z "$testdata" ]; then
+    echo "Could not find test data" >&2
+    exit 1
+fi
+
+server="../../storage/ovsqlite/ovsqlite-server"
+writer="overview/ovsqlite-write.t"
+reader="overview/ovsqlite-read.t"
+util_source="../storage/ovsqlite/ovsqlite-util.in"
+
+# When run from the tests directory, adjust paths.
+if [ ! -x "$server" ]; then
+    server="../storage/ovsqlite/ovsqlite-server"
+fi
+if [ ! -x "$writer" ]; then
+    writer="./overview/ovsqlite-write.t"
+fi
+if [ ! -x "$reader" ]; then
+    reader="./overview/ovsqlite-read.t"
+fi
+
+# Skip if SQLite support was not compiled in.
+if ! grep -q '^#define HAVE_SQLITE3' ../include/config.h 2>/dev/null; then
+    echo "1..0 # skip SQLite support not compiled"
+    exit 0
+fi
+
+for prog in "$server" "$writer" "$reader"; do
+    if [ ! -x "$prog" ]; then
+        echo "1..0 # skip ovsqlite binaries not built"
+        exit 0
+    fi
+done
+
+echo 23
+
+# Set up temp directory with config files.  Use absolute paths because
+# the C test programs chdir to the test data directory before reading
+# inn.conf.
+tmpdir="$(pwd)/ov-tmp-integ"
+rm -rf "$tmpdir"
+mkdir -p "$tmpdir"
+
+cat >"$tmpdir/inn.conf" <<EOF
+domain:          news.example.com
+pathhost:        inn.example.com
+mta:             "/usr/sbin/sendmail -oi -oem %s"
+hismethod:       hisv6
+enableoverview:  true
+ovmethod:        ovsqlite
+wireformat:      true
+
+pathnews:        .
+patharchive:     archive
+patharticles:    spool
+pathoverview:    $tmpdir
+pathrun:         $tmpdir
+pathetc:         $tmpdir
+pathdb:          $tmpdir
+pathlog:         $tmpdir
+pathtmp:         $tmpdir
+EOF
+
+cat >"$tmpdir/ovsqlite.conf" <<EOF
+walmode: true
+compress: true
+cachesize: 1000
+readercachesize: 1000
+transrowlimit: 10000
+transtimelimit: 30.0
+EOF
+
+INNCONF="$tmpdir/inn.conf"
+export INNCONF
+
+# Test 1: start ovsqlite-server in debug/foreground mode.
+$server -d >"$tmpdir/server.log" 2>&1 &
+server_pid=$!
+
+# Wait for socket file (up to 5 seconds).
+waited=0
+while [ ! -S "$tmpdir/ovsqlite.sock" ] && [ $waited -lt 50 ]; do
+    # Check if server died.
+    if ! kill -0 $server_pid 2>/dev/null; then
+        echo "# Server exited prematurely, log:"
+        sed 's/^/# /' "$tmpdir/server.log"
+        printcount "not ok" "# server startup"
+        rm -rf "$tmpdir"
+        exit 1
+    fi
+    sleep 0.1
+    waited=$(expr $waited + 1)
+done
+
+if [ -S "$tmpdir/ovsqlite.sock" ]; then
+    printcount "ok" "# server started"
+else
+    echo "# Server socket not found after 5s, log:"
+    sed 's/^/# /' "$tmpdir/server.log"
+    printcount "not ok" "# server started"
+    kill $server_pid 2>/dev/null
+    rm -rf "$tmpdir"
+    exit 1
+fi
+
+# Tests 2-4: run the writer (3 TAP tests from inside).
+writer_output=$($writer 2>&1)
+writer_rc=$?
+writer_count=$(echo "$writer_output" | grep -c "^ok ")
+if [ $writer_rc -eq 0 ] && [ "$writer_count" -eq 3 ]; then
+    printcount "ok" "# writer open"
+    printcount "ok" "# writer load"
+    printcount "ok" "# writer close"
+else
+    echo "# Writer failed (rc=$writer_rc):"
+    echo "$writer_output" | sed 's/^/# /'
+    printcount "not ok" "# writer open"
+    printcount "not ok" "# writer load"
+    printcount "not ok" "# writer close"
+fi
+
+# Test 5: stop the server gracefully.
+kill $server_pid 2>/dev/null
+wait $server_pid 2>/dev/null
+if [ $? -le 128 ] || [ $? -eq 143 ]; then
+    printcount "ok" "# server stopped"
+else
+    printcount "ok" "# server stopped (signal)"
+fi
+
+# Tests 6-15: report database statistics and vacuum with ovsqlite-util.
+# Run the source directly with -p so the test does not depend on an installed
+# INN::Config and innconfval.  The server is already stopped, so vacuum can
+# take an exclusive lock offline.
+if [ ! -r "$util_source" ] \
+    || ! perl -MDBI -MDBD::SQLite -MCompress::Zlib -e 1 \
+        >/dev/null 2>&1; then
+    printcount "ok" "# skip ovsqlite-util dependencies unavailable"
+    printcount "ok" "# skip ovsqlite-util dependencies unavailable"
+    printcount "ok" "# skip ovsqlite-util dependencies unavailable"
+    printcount "ok" "# skip ovsqlite-util dependencies unavailable"
+    printcount "ok" "# skip ovsqlite-util dependencies unavailable"
+    printcount "ok" "# skip ovsqlite-util dependencies unavailable"
+    printcount "ok" "# skip ovsqlite-util dependencies unavailable"
+    printcount "ok" "# skip ovsqlite-util dependencies unavailable"
+    printcount "ok" "# skip ovsqlite-util dependencies unavailable"
+    printcount "ok" "# skip ovsqlite-util dependencies unavailable"
+else
+    stats_output=$(perl "$util_source" -s -p "$tmpdir" 2>&1)
+    stats_rc=$?
+    if [ $stats_rc -eq 0 ]; then
+        printcount "ok" "# statistics command"
+    else
+        echo "# ovsqlite-util -s failed (rc=$stats_rc):"
+        echo "$stats_output" | sed 's/^/# /'
+        printcount "not ok" "# statistics command"
+    fi
+    if echo "$stats_output" | grep -q '^Schema version: 1$'; then
+        printcount "ok" "# schema version statistic"
+    else
+        printcount "not ok" "# schema version statistic"
+    fi
+    if echo "$stats_output" | grep -q '^Journal mode: wal$'; then
+        printcount "ok" "# journal mode statistic"
+    else
+        printcount "not ok" "# journal mode statistic"
+    fi
+    if echo "$stats_output" | grep -q '^Compression: enabled$'; then
+        printcount "ok" "# compression statistic"
+    else
+        printcount "not ok" "# compression statistic"
+    fi
+    if echo "$stats_output" | grep -q '^Page count: [1-9][0-9]*$'; then
+        printcount "ok" "# page count statistic"
+    else
+        printcount "not ok" "# page count statistic"
+    fi
+    if echo "$stats_output" | grep -q '^Total groups: 11$' \
+        && echo "$stats_output" | grep -q '^Active groups: 11$' \
+        && echo "$stats_output" | grep -q '^Deleted groups: 0$'; then
+        printcount "ok" "# group count statistics"
+    else
+        echo "# unexpected -s group counts:"
+        echo "$stats_output" | sed 's/^/# /'
+        printcount "not ok" "# group count statistics"
+    fi
+    if echo "$stats_output" | grep -q '^Total articles: 99$' \
+        && echo "$stats_output" \
+        | grep -q '^Articles in active groups: 99$' \
+        && echo "$stats_output" \
+        | grep -q '^Articles in deleted groups: 0$' \
+        && echo "$stats_output" | grep -q '^Orphan articles: 0$'; then
+        printcount "ok" "# article count statistics"
+    else
+        echo "# unexpected -s article counts:"
+        echo "$stats_output" | sed 's/^/# /'
+        printcount "not ok" "# article count statistics"
+    fi
+    if echo "$stats_output" | grep -q '^WAL file size: [0-9][0-9]* bytes$'; then
+        printcount "ok" "# WAL file size statistic"
+    else
+        printcount "not ok" "# WAL file size statistic"
+    fi
+
+    vac_output=$(perl "$util_source" -v -p "$tmpdir" 2>&1)
+    vac_rc=$?
+    if [ $vac_rc -eq 0 ] \
+        && echo "$vac_output" | grep -q '^Vacuum complete\.$'; then
+        printcount "ok" "# vacuum command"
+    else
+        echo "# ovsqlite-util -v failed (rc=$vac_rc):"
+        echo "$vac_output" | sed 's/^/# /'
+        printcount "not ok" "# vacuum command"
+    fi
+
+    stats_after=$(perl "$util_source" -s -p "$tmpdir" 2>&1)
+    if echo "$stats_after" | grep -q '^Total articles: 99$' \
+        && echo "$stats_after" | grep -q '^Total groups: 11$'; then
+        printcount "ok" "# counts after vacuum"
+    else
+        echo "# unexpected counts after vacuum:"
+        echo "$stats_after" | sed 's/^/# /'
+        printcount "not ok" "# counts after vacuum"
+    fi
+fi
+
+# Tests 16-20: run the reader (5 TAP tests from inside).
+reader_output=$($reader 2>&1)
+reader_rc=$?
+reader_count=$(echo "$reader_output" | grep -c "^ok ")
+if [ $reader_rc -eq 0 ] && [ "$reader_count" -eq 5 ]; then
+    printcount "ok" "# reader open (direct)"
+    printcount "ok" "# group stats"
+    printcount "ok" "# article data"
+    printcount "ok" "# search order"
+    printcount "ok" "# reopen"
+else
+    echo "# Reader failed (rc=$reader_rc):"
+    echo "$reader_output" | sed 's/^/# /'
+    printcount "not ok" "# reader open (direct)"
+    printcount "not ok" "# group stats"
+    printcount "not ok" "# article data"
+    printcount "not ok" "# search order"
+    printcount "not ok" "# reopen"
+fi
+
+# Tests 21-23: server restart resilience.
+# Simulate INN restart: start a new server against the existing WAL database,
+# shut it down, verify the reader can still read all data.  This is the
+# scenario where nnrpd outlives a server restart cycle.
+$server -d >"$tmpdir/server2.log" 2>&1 &
+server_pid=$!
+waited=0
+while [ ! -S "$tmpdir/ovsqlite.sock" ] && [ $waited -lt 50 ]; do
+    if ! kill -0 $server_pid 2>/dev/null; then
+        echo "# Server restart failed, log:"
+        sed 's/^/# /' "$tmpdir/server2.log"
+        printcount "not ok" "# server restart"
+        printcount "not ok" "# server re-stop"
+        printcount "not ok" "# reader after restart"
+        rm -rf "$tmpdir"
+        exit 1
+    fi
+    sleep 0.1
+    waited=$(expr $waited + 1)
+done
+if [ -S "$tmpdir/ovsqlite.sock" ]; then
+    printcount "ok" "# server restart"
+else
+    printcount "not ok" "# server restart"
+fi
+
+kill $server_pid 2>/dev/null
+wait $server_pid 2>/dev/null
+printcount "ok" "# server re-stop"
+
+# Reader should still work — data survives the restart cycle.
+reader_output=$($reader 2>&1)
+reader_rc=$?
+reader_count=$(echo "$reader_output" | grep -c "^ok ")
+if [ $reader_rc -eq 0 ] && [ "$reader_count" -eq 5 ]; then
+    printcount "ok" "# reader after restart"
+else
+    echo "# Reader after restart failed (rc=$reader_rc):"
+    echo "$reader_output" | sed 's/^/# /'
+    printcount "not ok" "# reader after restart"
+fi
+
+# Clean up.
+rm -rf "$tmpdir"

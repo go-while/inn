@@ -20,6 +20,11 @@
 **  which is used in this file.  The order in this file is documentation of
 **  where each parameter is used, for later work at breaking up this mess
 **  of parameters into separate configuration groups for each INN subsystem.
+**
+**  Written by Russ Allbery in 2002.
+**
+**  Various bug fixes, code and documentation improvements since then
+**  in 2002-2011, 2013-2018, 2021-2024, 2026.
 */
 
 #include "portable/system.h"
@@ -97,6 +102,7 @@ static const struct config config_table[] = {
     {K(pathdb),                     STRING(NULL)      },
     {K(pathetc),                    STRING(NULL)      },
     {K(pathfilter),                 STRING(NULL)      },
+    {K(pathhistory),                STRING(NULL)      },
     {K(pathhttp),                   STRING(NULL)      },
     {K(pathincoming),               STRING(NULL)      },
     {K(pathlog),                    STRING(NULL)      },
@@ -205,6 +211,8 @@ static const struct config config_table[] = {
     /* The following settings are specific to the storage subsystem. */
     {K(articlemmap),                BOOL(true)        },
     {K(cnfscheckfudgesize),         UNUMBER(0)        },
+    {K(expirebloomfp),              UNUMBER(10000)    },
+    {K(expiretombstone),            BOOL(false)       },
     {K(immediatecancel),            BOOL(false)       },
     {K(keepmmappedthreshold),       UNUMBER(1024)     },
     {K(nfswriter),                  BOOL(false)       },
@@ -219,6 +227,10 @@ static const struct config config_table[] = {
 
     /* The following settings are specific to the history subsystem. */
     {K(hismethod),                  STRING(NULL)      },
+    {K(hissqlitecachesize),         UNUMBER(65536)    },
+    {K(hissqlitemmapsize),          UNUMBER(0)        },
+    {K(hissqlitepagesize),          UNUMBER(4096)     },
+    {K(hissqlitereadercachesize),   UNUMBER(2000)     },
 
     /* The following settings are specific to rc.news. */
     {K(docnfsstat),                 BOOL(false)       },
@@ -306,6 +318,8 @@ innconf_set_defaults(void)
         innconf->pathfilter = concatpath(innconf->pathbin, "filter");
     if (innconf->pathdb == NULL)
         innconf->pathdb = concatpath(innconf->pathnews, "db");
+    if (innconf->pathhistory == NULL)
+        innconf->pathhistory = xstrdup(innconf->pathdb);
     if (innconf->pathetc == NULL)
         innconf->pathetc = concatpath(innconf->pathnews, "etc");
     if (innconf->pathrun == NULL)
@@ -338,7 +352,7 @@ innconf_set_defaults(void)
     if (innconf->extraoverviewhidden == NULL)
         innconf->extraoverviewhidden = vector_new();
 
-        /* Defaults used only if TLS/SSL is supported. */
+    /* Defaults used only if TLS/SSL is supported. */
 #ifdef HAVE_OPENSSL
     if (innconf->tlscapath == NULL)
         innconf->tlscapath = xstrdup(innconf->pathetc);
@@ -482,6 +496,17 @@ innconf_validate(struct config_group *group)
         config_error_param(group, "datamovethreshold",
                            "maximum value for datamovethreshold is 1MB");
         innconf->datamovethreshold = 1024 * 1024;
+    }
+
+    /* hissqlitepagesize must be a power of two between 512 and 65536, as
+       required by SQLite's pragma page_size. */
+    if (innconf->hissqlitepagesize < 512 || innconf->hissqlitepagesize > 65536
+        || (innconf->hissqlitepagesize & (innconf->hissqlitepagesize - 1))
+               != 0) {
+        config_error_param(group, "hissqlitepagesize",
+                           "hissqlitepagesize must be a power of 2 between 512"
+                           " and 65536");
+        innconf->hissqlitepagesize = 4096;
     }
 
     if (innconf->docancels != NULL

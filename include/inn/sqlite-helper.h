@@ -1,5 +1,14 @@
+/*  SQLite helper header file.
+**
+**  Original implementation written by Bo Lindbergh (2020-12-17).
+**  <2bfjdsla52kztwejndzdstsxl9athp@gmail.com>
+**
+**  Various bug fixes, code and documentation improvements since then
+**  in 2021, 2026.
+*/
+
 #ifndef SQLITE_HELPER_H
-#define SQLITE_HELPER_H 1
+#define SQLITE_HELPER_H
 
 #include "config.h"
 
@@ -7,11 +16,6 @@
 
 #    include <sqlite3.h>
 #    include <stddef.h>
-
-/* SQLITE_PREPARE_PERSISTENT is defined in SQLite 3.20.0 and above. */
-#    ifndef SQLITE_PREPARE_PERSISTENT
-#        define SQLITE_PREPARE_PERSISTENT 0x00
-#    endif
 
 typedef struct sqlite_helper_t {
     size_t stmt_count;

@@ -6,6 +6,11 @@
 ##  certain files according to built-in rules and a list at the end of this
 ##  file.  It is intended to be used to support make check-manifest from the
 ##  top level of the INN tree.
+##
+##  Written by Russ Allbery in 2002.
+##
+##  Various bug fixes, code and documentation improvements since then
+##  in 2002, 2005-2011, 2013-2018, 2020-2024, 2026.
 
 require 5.005;
 
@@ -177,6 +182,8 @@ frontends/scanspool
 frontends/sm
 frontends/sys2nf
 history/buildconfig
+history/hissqlite/hissqlite-convert
+history/hissqlite/hissqlite-util
 include/config.h
 include/inn/paths.h
 include/inn/portable-getaddrinfo.h
@@ -191,6 +198,7 @@ innd/tinyleaf
 innfeed/imapfeed
 innfeed/innfeed
 innfeed/procbatch
+lib/sqlite-helper-gen
 nnrpd/nnrpd
 perl/INN/Config.pm
 perl/INN/Utils/Shlock.pm
@@ -270,7 +278,6 @@ storage/buffindexed/buffindexed_d
 storage/buildconfig
 storage/ovsqlite/ovsqlite-server
 storage/ovsqlite/ovsqlite-util
-storage/ovsqlite/sqlite-helper-gen
 storage/tradindexed/tdx-util
 support/fixconfig
 support/fixscript
@@ -278,10 +285,14 @@ tests/runtests
 tests/authprogs/ident.t
 tests/clients/server-list
 tests/docs/pod.t
+tests/expire/tombstone-hisexpire.t
+tests/expire/tombstone.t
 tests/innd/artparse.t
 tests/innd/chan.t
 tests/lib/artnumber.t
 tests/lib/asprintf.t
+tests/lib/bloom.t
+tests/lib/bloom-hiswalk.t
 tests/lib/buffer.t
 tests/lib/canlock.t
 tests/lib/concat.t
@@ -297,6 +308,9 @@ tests/lib/hash.t
 tests/lib/hashtab.t
 tests/lib/headers.t
 tests/lib/hex.t
+tests/lib/hissqlite.t
+tests/lib/hissqlite-convert.t
+tests/lib/history-bench
 tests/lib/inet_aton.t
 tests/lib/inet_ntoa.t
 tests/lib/inet_ntop.t
@@ -313,7 +327,9 @@ tests/lib/network/server.t
 tests/lib/pread.t
 tests/lib/pwrite.t
 tests/lib/qio.t
+tests/lib/readin.t
 tests/lib/reallocarray.t
+tests/lib/reservedfd.t
 tests/lib/setenv.t
 tests/lib/snprintf.t
 tests/lib/strlcat.t
@@ -327,7 +343,13 @@ tests/lib/xwrite.t
 tests/nnrpd/auth-ext.t
 tests/overview/api.t
 tests/overview/buffindexed.t
+tests/overview/ovsqlite.t
+tests/overview/ovsqlite-read.t
+tests/overview/ovsqlite-write.t
+tests/overview/tdx-group.t
 tests/overview/tradindexed.t
 tests/overview/xref.t
 tests/perl/minimum-version.t
+tests/storage/caf.t
+tests/storage/cancel-tombstone.t
 tests/util/innbind.t

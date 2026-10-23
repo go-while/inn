@@ -3,10 +3,15 @@
 **
 **  The interface to reading inn.conf configuration files and managing the
 **  resulting innconf struct.
+**
+**  Written by Russ Allbery in 2002.
+**
+**  Various bug fixes, code and documentation improvements since then
+**  in 2002-2004, 2007-2011, 2013-2018, 2021-2024, 2026.
 */
 
 #ifndef INN_INNCONF_H
-#define INN_INNCONF_H 1
+#define INN_INNCONF_H
 
 #include "inn/macros.h"
 #include "inn/portable-stdbool.h"
@@ -67,15 +72,26 @@ struct innconf {
     unsigned long wipexpire; /* How long to keep pending article record */
 
     /* History settings */
-    char *hismethod; /* Which history method to use */
+    char *hismethod;                  /* Which history method to use */
+    unsigned long hissqlitecachesize; /* hissqlite writer page cache, in kB */
+    unsigned long
+        hissqlitemmapsize; /* hissqlite mmap size in bytes; 0 = off */
+    unsigned long
+        hissqlitepagesize; /* hissqlite database page size, in bytes */
+    unsigned long
+        hissqlitereadercachesize; /* hissqlite per-nnrpd reader cache, in kB */
 
     /* Article Storage */
     unsigned long cnfscheckfudgesize; /* Additional CNFS integrity checking */
     bool enableoverview;              /* Store overview info for articles? */
+    unsigned long expirebloomfp; /* Bloom filter FP rate 1/N (0 = disabled) */
     struct vector *extraoverviewadvertised; /* Extra overview fields for LIST
                                                OVERVIEW.FMT */
     struct vector
         *extraoverviewhidden;    /* Extra overview fields silently generated */
+    bool expiretombstone;        /* Use expireover -> expire tombstone log
+                                    to skip per-article SMretrieve in
+                                    expire? */
     bool groupbaseexpiry;        /* Do expiry by newsgroup? */
     bool mergetogroups;          /* Refile articles from to.* into to */
     bool nfswriter;              /* Use NFS writer functionality */
@@ -212,6 +228,7 @@ struct innconf {
     char *pathdb;       /* News database files */
     char *pathetc;      /* News configuration files */
     char *pathfilter;   /* Filtering code */
+    char *pathhistory;  /* History database files */
     char *pathhttp;     /* HTML files */
     char *pathincoming; /* Incoming spooled news */
     char *pathlog;      /* Log files */

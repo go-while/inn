@@ -13,6 +13,12 @@
  * The canonical version of this file was maintained (until 2020) in the
  * rra-c-util package, which can be found at
  * <https://www.eyrie.org/~eagle/software/rra-c-util/>.
+ *
+ * Integrated in INN in 2000 by Russ Allbery.
+ *
+ * Various bug fixes, code and documentation improvements since then
+ * in 2000-2002, 2005, 2007, 2009, 2011, 2013, 2014, 2016-2018, 2020-2022,
+ * 2026.
  */
 
 /*
@@ -62,7 +68,7 @@
  * for string length.  This covers a nasty loophole.
  *
  * The other functions are there to prevent NULL pointers from
- * causing nast effects.
+ * causing nasty effects.
  *
  * More Recently:
  *  Brandon Long <blong@fiction.net> 9/15/96 for mutt 0.43
@@ -300,6 +306,16 @@ dopr(char *buffer, size_t maxlen, const char *format, va_list args)
                 break;
             case 'L':
                 cflags = DP_C_LDOUBLE;
+                ch = *format++;
+                break;
+            case 'z': /* size_t */
+            case 'j': /* intmax_t */
+            case 't': /* ptrdiff_t */
+                /* None of these types have a dedicated cflags value.  On
+                 * every ABI we support, they're the same width as either
+                 * long or long long, so pick whichever one matches. */
+                cflags =
+                    (sizeof(size_t) > sizeof(long)) ? DP_C_LLONG : DP_C_LONG;
                 ch = *format++;
                 break;
             default:
@@ -782,8 +798,14 @@ fmtfp(char *buffer, size_t *currlen, size_t maxlen, LDOUBLE fvalue, int min,
         fconvert[fplace++] = (char) ('0' + (fracpart % 10));
         fracpart = (fracpart / 10);
     } while (fracpart && (fplace < sizeof(fconvert)));
+#if __GNUC__ > 7
+#    pragma GCC diagnostic ignored "-Wstringop-overflow"
+#endif
     while (leadingfrac0s-- > 0 && fplace < sizeof(fconvert))
         fconvert[fplace++] = '0';
+#if __GNUC__ > 7
+#    pragma GCC diagnostic warning "-Wstringop-overflow"
+#endif
     if (fplace == sizeof(fconvert))
         fplace--;
     fconvert[fplace] = 0;

@@ -70,10 +70,7 @@ static void xmalloc_abort(const char *what, size_t size, const char *file,
 static void Usage(void) __attribute__((__noreturn__));
 
 /* header table initialization */
-#define ARTHEADERINIT(name, type)    \
-    {                                \
-        name, type, sizeof(name) - 1 \
-    }
+#define ARTHEADERINIT(name, type) {name, type, sizeof(name) - 1}
 
 /* clang-format off */
 const ARTHEADER ARTheaders[] = {
@@ -479,8 +476,10 @@ main(int ac, char *av[])
             innconf->maxartsize = strtoul(optarg, NULL, 10);
             break;
         case 'm':
-            if (ModeReason)
+            if (ModeReason) {
                 free(ModeReason);
+                ModeReason = NULL;
+            }
             switch (*optarg) {
             default:
                 Usage();

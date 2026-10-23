@@ -87,11 +87,12 @@ BDB_LDFLAGS    = @BDB_LDFLAGS@ $(ZLIB_LDFLAGS)
 BDB_LIBS       = @BDB_LIBS@ $(ZLIB_LIBS)
 
 ##  SQLite support.  Additional flags and libraries used when compiling or
-##  linking code that contains SQLite support.
+##  linking code that contains SQLite support.  zlib is bundled in because
+##  ovsqlite direct readers need decompression support.
 
-SQLITE3_CPPFLAGS = @SQLITE3_CPPFLAGS@
-SQLITE3_LDFLAGS  = @SQLITE3_LDFLAGS@
-SQLITE3_LIBS     = @SQLITE3_LIBS@
+SQLITE3_CPPFLAGS = @SQLITE3_CPPFLAGS@ $(ZLIB_CPPFLAGS)
+SQLITE3_LDFLAGS  = @SQLITE3_LDFLAGS@ $(ZLIB_LDFLAGS)
+SQLITE3_LIBS     = @SQLITE3_LIBS@ $(ZLIB_LIBS)
 
 ##  INN libraries.  Nearly all INN programs are linked with libinn, and any
 ##  INN program that reads from or writes to article storage or overview is
@@ -101,7 +102,7 @@ SQLITE3_LIBS     = @SQLITE3_LIBS@
 LIBINN		= $(abs_builddir)/lib/libinn$(LIBSUFFIX).$(EXTLIB)
 LIBHIST		= $(abs_builddir)/history/libinnhist$(LIBSUFFIX).$(EXTLIB)
 LIBSTORAGE	= $(abs_builddir)/storage/libinnstorage$(LIBSUFFIX).$(EXTLIB)
-STORAGE_LIBS	= $(BDB_LDFLAGS) $(BDB_LIBS)
+STORAGE_LIBS	= $(BDB_LDFLAGS) $(BDB_LIBS) $(SQLITE3_LDFLAGS) $(SQLITE3_LIBS)
 
 DBM_CPPFLAGS	= @DBM_CPPFLAGS@
 DBM_LIBS	= @DBM_LIBS@
@@ -162,12 +163,12 @@ CANLOCK_CPPFLAGS= @CANLOCK_CPPFLAGS@
 CANLOCK_LDFLAGS	= @CANLOCK_LDFLAGS@
 CANLOCK_LIBS	= $(abs_builddir)/lib/canlock$(LIBSUFFIX).o @CANLOCK_LIBS@
 
-##  blacklistd support.  Additional flags and libraries needed to add support
-##  for FreeBSD's and NetBSD's blacklistd daemon.
+##  blocklistd support.  Additional flags and libraries needed to add support
+##  for FreeBSD's and NetBSD's blocklistd daemon.
 
-BLACKLIST_CPPFLAGS	= @BLACKLIST_CPPFLAGS@
-BLACKLIST_LDFLAGS	= @BLACKLIST_LDFLAGS@
-BLACKLIST_LIBS		= @BLACKLIST_LIBS@
+BLOCKLIST_CPPFLAGS	= @BLOCKLIST_CPPFLAGS@
+BLOCKLIST_LDFLAGS	= @BLOCKLIST_LDFLAGS@
+BLOCKLIST_LIBS		= @BLOCKLIST_LIBS@
 
 ##  Missing functions.  If non-empty, configure detected that your system
 ##  was missing some standard functions, and INN will be providing its own
@@ -242,6 +243,7 @@ PATHHTTP	= @HTTPDIR@
 PATHLOG		= @LOGDIR@
 PATHLOGOLD	= $(PATHLOG)/OLD
 PATHDB		= @DBDIR@
+PATHHISTORY	= @HISTORYDIR@
 PATHSPOOL	= @SPOOLDIR@
 PATHTMP		= $(tmpdir)
 PATHAUTH	= $(PATHBIN)/auth

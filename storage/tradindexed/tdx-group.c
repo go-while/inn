@@ -6,6 +6,11 @@
 **  the high and low article marks and the base article numbers for each
 **  individual group index file.
 **
+**  Initial implementation in 2002 by Russ Allbery.
+**
+**  Various bug fixes, code and documentation improvements since then
+**  in 2002-2004, 2006-2009, 2014, 2015, 2021, 2023, 2024, 2026.
+**
 **  Externally visible functions have a tdx_ prefix; internal functions do
 **  not.  (Externally visible unfortunately means everything that needs to be
 **  visible outside of this object file, not just interfaces exported to
@@ -109,6 +114,7 @@ struct group_index {
     bool writable;
     struct group_header *header;
     struct group_entry *entries;
+    size_t mapped_size;
     int count;
 };
 
@@ -116,8 +122,7 @@ struct group_index {
 struct hashmap;
 
 /* Internal prototypes. */
-static int index_entry_count(size_t size);
-static size_t index_file_size(int count);
+static bool index_file_size(int count, off_t *size);
 static bool index_lock(int fd, enum inn_locktype type);
 static bool index_lock_group(int fd, ptrdiff_t offset, enum inn_locktype);
 static bool index_map(struct group_index *);
@@ -129,21 +134,60 @@ static long index_find(struct group_index *, const char *group);
 
 /*
 **  Given a file size, return the number of group entries that it contains.
+**  Reject sizes that cannot be represented by the types used for mapping and
+**  indexing the file.
 */
-static int
-index_entry_count(size_t size)
+bool
+tdx_index_entry_count(off_t size, int *count)
 {
-    return (size - sizeof(struct group_header)) / sizeof(struct group_entry);
+    uintmax_t entries;
+
+    if (size < (off_t) sizeof(struct group_header)) {
+        errno = EINVAL;
+        return false;
+    }
+    if ((uintmax_t) size > SIZE_MAX) {
+        errno = EOVERFLOW;
+        return false;
+    }
+    entries = ((uintmax_t) size - sizeof(struct group_header))
+              / sizeof(struct group_entry);
+    if (entries > INT_MAX) {
+        errno = EOVERFLOW;
+        return false;
+    }
+    *count = (int) entries;
+    return true;
 }
 
 
 /*
-**  Given a number of group entries, return the required file size.
+**  Given a number of group entries, return the required file size after
+**  checking that it is representable both as an off_t and as a size_t.
 */
-static size_t
-index_file_size(int count)
+static bool
+index_file_size(int count, off_t *size)
 {
-    return sizeof(struct group_header) + count * sizeof(struct group_entry);
+    uintmax_t bytes;
+
+    if (count < 0
+        || (uintmax_t) count > (UINTMAX_MAX - sizeof(struct group_header))
+                                   / sizeof(struct group_entry)) {
+        errno = EOVERFLOW;
+        return false;
+    }
+    bytes = sizeof(struct group_header)
+            + (uintmax_t) count * sizeof(struct group_entry);
+    if (bytes > SIZE_MAX) {
+        errno = EOVERFLOW;
+        return false;
+    }
+    *size = (off_t) bytes;
+    if (*size < 0 || (uintmax_t) *size != bytes) {
+        errno = EOVERFLOW;
+        return false;
+    }
+    return true;
 }
 
 
@@ -195,24 +239,34 @@ index_lock_group(int fd, ptrdiff_t offset, enum inn_locktype type)
 static bool
 index_map(struct group_index *index)
 {
+    off_t length;
+    size_t size;
+
     if (!innconf->tradindexedmmap && index->writable) {
         warn("tradindexed: cannot open for writing without mmap");
         return false;
     }
+    if (!index_file_size(index->count, &length)) {
+        syswarn("tradindexed: invalid size for %s", index->path);
+        return false;
+    }
+    size = (size_t) length;
 
     if (!innconf->tradindexedmmap) {
-        ssize_t header_size;
-        ssize_t entry_size;
+        size_t entry_size;
 
-        header_size = sizeof(struct group_header);
-        entry_size = index->count * sizeof(struct group_entry);
-        index->header = xmalloc(header_size);
+        entry_size = size - sizeof(struct group_header);
+        index->header = xmalloc(sizeof(struct group_header));
         index->entries = xmalloc(entry_size);
-        if (read(index->fd, index->header, header_size) != header_size) {
+        if (lseek(index->fd, 0, SEEK_SET) < 0
+            || xread(index->fd, (char *) index->header,
+                     (off_t) sizeof(struct group_header))
+                   < 0) {
             syswarn("tradindexed: cannot read header from %s", index->path);
             goto fail;
         }
-        if (read(index->fd, index->entries, entry_size) != entry_size) {
+        if (xread(index->fd, (char *) index->entries, (off_t) entry_size)
+            < 0) {
             syswarn("tradindexed: cannot read entries from %s", index->path);
             goto fail;
         }
@@ -227,12 +281,10 @@ index_map(struct group_index *index)
 
     } else {
         char *data;
-        size_t size;
         int flag = PROT_READ;
 
         if (index->writable)
             flag = PROT_READ | PROT_WRITE;
-        size = index_file_size(index->count);
         data = mmap(NULL, size, flag, MAP_SHARED, index->fd, 0);
         if (data == MAP_FAILED) {
             syswarn("tradindexed: cannot mmap %s", index->path);
@@ -242,6 +294,7 @@ index_map(struct group_index *index)
         index->entries =
             (struct group_entry *) (void *) (data
                                              + sizeof(struct group_header));
+        index->mapped_size = size;
         return true;
     }
 }
@@ -253,6 +306,8 @@ file_open_group_index(struct group_index *index, struct stat *st)
     int open_mode;
 
     index->header = NULL;
+    index->entries = NULL;
+    index->mapped_size = 0;
     open_mode = index->writable ? O_RDWR | O_CREAT : O_RDONLY;
     index->fd = open(index->path, open_mode, ARTFILE_MODE);
     if (index->fd < 0) {
@@ -285,33 +340,69 @@ fail:
 static bool
 index_maybe_remap(struct group_index *index, long loc)
 {
+    struct group_index replacement;
     struct stat st;
+    bool reopened = false;
     int count;
     int r;
 
-    if (loc < index->count)
+    if (index->header != NULL && index->entries != NULL && loc < index->count)
         return true;
 
     /* Don't remap if remapping wouldn't actually help. */
     r = fstat(index->fd, &st);
     if (r == -1) {
         if (errno == ESTALE) {
-            index_unmap(index);
-            if (!file_open_group_index(index, &st))
+            replacement = *index;
+            replacement.fd = -1;
+            replacement.header = NULL;
+            replacement.entries = NULL;
+            replacement.mapped_size = 0;
+            if (!file_open_group_index(&replacement, &st))
                 return false;
+            reopened = true;
         } else {
             syswarn("tradindexed: cannot stat %s", index->path);
             return false;
         }
     }
-    count = index_entry_count(st.st_size);
-    if (count < loc && index->header != NULL)
+    if (!tdx_index_entry_count(st.st_size, &count)) {
+        syswarn("tradindexed: invalid size for %s", index->path);
+        if (reopened)
+            close(replacement.fd);
+        return false;
+    }
+    /* If the file still has exactly the number of entries currently mapped,
+       remapping cannot satisfy an out-of-range lookup.  A different count in
+       either direction requires a refresh; audit deliberately passes the
+       on-disk count as loc to obtain a complete current mapping. */
+    if (!reopened && count == index->count && index->header != NULL)
         return true;
 
-    /* Okay, remapping will actually help. */
+    /* Build the replacement before discarding the current mapping so that a
+       failed mmap or read leaves the existing state usable. */
+    if (!reopened)
+        replacement = *index;
+    replacement.header = NULL;
+    replacement.entries = NULL;
+    replacement.mapped_size = 0;
+    replacement.count = count;
+    if (!index_map(&replacement)) {
+        if (reopened)
+            close(replacement.fd);
+        return false;
+    }
+
     index_unmap(index);
+    if (reopened) {
+        close(index->fd);
+        index->fd = replacement.fd;
+    }
+    index->header = replacement.header;
+    index->entries = replacement.entries;
+    index->mapped_size = replacement.mapped_size;
     index->count = count;
-    return index_map(index);
+    return true;
 }
 
 
@@ -329,11 +420,13 @@ index_unmap(struct group_index *index)
         free(index->header);
         free(index->entries);
     } else {
-        if (munmap(index->header, index_file_size(index->count)) < 0)
+        if (munmap(index->header, index->mapped_size) < 0) {
             syswarn("tradindexed: cannot munmap %s", index->path);
+        }
     }
     index->header = NULL;
     index->entries = NULL;
+    index->mapped_size = 0;
 }
 
 
@@ -344,11 +437,21 @@ index_unmap(struct group_index *index)
 static bool
 index_expand(struct group_index *index)
 {
+    struct group_index replacement;
     int i;
+    int newcount;
+    off_t newsize, oldsize;
 
-    index_unmap(index);
-    index->count += 1024;
-    if (ftruncate(index->fd, index_file_size(index->count)) < 0) {
+    if (index->count > INT_MAX - 1024
+        || !index_file_size(index->count, &oldsize)
+        || !index_file_size(index->count + 1024, &newsize)) {
+        errno = EOVERFLOW;
+        syswarn("tradindexed: cannot expand %s", index->path);
+        return false;
+    }
+
+    newcount = index->count + 1024;
+    if (ftruncate(index->fd, newsize) < 0) {
         syswarn("tradindexed: cannot expand %s", index->path);
         return false;
     }
@@ -360,13 +463,22 @@ index_expand(struct group_index *index)
        state (particularly if this was the first expansion of the index file,
        in which case entry 0 points to entry 0 and our walking functions may
        go into infinite loops).  Undo the file expansion. */
-    if (!index_map(index)) {
-        index->count -= 1024;
-        if (ftruncate(index->fd, index_file_size(index->count)) < 0) {
+    replacement = *index;
+    replacement.header = NULL;
+    replacement.entries = NULL;
+    replacement.mapped_size = 0;
+    replacement.count = newcount;
+    if (!index_map(&replacement)) {
+        if (ftruncate(index->fd, oldsize) < 0) {
             syswarn("tradindexed: cannot shrink %s", index->path);
         }
         return false;
     }
+    index_unmap(index);
+    index->header = replacement.header;
+    index->entries = replacement.entries;
+    index->mapped_size = replacement.mapped_size;
+    index->count = newcount;
 
     /* If the magic isn't right, assume this is a new index file. */
     if (index->header->magic != TDX_MAGIC) {
@@ -382,7 +494,7 @@ index_expand(struct group_index *index)
         index->header->freelist.recno = i;
     }
 
-    inn_msync_page(index->header, index_file_size(index->count), MS_ASYNC);
+    inn_msync_page(index->header, (size_t) newsize, MS_ASYNC);
     return true;
 }
 
@@ -404,8 +516,16 @@ tdx_index_open(bool writable)
     if (!file_open_group_index(index, &st)) {
         goto fail;
     }
-    if ((size_t) st.st_size > sizeof(struct group_header)) {
-        index->count = index_entry_count(st.st_size);
+    if (st.st_size < 0) {
+        errno = EOVERFLOW;
+        syswarn("tradindexed: invalid size for %s", index->path);
+        goto fail;
+    }
+    if (st.st_size > (off_t) sizeof(struct group_header)) {
+        if (!tdx_index_entry_count(st.st_size, &index->count)) {
+            syswarn("tradindexed: invalid size for %s", index->path);
+            goto fail;
+        }
         if (!index_map(index))
             goto fail;
     } else {
@@ -495,7 +615,7 @@ static long
 index_find(struct group_index *index, const char *group)
 {
     HASH hash;
-    long loc;
+    long loc, steps;
 
     if (index->header == NULL || index->entries == NULL)
         return -1;
@@ -504,9 +624,13 @@ index_find(struct group_index *index, const char *group)
         return -1;
     loc = index->header->hash[index_bucket(hash)].recno;
 
-    while (loc >= 0) {
+    for (steps = 0; loc >= 0; steps++) {
         struct group_entry *entry;
 
+        if (steps >= index->count) {
+            warn("tradindexed: loop in group index");
+            return -1;
+        }
         if (loc >= index->count) {
             if (!index_maybe_remap(index, loc)) {
                 return -1;
@@ -526,6 +650,8 @@ index_find(struct group_index *index, const char *group)
         }
         loc = entry->next.recno;
     }
+    if (loc != -1)
+        warn("tradindexed: invalid negative index %ld", loc);
     return -1;
 }
 
@@ -553,14 +679,18 @@ static long
 index_unlink_hash(struct group_index *index, HASH hash)
 {
     int *parent;
-    long current;
+    long current, steps;
 
     parent = &index->header->hash[index_bucket(hash)].recno;
     current = *parent;
 
-    while (current >= 0) {
+    for (steps = 0; current >= 0; steps++) {
         struct group_entry *entry;
 
+        if (steps >= index->count) {
+            warn("tradindexed: loop in group index");
+            return -1;
+        }
         if (current >= index->count) {
             if (!index_maybe_remap(index, current)) {
                 return -1;
@@ -585,6 +715,8 @@ index_unlink_hash(struct group_index *index, HASH hash)
         parent = &entry->next.recno;
         current = *parent;
     }
+    if (current != -1)
+        warn("tradindexed: invalid negative index %ld", current);
     return -1;
 }
 
@@ -662,6 +794,12 @@ tdx_index_add(struct group_index *index, const char *group, ARTNUM low,
             return false;
         }
     loc = index->header->freelist.recno;
+    if (loc < 0 || loc >= index->count || index->entries[loc].next.recno < -1
+        || index->entries[loc].next.recno >= index->count) {
+        warn("tradindexed: invalid free list entry %ld", loc);
+        index_lock(index->fd, INN_LOCK_UNLOCK);
+        return false;
+    }
     index->header->freelist.recno = index->entries[loc].next.recno;
     inn_msync_page(&index->header->freelist, sizeof(struct loc), MS_ASYNC);
 
@@ -926,7 +1064,7 @@ tdx_expire(const char *group, ARTNUM *low, struct history *history)
     struct group_entry new_entry;
     struct group_data *data = NULL;
     ptrdiff_t offset;
-    ARTNUM old_base, old_high;
+    ARTNUM old_base, old_low, old_high;
     ino_t old_inode;
 
     index = tdx_index_open(true);
@@ -946,6 +1084,7 @@ tdx_expire(const char *group, ARTNUM *low, struct history *history)
     new_entry.low = 0;
     new_entry.count = 0;
     new_entry.base = 0;
+    old_low = entry->low;
     old_high = entry->high;
     data = tdx_data_open(index, group, entry);
     if (data == NULL)
@@ -966,9 +1105,13 @@ tdx_expire(const char *group, ARTNUM *low, struct history *history)
     }
 
     /* Almost done.  Update the group index.  If there are no articles in the
-       group, the high water mark should be one less than the low water
-       mark. */
+       group, the high water mark should be one less than the low water mark.
+       If the group is already empty (low > high), keep its low water mark as
+       is; otherwise, expiring an empty group would decrement it on every run.
+     */
     if (new_entry.low == 0) {
+        if (old_low > old_high)
+            old_high = old_low;
         new_entry.low = old_high > 0 ? old_high : 1;
         new_entry.high = new_entry.low - 1;
     }
@@ -1076,10 +1219,12 @@ hashmap_load(void)
     free(activepath);
     if (active == NULL)
         return NULL;
-    if (fstat(QIOfileno(active), &st) < 0)
+    if (fstat(QIOfileno(active), &st) < 0 || st.st_size < 0
+        || (uintmax_t) st.st_size > SIZE_MAX) {
         hash_size = 32 * 1024;
-    else
-        hash_size = st.st_size / 30;
+    } else {
+        hash_size = (size_t) st.st_size / 30;
+    }
     hash = hash_create(hash_size, hashmap_hash, hashmap_key, hashmap_equal,
                        hashmap_delete);
 
@@ -1131,7 +1276,7 @@ void
 tdx_index_dump(struct group_index *index, FILE *output)
 {
     int bucket;
-    long current;
+    long current, steps;
     struct group_entry *entry;
     struct hash *hashmap;
     struct hashmap *group;
@@ -1142,9 +1287,16 @@ tdx_index_dump(struct group_index *index, FILE *output)
     hashmap = hashmap_load();
     for (bucket = 0; bucket < TDX_HASH_SIZE; bucket++) {
         current = index->header->hash[bucket].recno;
-        while (current != -1) {
-            if (!index_maybe_remap(index, current))
-                return;
+        for (steps = 0; current >= 0; steps++) {
+            if (steps >= index->count) {
+                warn("tradindexed: loop in group index bucket %d", bucket);
+                goto done;
+            }
+            if (!index_maybe_remap(index, current)
+                || current >= index->count) {
+                warn("tradindexed: entry %ld out of range", current);
+                goto done;
+            }
             entry = index->entries + current;
             name = NULL;
             if (hashmap != NULL) {
@@ -1157,11 +1309,16 @@ tdx_index_dump(struct group_index *index, FILE *output)
             tdx_index_print(name, entry, output);
             if (current == entry->next.recno) {
                 warn("tradindexed: index loop for entry %ld", current);
-                return;
+                goto done;
             }
             current = entry->next.recno;
         }
+        if (current != -1) {
+            warn("tradindexed: invalid negative index %ld", current);
+            goto done;
+        }
     }
+done:
     if (hashmap != NULL)
         hash_free(hashmap);
 }
@@ -1419,10 +1576,15 @@ tdx_index_audit(bool fix)
     /* Make sure the size looks sensible. */
     if (fstat(index->fd, &st) < 0) {
         syswarn("tradindexed: cannot fstat %s", index->path);
+        index_lock(index->fd, INN_LOCK_UNLOCK);
         return;
     }
-    count = index_entry_count(st.st_size);
-    expected = index_file_size(count);
+    if (!tdx_index_entry_count(st.st_size, &count)
+        || !index_file_size(count, &expected)) {
+        syswarn("tradindexed: invalid size for %s", index->path);
+        index_lock(index->fd, INN_LOCK_UNLOCK);
+        return;
+    }
     if (expected != st.st_size) {
         syswarn("tradindexed: %lu bytes of trailing trash in %s",
                 (unsigned long) (st.st_size - expected), index->path);
@@ -1430,7 +1592,10 @@ tdx_index_audit(bool fix)
             if (ftruncate(index->fd, expected) < 0)
                 syswarn("tradindexed: cannot truncate %s", index->path);
     }
-    index_maybe_remap(index, count);
+    if (!index_maybe_remap(index, count)) {
+        index_lock(index->fd, INN_LOCK_UNLOCK);
+        return;
+    }
 
     /* Okay everything is now mapped and happy.  Validate the header. */
     index_audit_header(index, fix);

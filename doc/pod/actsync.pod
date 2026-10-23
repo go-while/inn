@@ -163,14 +163,15 @@ the server by supplying the I<debug-level> argument:
 
 The I<debug-level> causes B<actsyncd> to run B<actsync> with a B<-v>
 I<debug-level> flag (overriding any B<-v> flag on the C<flags=> line),
-not make any changes to the F<active> file, write a new F<active> file to
-standard output, and write debug messages to standard error.  Note that using
-I<debug-level> is only supported when synchronizing with another news server,
-not with FTP or HTTP(S).
+not make any changes to the F<active> file, and write debug messages to
+standard error.  Note that using I<debug-level> is only supported when
+synchronizing with another news server, not with FTP or HTTP(S).
 
-If the I<debug-format> argument is also given to B<actsyncd>, the data
-written to standard output will be in C<-o I<debug-format>> instead of in
-C<-o a1> format.
+Unless the I<debug-format> argument is also given to B<actsyncd>, the data
+written to standard output will be in the format determined by the C<flags=>
+line, that is to say C<-o c> (B<ctlinnd> commands) since you should not
+specify an B<-o> flag on that line.  If I<debug-format> is given, the data
+written to standard output will be in C<-o I<debug-format>> format instead.
 
 INN comes with default values of C<downloads.isc.org> for <host>
 and C</pub/usenet/CONFIG/active.gz> for <path-to-active>:
@@ -234,7 +235,7 @@ components:
     99.bottles.of.treacle.on.the.wall
     linfield.class.envio_bio.101.d
 
-The newsgroups directory of a newsgroup with a all numeric component
+The newsgroups directory of a newsgroup with an all numeric component
 could conflict with an article from another group if stored using the
 tradspool storage method; see storage.conf(5).  For example, the directory
 for the first newsgroup listed above is the same path as article number
@@ -339,7 +340,7 @@ file specified with B<-i>.
 =item B<-k>
 
 By default, any newsgroup on the local host that has an invalid name will
-be considered for removal.  This causes B<actsync> simply ignore such
+be considered for removal.  This causes B<actsync> to simply ignore such
 newsgroups.  This flag, used in combination with B<-m>, will prevent any
 newsgroup from being scheduled for removal.
 

@@ -249,12 +249,19 @@ snapshot:
 
 
 ##  Check code for nits and potential errors by running:
+##    * codespell for misspelled words in source code,
 ##    * perlcritic for Perl scripts,
 ##    * perltidy warnings for Perl scripts.
 ##  This should only be run by a maintainer since it depends on the presence
 ##  of these programs, and sometimes a specific version.
 code-check:
-	@F=`(grep --include=\*.in -Rin perl . | grep ':1:' | cut -f1 -d':' ; \
+	@if command -v "codespell" >/dev/null 2>&1; then \
+	    echo "Running codespell to check misspelled words..." ; \
+	    codespell ; \
+	else \
+	    echo "Skipping misspelled words checking (codespell not found)" ; \
+	fi ; \
+	F=`(grep --include=\*.in -Rin perl . | grep ':1:' | cut -f1 -d':' ; \
 	        find . \( -name '*.pl' -o -name '*.pl.in' -o -name '*.pm' \
 	        -o -name '*.pm.in' \) \
 	        \! -wholename ./perl/INN/Config.pm \
@@ -262,7 +269,9 @@ code-check:
 	        \! -wholename ./samples/nnrpd_access.pl \
 	        \! -wholename ./samples/nnrpd_auth.pl \
 	        \! -wholename ./scripts/innshellvars.pl \
-	        ; echo ./support/mkmanifest) \
+	        ; echo ./support/mkmanifest \
+	        ; echo ./tests/data/overview/munge-data \
+	        ; echo ./tests/nnrpd/auth-test) \
 	        | grep -v pgpverify | grep -v '^./site/' | sort -u` ; \
 	if command -v "perlcritic" >/dev/null 2>&1; then \
 	    echo "Running perlcritic to check Perl code..." ; \
@@ -272,7 +281,7 @@ code-check:
 	fi ; \
         if command -v "perltidy" >/dev/null 2>&1; then \
             echo "Running perltidy to check Perl code..." ; \
-            perltidy -se -wma -wmauc=0 -wmr \
+            perltidy -se -wlt=1 -wma -wmauc=0 -wmr -wnt -wuk \
                 -wvt='c p r u' -wvxl='*_unused' $$F ; \
         else \
             echo "Skipping Perl code checking (perltidy not found)" ; \
@@ -326,7 +335,9 @@ reformat:
 	        \! -wholename ./samples/nnrpd_access.pl \
 	        \! -wholename ./samples/nnrpd_auth.pl \
 	        \! -wholename ./scripts/innshellvars.pl \
-	        ; echo ./support/mkmanifest) \
+	        ; echo ./support/mkmanifest \
+	        ; echo ./tests/data/overview/munge-data \
+	        ; echo ./tests/nnrpd/auth-test) \
 	        | grep -v pgpverify | grep -v '^./site/' | sort -u \
 	        | xargs perltidy ; \
 	else \

@@ -2,7 +2,12 @@
 # fixscript will replace this line with code to load INN::Config
 
 # mailpost - Yet another mail-to-news filter
-# vixie 14jun92 [original]
+#
+# Originally written by Paul Vixie, and released on June, 14th 1992.
+# Hacked up by James Brister for INN integration in 1998.
+#
+# Various bug fixes, code and documentation improvements
+# in 1992, 1993, 1995, 1998-2004, 2007-2012, 2015, 2017, 2021-2024, 2026.
 
 use strict;
 use warnings;
@@ -579,7 +584,7 @@ sub mailArtAndDie {
       || die "die($errmsg): sendmail: $!\n";
     # As the mail is sent in direct response to a message, it is auto-replied,
     # and not auto-generated (RFC 3834).
-    print SENDMAIL <<"EOF" ;
+    print SENDMAIL <<"EOF";
 To: $Maintainer
 Subject: mailpost failure ($newsgroups)
 Auto-Submitted: auto-replied
@@ -671,6 +676,8 @@ sub append_newsgroups($$) {
 
 __END__
 
+=encoding utf-8
+
 =head1 NAME
 
 mailpost - Feed an e-mail message into a newsgroup
@@ -692,7 +699,7 @@ whitespace-separated list of group names to which to post the article
 
 Before feeding the article to B<inews>, it checks that the article has
 not been seen before, and it changes some header fields (cleaning up some
-address header fields, removing a few ones like X-Complaints-To and X-Trace,
+address header fields, removing a few, like X-Complaints-To and X-Trace,
 and putting C<X-> in front of unknown header fields).  The Received and *-To
 header fields are also altered to prevent spamming the gateway (the name
 of the news server or the domain name set in I<fromhost>, I<pathhost> and
@@ -711,10 +718,10 @@ Normally, B<mailpost> is run by sendmail(8) via an alias entry:
 The B<-b> and B<-t> flags are useful to change the directories used by
 B<mailpost> by default.  As a matter of fact, though it is recommended to
 run B<mailpost> as the news user, it is as often as not run as another user,
-notably the mail user.  Therefore, you should make sure to create and set to
-be writable by the user that B<mailpost> runs as the directories where to put
-the database and the temporary files.  Also, B<mailpost> must be executable by
-that user.
+notably the mail user.  Therefore, you should make sure to create the
+directories where the database and the temporary files are put, and set them
+to be writable by the user that B<mailpost> runs as.  Also, B<mailpost> must
+be executable by that user.
 
 Instead of F</var/spool/mailpost>, the mail spool directory can be specified,
 or any other directory where the B<mailpost> process has write access.
@@ -724,7 +731,7 @@ moderated newsgroup (running for instance the command C<ctlinnd newgroup
 local.bicycles.racing m>) and set the moderation address for this newsgroup
 in the F<moderators> file in I<pathetc> to the mailing-list address.  If you
 add an B<-a> flag in the above example, then on the one hand, when a message
-is sent to the mailing-list, B<mailpost> will be run, mark it as approved,
+is sent to the mailing-list, B<mailpost> will be run, will mark it as approved,
 and the message will directly reach the newsgroup.  On the other hand, when
 a message is posted to the newsgroup, it normally does not have an Approved
 header field, so it will be sent (by B<nnrpd>) to the mailing-list address
@@ -740,7 +747,7 @@ be processed by B<mailpost>, approved, and finally reach the newsgroup.
 
 If the B<-a> flag is used, I<addr> (which is usually the e-mail address of
 the poster) is added to the article as the body of an Approved header field.
-It is useful if one of the newsgroup to which the article should be posted is
+It is useful if one of the newsgroups to which the article should be posted is
 moderated.  (Of course, this flag should be added only if you are supposed to
 auto-approve your posts.)
 
@@ -797,7 +804,7 @@ in case an error occurs.  Everything is written to the standard output.
 =item B<-o> I<output-command>
 
 Specifies the program to which the resulting article processed by B<mailpost>
-should be sent.  For debugging purpose, C<-o cat> can be used.  The default
+should be sent.  For debugging purposes, C<-o cat> can be used.  The default
 value is C<inews -S -h>.
 
 =item B<-p> I<port>
@@ -831,6 +838,7 @@ through to B<inews> without having C<X-> prepended.
 
 By default, known header fields are:
 
+    Approved
     Archive
     Archived-At
     Comments
@@ -878,7 +886,7 @@ The default database files which record previously seen message-IDs.
 =head1 HISTORY
 
 Written by Paul Vixie long ago and then hacked up by James Brister for INN
-integration.  Documentation improved by Julien Elie.
+integration.  Documentation improved by Julien Élie.
 
 =head1 SEE ALSO
 

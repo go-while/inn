@@ -5,6 +5,11 @@
 **  including some ways that are useful for recovery from crashes.  It allows
 **  the user to view the contents of the various data structures that
 **  tradindexed stores on disk.
+**
+**  Initial implementation in 2002 by Russ Allbery.
+**
+**  Various bug fixes, code and documentation improvements since then
+**  in 2003, 2005, 2006, 2008-2010, 2017, 2021-2024, 2026.
 */
 
 #include "portable/system.h"
@@ -48,6 +53,7 @@ dump_index(const char *group)
         entry = tdx_index_entry(index, group);
         if (entry == NULL) {
             warn("cannot find group %s", group);
+            tdx_index_close(index);
             return;
         }
         tdx_index_print(group, entry, stdout);
@@ -72,11 +78,13 @@ dump_group_index(const char *group)
     entry = tdx_index_entry(index, group);
     if (entry == NULL) {
         warn("cannot find group %s in the index", group);
+        tdx_index_close(index);
         return;
     }
     data = tdx_data_open(index, group, entry);
     if (data == NULL) {
         warn("cannot open group %s", group);
+        tdx_index_close(index);
         return;
     }
     tdx_data_index_dump(data, stdout);
@@ -110,14 +118,15 @@ dump_overview(const char *group, ARTNUM low, ARTNUM high, bool overchan)
     entry = tdx_index_entry(index, group);
     if (entry == NULL) {
         warn("cannot find group %s", group);
+        tdx_index_close(index);
         return;
     }
     data = tdx_data_open(index, group, entry);
     if (data == NULL) {
         warn("cannot open group %s", group);
+        tdx_index_close(index);
         return;
     }
-    data->refcount++;
 
     if (low == 0)
         low = entry->low;
@@ -130,11 +139,14 @@ dump_overview(const char *group, ARTNUM low, ARTNUM high, bool overchan)
             puts("Article not found");
         else
             warn("cannot open search in %s: %lu - %lu", group, low, high);
+        tdx_data_close(data);
         tdx_index_close(index);
         return;
     }
     while (tdx_search(search, &article)) {
         if (overchan) {
+            if (article.overlen < 3)
+                continue;
             p = memchr(article.overview, '\t', article.overlen - 3);
             if (p == NULL)
                 continue;
@@ -144,6 +156,8 @@ dump_overview(const char *group, ARTNUM low, ARTNUM high, bool overchan)
                    (unsigned long) article.expires);
             fwrite(p, article.overlen - 2 - (p - article.overview), 1, stdout);
         } else {
+            if (article.overlen < 2)
+                continue;
             fwrite(article.overview, article.overlen - 2, 1, stdout);
             printf("\tArticle: %lu\tToken: %s", article.number,
                    TokenToText(article.token));
@@ -308,7 +322,7 @@ group_rebuild(const char *group, const char *path)
     if (!tdx_index_rebuild_start(index, entry))
         die("cannot start index rebuild for %s", group);
 
-    histpath = concatpath(innconf->pathdb, INN_PATH_HISTORY);
+    histpath = concatpath(innconf->pathhistory, INN_PATH_HISTORY);
     flags = HIS_RDONLY | HIS_ONDISK;
     history = HISopen(histpath, innconf->hismethod, flags);
     if (history == NULL)
@@ -324,18 +338,24 @@ group_rebuild(const char *group, const char *path)
     for (file = 0; file < files->count; file++) {
         filename = concatpath(path, files->strings[file]);
         article = ReadInFile(filename, &st);
-        size = st.st_size;
         if (article == NULL) {
             syswarn("cannot read in %s", filename);
             free(filename);
             continue;
         }
+        size = (size_t) st.st_size;
 
         /* Check to see if the article is not in wire format.  If it isn't,
            convert it.  We only check the first line ending. */
         p = strchr(article, '\n');
         if (p != NULL && (p == article || p[-1] != '\r')) {
             wireformat = wire_from_native(article, size, &length);
+            if (wireformat == NULL) {
+                syswarn("cannot convert %s to wire format", filename);
+                free(filename);
+                free(article);
+                continue;
+            }
             free(article);
             article = wireformat;
             size = length;

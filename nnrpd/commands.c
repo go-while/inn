@@ -97,6 +97,7 @@ PERMgeneric(char *av[], char *accesslist, size_t size)
     size_t j;
     int i, pan[2], status;
     pid_t pid;
+    ssize_t count;
     struct stat stb;
 
     av += 2;
@@ -159,6 +160,8 @@ PERMgeneric(char *av[], char *accesslist, size_t size)
         if (i == (long) innconf->maxforks) {
             Reply("%d Can't fork %s\r\n", NNTP_FAIL_ACTION, strerror(errno));
             syslog(L_FATAL, "can't fork %s %m", av[0]);
+            close(pan[PIPE_READ]);
+            close(pan[PIPE_WRITE]);
             return -1;
         }
         syslog(L_NOTICE, "can't fork %s -- waiting", av[0]);
@@ -194,12 +197,14 @@ PERMgeneric(char *av[], char *accesslist, size_t size)
     }
 
     close(pan[PIPE_WRITE]);
-    if (read(pan[PIPE_READ], path, sizeof(path)) < 0) {
+    count = read(pan[PIPE_READ], path, sizeof(path));
+    close(pan[PIPE_READ]);
+    waitpid(pid, &status, 0);
+    if (count < 0) {
         syslog(L_FATAL, "can't read %s %m", path);
         return 0;
     }
 
-    waitpid(pid, &status, 0);
     if (!WIFEXITED(status) || WEXITSTATUS(status) != 0)
         return 0;
 
@@ -406,7 +411,7 @@ CMDauthinfo(int ac, char *av[])
             return;
         }
 
-        /* For backwards compatibility, we return 481 instead of 502 (which had
+        /* For backward compatibility, we return 481 instead of 502 (which had
          * the same meaning as 481 in RFC 2980). */
         if (code == NNTP_ERR_ACCESS) {
             code = NNTP_FAIL_AUTHINFO_BAD;
@@ -620,7 +625,7 @@ CMDpost(int ac, char *av[])
     static int size;
     char *p, *q;
     char *end;
-    int longline, missingdotstuffing;
+    long longline, missingdotstuffing;
     READTYPE r;
     int i;
     long l;
@@ -813,7 +818,7 @@ CMDpost(int ac, char *av[])
 
     if (longline > 0) {
         warn("%s too long in post", Client.host);
-        Reply("%d Line %d too long\r\n",
+        Reply("%d Line %ld too long\r\n",
               ihave ? NNTP_FAIL_IHAVE_REJECT : NNTP_FAIL_POST_REJECT,
               longline);
         POSTrejected++;
@@ -821,7 +826,7 @@ CMDpost(int ac, char *av[])
     }
 
     if (missingdotstuffing > 0) {
-        Reply("%d Line %d without its initial dot doubled (dot-stuffing)\r\n",
+        Reply("%d Line %ld without its initial dot doubled (dot-stuffing)\r\n",
               ihave ? NNTP_FAIL_IHAVE_REJECT : NNTP_FAIL_POST_REJECT,
               missingdotstuffing);
         POSTrejected++;

@@ -29,8 +29,9 @@ specified);
 
 =item *
 
-purging the overview database with B<expireover> (if the corresponding eponym
-keyword is specified or if I<enableoverview> is true in F<inn.conf>);
+purging the overview database with B<expireover> (if the corresponding
+eponymous keyword is specified or if I<enableoverview> is true in
+F<inn.conf>);
 
 =item *
 
@@ -50,7 +51,7 @@ renumbering the F<active> file with B<ctlinnd>;
 
 =item *
 
-rebuilding the F<history> file with B<expire>;
+rebuilding the history database with B<expire>;
 
 =item *
 
@@ -84,7 +85,7 @@ the above option list for B<news.daily>.
 
 It may be run more often, but such invocations should at least use the
 B<norotate> keyword (or perhaps the B<notdaily> keyword) to prevent the log
-files from being processed and rotated too fast.  The shlock(1) program is
+files from being processed and rotated too fast.  The shlock(8) program is
 used to prevent simultaneous executions.
 
 The program specified by the given path I</path/to/a/program> is executed
@@ -110,10 +111,12 @@ Specify the file to use as the F<expire.ctl> file for B<expire>.
 
 =item B<expdir>=I<path>
 
-By default, B<expire> builds the new F<history> file and database in the same
-directory as the current files.  Using this keyword specifies a different
-location to build the new files (by passing the B<-d> flag to B<expire>),
-which will then be moved to the right location when finished.
+By default, B<expire> builds the new history database in the same directory as
+the current one.  Using this keyword specifies a different location to build
+the new C<hisv6> database (by passing the B<-d> flag to B<expire>), which will
+then be moved to the right location when finished.
+
+This option is not available with the C<hissqlite> history method.
 
 =item B<expireover>
 
@@ -140,7 +143,7 @@ keyword is used.
 =item B<lowmark>
 
 If the B<lowmark> keyword is used, C<ctlinnd lowmark> is used for renumbering
-F<active>.  Normal C<ctlinnd renumber> operation will take long time.  With
+F<active>.  Normal C<ctlinnd renumber> operation will take a long time.  With
 the B<lowmark> keyword, this will take less time.  If the B<lowmark> keyword
 is used, the B<norenumber> keyword is not needed since B<news.daily> specifies
 it implicitly.
@@ -259,7 +262,7 @@ converted to POD by Julien Elie.
 =head1 SEE ALSO
 
 active(5), ctlinnd(8), expire(8), expire.ctl(5), expireover(8), expirerm(8),
-fastrm(1), inn.conf(5), innstat(8), newslog(5), procbatch(8), scanlogs(8),
-shlock(1).
+fastrm(1), hissqlite(5), history(5), inn.conf(5), innstat(8), newslog(5),
+procbatch(8), scanlogs(8), shlock(8).
 
 =cut

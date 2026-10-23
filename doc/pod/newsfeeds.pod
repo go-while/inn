@@ -58,7 +58,7 @@ which programs should be run (and what information should be sent to
 them), and then this information is used by programs like innxmit(8) and
 innfeed(8) to feed articles to remote sites.
 
-Used in conjunction with delayer(1) in the configuration of the related funnel
+Used in conjunction with delayer(8) in the configuration of the related funnel
 feed, B<innfeed> can even send a delayed feed to remote peers or to another
 local instance of B<innd>, notably to permit the rejection of spam before it
 actually arrives.
@@ -211,7 +211,7 @@ the article is sent.
 =back
 
 If an article has more than one distribution specified, then each one is
-handled according according to the above rules.  If any of the specified
+handled according to the above rules.  If any of the specified
 distributions indicate that the article should be sent, it is; if none do,
 it is not sent.  In other words, the rules are used as a logical or.
 
@@ -578,7 +578,7 @@ Expires header field, C<0> otherwise.
 =item f
 
 The storage API token of the article (the same as C<n>).  The article can
-be retrieved given the storage API token by using sm(1).
+be retrieved given the storage API token by using sm(8).
 
 =item g
 
@@ -589,20 +589,20 @@ was posted even if it is a control message.)
 
 =item h
 
-The history hash key of the article (derived from the message ID).
+The history hash key of the article (derived from the Message-ID).
 
 =item m
 
-The message ID of the article.
+The Message-ID of the article.
 
 =item n
 
 The storage API token of the article.  The article can be retrieved given
-the storage API token by using sm(1).
+the storage API token by using sm(8).
 
 =item p
 
-The time the article was posted a seconds since epoch.
+The time the article was posted as seconds since epoch.
 
 =item s
 
@@ -723,7 +723,7 @@ A program feed (B<Tp>) spawns a given program for every article that the
 site receives.  The I<parameter> field must be the command line to execute,
 and should contain one instance of C<%s>, which will be replaced by the
 storage API token of the article (the actual article can be retrieved by
-the program using sm(1)).  The program will not receive anything on
+the program using sm(8)).  The program will not receive anything on
 standard input (unlike earlier versions of INN, where the article is sent
 to the program on stdin), and standard output and error from the program
 will be set to the error log (I<pathlog>/errlog).  B<innd> will try to
@@ -796,7 +796,7 @@ The former look like this:
 
 which generates a file named I<pathoutgoing>/feed.example.com containing
 one line per article consisting of the storage API token, a space, and the
-message ID.
+Message-ID.
 
 The latter look like this:
 
@@ -822,7 +822,7 @@ Note that the I<pattern> for this feed is just C<!*> so that it won't
 receive any articles directly.  The feed should only receive those
 articles that would go to one of the funnel feeds that are feeding into
 it.  innfeed(8) will receive one line per article on its standard input
-containing the storage API token, the message ID, and a space-separated
+containing the storage API token, the Message-ID, and a space-separated
 list of sites that should receive that article.
 
 Here's a more esoteric example of a channel feed:
@@ -858,7 +858,7 @@ target of funnel feeds such as:
 Suppose that the server receives an article crossposted between
 news.admin.misc and news.software.nntp.  The server will notice that the
 article should be sent to the site C<peter@example.com> and the site
-C<bob@example.com>, both of which funnel into C<mailer!>, so it will look
+C<sue@example.com>, both of which funnel into C<mailer!>, so it will look
 at the C<mailer!> site and end up executing the command line:
 
     sm @...@ | innmail -s "News article" \
@@ -878,7 +878,7 @@ newsgroup other than control.cancel, which due to the sorting of control
 messages described in innd(8) will send it all control messages except for
 cancel messages.  B<controlchan> gets the storage API token, the name of the
 sending site (for processing old-style ihave and sendme control messages,
-be sure to read about I<logipaddr> in controlchan(8)), and the message ID for
+be sure to read about I<logipaddr> in controlchan(8)), and the Message-ID for
 each article.
 
 For many other examples, including examples of the special C<ME> site
@@ -893,7 +893,7 @@ and rewritten in POD by Russ Allbery <eagle@eyrie.org>.
 
 =head1 SEE ALSO
 
-active(5), buffchan(8), controlchan(8), ctlinnd(8), delayer(1), inn.conf(5),
-innd(8), innfeed(8), innxmit(8), libinn_uwildmat(3), nntpsend(8).
+active(5), buffchan(8), controlchan(8), ctlinnd(8), delayer(8), inn.conf(5),
+innd(8), innfeed(8), innxmit(8), libinn_uwildmat(3), nntpsend(8), sm(8).
 
 =cut

@@ -6,10 +6,14 @@
 **  far, most of the library support is for servers rather than clients.
 **  Buffering is handled internally when reading from the network to allow for
 **  easier parsing.
+**
+**  Written by Russ Allbery in 2003.
+**  Various bug fixes, code and documentation improvements since then
+**  in 2003-2005, 2008-2010, 2015, 2021-2024, 2026.
 */
 
 #ifndef INN_NNTP_H
-#define INN_NNTP_H 1
+#define INN_NNTP_H
 
 #include "inn/macros.h"
 #include "inn/portable-stdbool.h"

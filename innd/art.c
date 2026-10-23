@@ -1124,7 +1124,7 @@ ARTreject(Reject_type code, CHANNEL *cp)
     /* Remember why the article was rejected (for the status file) */
 
     cp->Rejected++;
-    cp->RejectSize += (float) (cp->Next - cp->Start);
+    cp->RejectSize += (unsigned long long) (cp->Next - cp->Start);
 
     /* Streaming is used.  Increase the reject counter for TAKETHIS. */
     if (cp->Sendid.size > 3) {
@@ -1134,7 +1134,7 @@ ARTreject(Reject_type code, CHANNEL *cp)
     switch (code) {
     case REJECT_DUPLICATE:
         cp->Duplicate++;
-        cp->DuplicateSize += (float) (cp->Next - cp->Start);
+        cp->DuplicateSize += (unsigned long long) (cp->Next - cp->Start);
         break;
     case REJECT_SITE:
         cp->Unwanted_s++;
@@ -1280,9 +1280,15 @@ ARTcancel(const ARTDATA *data, const char *MessageID, const bool Trusted)
     /* Get stored message and zap them. */
     if (innconf->enableoverview)
         OVcancel(token);
-    if (!SMcancel(token) && SMerrno != SMERR_NOENT && SMerrno != SMERR_UNINIT)
+    if (SMcancel(token) || SMerrno == SMERR_NOENT) {
+        /* Record the out-of-band cancel so a later expire run can drop
+         * the history entry without an SMretrieve(RETR_STAT).  Best-
+         * effort and a no-op when expiretombstone is disabled. */
+        SMcanceltombstone(token);
+    } else if (SMerrno != SMERR_UNINIT) {
         syslog(L_ERROR, "%s cant cancel %s (SMerrno %d)", LogName,
                TokenToText(token), SMerrno);
+    }
     if (innconf->immediatecancel && !SMflushcacheddata(SM_CANCELLEDART))
         syslog(L_ERROR, "%s cant cancel cached %s", LogName,
                TokenToText(token));
@@ -1526,6 +1532,8 @@ ARTxrefslave(ARTDATA *data)
         return false;
     /* skip server name */
     if ((p = strpbrk(HDR(HDR__XREF), " \t\r\n")) == NULL)
+        return false;
+    if (p > HDR(HDR__XREF) + HDR_LEN(HDR__XREF))
         return false;
     /* in case Xref is folded */
     while (*++p == ' ' || *p == '\t' || *p == '\r' || *p == '\n')
@@ -2676,7 +2684,7 @@ ARTpost(CHANNEL *cp)
         cp->ArtMax = i;
     cp->ArtBeg = 0;
 
-    cp->Size += (float) data->BytesValue;
+    cp->Size += (unsigned long long) data->BytesValue;
     if (innconf->logartsize) {
         if (fprintf(Log, " %ld", data->BytesValue) == EOF || ferror(Log)) {
             oerrno = errno;

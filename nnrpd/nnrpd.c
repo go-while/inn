@@ -51,10 +51,10 @@ bool encryption_layer_on = false;
 #endif
 
 /* Optional arguments for getopt. */
-#if defined(HAVE_BLACKLIST)
-#    define BLACKLIST_OPT "B"
+#if defined(HAVE_BLACKLIST) || defined(HAVE_BLOCKLIST)
+#    define BLOCKLIST_OPT "B"
 #else
-#    define BLACKLIST_OPT ""
+#    define BLOCKLIST_OPT ""
 #endif
 
 #if defined(HAVE_OPENSSL)
@@ -1033,7 +1033,7 @@ main(int argc, char *argv[])
 #endif /* HAVE_SASL */
 
     while ((i = getopt(argc, argv,
-                       "4:6:b:" BLACKLIST_OPT "c:Dfi:I:nop:P:r:s:" OPENSSL_OPT
+                       "4:6:b:" BLOCKLIST_OPT "c:Dfi:I:nop:P:r:s:" OPENSSL_OPT
                        "t"))
            != EOF)
         switch (i) {
@@ -1049,11 +1049,11 @@ main(int argc, char *argv[])
         case '6': /* Bind to a certain IPv6 address. */
             ListenAddr6 = xstrdup(optarg);
             break;
-#if defined(HAVE_BLACKLIST)
-        case 'B': /* Enable blacklistd functionality. */
-            BlacklistEnabled = true;
+#if defined(HAVE_BLACKLIST) || defined(HAVE_BLOCKLIST)
+        case 'B': /* Enable blocklistd functionality. */
+            BlocklistEnabled = true;
             break;
-#endif            /* HAVE_BLACKLIST */
+#endif            /* HAVE_BLACKLIST || HAVE_BLOCKLIST */
         case 'c': /* Use alternate readers.conf. */
             ConfFile = concatpath(innconf->pathetc, optarg);
             break;
@@ -1109,7 +1109,7 @@ main(int argc, char *argv[])
             syswarn("could not nice to %lu", innconf->nicennrpd);
     }
 
-    HISTORY = concatpath(innconf->pathdb, INN_PATH_HISTORY);
+    HISTORY = concatpath(innconf->pathhistory, INN_PATH_HISTORY);
     ACTIVE = concatpath(innconf->pathdb, INN_PATH_ACTIVE);
     ACTIVETIMES = concatpath(innconf->pathdb, INN_PATH_ACTIVETIMES);
     NEWSGROUPS = concatpath(innconf->pathdb, INN_PATH_NEWSGROUPS);
@@ -1358,13 +1358,11 @@ main(int argc, char *argv[])
         }
         encryption_layer_on = true;
 
-#    if defined(HAVE_ZLIB) && OPENSSL_VERSION_NUMBER >= 0x00090800fL
-        /* Check whether a compression layer has just been added.
-         * SSL_get_current_compression() is defined in OpenSSL versions >=
-         * 0.9.8 final release, as well as LibreSSL. */
+#    if defined(HAVE_ZLIB)
+        /* Check whether a compression layer has just been added. */
         tls_compression_on = (SSL_get_current_compression(tls_conn) != NULL);
         compression_layer_on = tls_compression_on;
-#    endif /* HAVE_ZLIB && OPENSSL >= v0.9.8 */
+#    endif /* HAVE_ZLIB */
     }
 #endif /* HAVE_OPENSSL */
 
@@ -1431,16 +1429,13 @@ main(int argc, char *argv[])
 
     if ((PERMaccessconf && PERMaccessconf->readertrack)
         || (!PERMaccessconf && innconf->readertrack)) {
-        int len;
         syslog(L_NOTICE, "%s Tracking Enabled (%s)", Client.host, Username);
         pid = getpid();
         gettimeofday(&tv, NULL);
         count += pid;
         vid = tv.tv_sec ^ tv.tv_usec ^ pid ^ count;
-        len = strlen("innconf->pathlog") + strlen("/tracklogs/log-") + BUFSIZ;
-        LocalLogFileName = xmalloc(len);
-        sprintf(LocalLogFileName, "%s/tracklogs/log-%u", innconf->pathlog,
-                vid);
+        xasprintf(&LocalLogFileName, "%s/tracklogs/log-%u", innconf->pathlog,
+                  vid);
         if ((locallog = fopen(LocalLogFileName, "w")) == NULL) {
             LocalLogDirName = concatpath(innconf->pathlog, "tracklogs");
             MakeDirectory(LocalLogDirName, false);

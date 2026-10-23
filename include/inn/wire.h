@@ -1,14 +1,17 @@
 /*
 **  Wire format article utilities.
 **
-**  Originally written by Alex Kiernan (alex.kiernan@thus.net)
-**
 **  These routines manipulate wire format articles; in particular, they should
 **  be safe in the presence of embedded NULs and UTF-8 characters.
+**
+**  Originally written by Alex Kiernan (alex.kiernan@thus.net) in 2002.
+**
+**  Various bug fixes, code and documentation improvements since then
+**  in 2002, 2005, 2009, 2021, 2022, 2026.
 */
 
 #ifndef INN_WIRE_H
-#define INN_WIRE_H 1
+#define INN_WIRE_H
 
 #include "inn/macros.h"
 #include "inn/portable-stdbool.h"
@@ -21,9 +24,9 @@ BEGIN_DECLS
    your article is bodyless). */
 char *wire_findbody(const char *, size_t);
 
-/* Given a pointer into an article and a pointer to the end of the article,
-   find the start of the next line or return NULL if there are no more lines
-   remaining in the article. */
+/* Given a pointer into an article and a pointer to its final octet, find the
+   start of the next line or return NULL if there are no more lines remaining
+   in the article. */
 char *wire_nextline(const char *, const char *end);
 
 /* Given a pointer to the start of an article and the name of a header field,
@@ -43,7 +46,8 @@ char *wire_endheader(const char *header, const char *end);
 
 /* Given an article and length in non-wire format, return a malloced region
    containing the article in wire format and set newlen to the length of the
-   new article. */
+   new article.  Returns NULL with errno set to EOVERFLOW if the converted
+   article would be too large to represent. */
 char *wire_from_native(const char *article, size_t len, size_t *newlen);
 
 /* Given an article and length in wire format, return a malloced region

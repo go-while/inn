@@ -1,6 +1,6 @@
 =head1 NAME
 
-his - routines for managing INN history
+libinnhist - Routines for managing INN history
 
 =head1 SYNOPSIS
 
@@ -29,7 +29,9 @@ his - routines for managing INN history
         HISCTLS_SYNCCOUNT,
         HISCTLS_NPAIRS,
         HISCTLS_IGNOREOLD,
-        HISCTLS_STATINTERVAL
+        HISCTLS_STATINTERVAL,
+        HISCTLG_INPLACEEXPIRE,
+        HISCTLG_ENTRYESTIMATE
     };
 
     struct history *HISopen(const char *path, const char *method,
@@ -63,12 +65,13 @@ his - routines for managing INN history
                    time_t threshold,
                    bool (*exists)(void *cookie, time_t arrived,
                                   time_t posted, time_t expires,
-                                  const TOKEN *token));
+                                  TOKEN *token));
 
     bool HISwalk(struct history *history, const char *reason,
                  void *cookie,
-                 bool (*callback)(void *cookie, time_t arrived,
-                                  time_t posted, time_t expires,
+                 bool (*callback)(void *cookie, const HASH *hash,
+                                  time_t arrived, time_t posted,
+                                  time_t expires,
                                   const TOKEN *token));
 
     struct histstats HISstats(struct history *history);
@@ -77,20 +80,25 @@ his - routines for managing INN history
 
     bool HISctl(struct history *history, int request, void *val);
 
+    void HISlogto(const char *s);
+
+    void HISlogclose(void);
+
 =head1 DESCRIPTION
 
 These functions provide access to the INN history database.  They maintain
 key/value pairs in an opaque database whilst providing for expiry of
 outdated information.
 
-The history structure is an opaque handle returned from HISopen.
+The history structure is an opaque handle returned from B<HISopen>.
 
 The B<HISopen> function opens the history file designated by I<path>
 using the mode I<flags> using the specified I<method>.  I<flags> may be
 B<HIS_RDONLY> to indicate that read-only access to the history
 database is desired, or B<HIS_RDWR> for read/write access.  History
-methods are defined at build time; the history method currently
-available is "hisv6".  On success a newly initialised history handle is
+methods are defined at build time; the history methods currently
+available are C<hisv6> and, when INN is built with SQLite support,
+C<hissqlite>.  On success, a newly initialised history handle is
 returned, or B<NULL> on failure.
 
 B<HIS_ONDISK>, B<HIS_INCORE> and B<HIS_MMAP> may be logically ORed
@@ -99,7 +107,7 @@ to how it should handle its data files; B<HIS_ONDISK> indicates that
 the caller would like as much of the data to be kept on disk (and out
 of memory), B<HIS_INCORE> indicates that the data files should be kept
 in main memory where possible and B<HIS_MMAP> that the files should be
-mmap()ed into the processes address space.  B<HIS_INCORE> is typically
+mmap()ed into the process's address space.  B<HIS_INCORE> is typically
 used where a mass rebuild of the history database is being performed;
 the underlying history manager may assume that the caller will call
 B<HISsync>() to sync the data files to disk.
@@ -118,7 +126,7 @@ B<true> on success.
 The B<HISsync> function synchronises any outstanding transactions
 associated with I<history> to disk.
 
-B<HISsetcache> associates a cache used for speeding up HIScheck with
+B<HISsetcache> associates a cache used for speeding up B<HIScheck> with
 I<history>.  The cache will occupy approximately I<size> bytes.
 
 B<HISlookup> retrieves a token from I<history> based on the passed
@@ -173,7 +181,7 @@ new database (and so merely see the callbacks), I<writing> may be set
 B<false>.
 
 If the underlying history mechanism needs to pause the server, the
-I<reason> string is used as the argument to the `ctlinnd pause'
+I<reason> string is used as the argument to the C<ctlinnd pause>
 command, and as such the server should be reserved by the caller prior
 to calling B<HISexpire>; if the caller wishes to inhibit pausing of
 the server, passing B<NULL> will achieve this.  If I<reason> is not
@@ -183,8 +191,8 @@ be left paused and the caller should unpause it.
 The history database is scanned and entries with an associated storage
 token are passed to the discrimination function I<exists>.
 
-If I<exists>() returns B<false> it indicates that stored entity
-associated with token is no longer available (or no longer required),
+If I<exists>() returns B<false>, it indicates that the stored entity
+associated with the token is no longer available (or no longer required),
 and therefore the associated history entry may be expired once it
 meets the I<threshold> constraint.  If I<exists>() returns B<true> the
 entry is kept as-is in the newly expired history database.
@@ -210,14 +218,16 @@ unspecified.
 
 B<HISwalk> provides an iteration function for the specified I<history>
 database.  For every entry in the history database, I<callback> is
-invoked, passing the I<cookie>, arrival, posting, and expiry times, in
-addition to the token associated with the entry.  If the I<callback>()
-returns B<false> the iteration is aborted and B<HISwalk> returns
-B<false> to the caller.
+invoked, passing the I<cookie>, the message-ID I<hash>, arrival,
+posting, and expiry times, in addition to the token associated with
+the entry.  If the entry has no storage token (a remembered
+message-ID), I<token> is B<NULL>.  If the I<callback>() returns
+B<false> the iteration is aborted and B<HISwalk> returns B<false> to
+the caller.  Malformed history lines are silently skipped.
 
 To process the entire database in the presence of a running server,
 I<reason> may be passed; if this argument is not B<NULL>, it is used
-as an an argument to the `ctlinnd (reserve|pause|go)' commands.  If
+as an argument to the C<ctlinnd (reserve|pause|go)> commands.  If
 I<reason> is B<NULL> and the server is running, the behaviour of
 B<HISwalk> is undefined.
 
@@ -291,7 +301,7 @@ will not be modified by the call.
 
 =item C<HISCTLS_NPAIRS> (size_t *)
 
-Set a hint to the to the underlying history manager as to how many
+Set a hint to the underlying history manager as to how many
 entries there are expected to be in the history database; B<0>
 indicates that an automatic or default sizing should be made.  I<val>
 should be a pointer to a value of type B<size_t> and will not be
@@ -307,13 +317,43 @@ value of type B<bool> and will not be modified by the call.
 
 =item C<HISCTLS_STATINTERVAL> (time_t *)
 
-For the history v6 and tagged hash managers, set the interval, in
+For the C<hisv6> history method and tagged hash managers, set the interval, in
 seconds, between stat(2)s of the history files checking for replaced
 files (as happens during expire); this option is typically used by
 nnrpd(8) like applications.  I<val> should be a pointer to a value of
 type B<time_t> and will not be modified by the call.
 
+=item C<HISCTLG_INPLACEEXPIRE> (bool *)
+
+Indicate whether the history backend expires in place (mutating the live
+database via a writer rather than rebuilding a new file and swapping it).
+Backends that do not implement this selector leave the value untouched,
+so the caller must initialise it to false.  I<val> should be a pointer to a
+value of type B<bool>; backends that do implement it will set it to reflect
+their behaviour.  expire(8) uses this to decide whether to open the history
+read/write (in place) or read-only (rebuild-and-swap, the hisv6 model).
+
+=item C<HISCTLG_ENTRYESTIMATE> (size_t *)
+
+Get a cheap, conservative overestimate of the number of entries in the
+history database, without scanning it, suitable for sizing data structures
+such as Bloom filters.  Each backend derives the estimate from its own
+on-disk layout: C<hisv6> divides the text file size by the minimum history
+line length, C<hissqlite> divides the allocated database pages by the
+minimum row footprint.  Returns false and leaves the value untouched if no
+estimate can be made; callers should fall back to their own default sizing.
+I<val> should be a pointer to a value of type B<size_t>.  expireover(8)
+uses this to size its Bloom filter before walking the history database.
+
 =back
+
+B<HISlogto> enables logging of history performance statistics (as used by
+B<innd>'s C<stathist> configuration and ctlinnd(8) directive) to the file
+named I<s>, opening it for appending and resetting the internal timing
+counters; any previously open log is closed first.  B<HISlogclose> closes
+that log, if one is open, and disables further logging.  These two
+functions are unrelated to a specific history handle and control a
+process-wide logging state used by the history API's internal timers.
 
 =head1 HISTORY
 

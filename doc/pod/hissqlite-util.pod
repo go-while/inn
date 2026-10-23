@@ -1,0 +1,161 @@
+=head1 NAME
+
+hissqlite-util - History manipulation utility for hissqlite
+
+=head1 SYNOPSIS
+
+B<hissqlite-util> [B<-AcdhsvV>] [B<-O> I<order>] [B<-p> I<path>]
+
+=head1 DESCRIPTION
+
+B<hissqlite-util> is an administrative interface to the hissqlite history
+method for INN.  It only works on hissqlite history databases, not on any
+other type of INN history.  It allows the administrator to audit the
+database for problems, dump its contents, report entry counts and the
+schema version, report database storage utilization, and vacuum the
+database to reclaim free pages.
+
+All actions except B<-v> are read-only, so it is safe to run them while
+INN is running.  B<hissqlite-util> opens the database directly; because
+B<innd> holds the write lock for only a single statement at a time, it
+waits at most briefly for any in-progress write.
+
+The B<-v> option rewrites the database file (SQLite C<VACUUM>) and needs
+write access.  When B<innd> is running, B<hissqlite-util> pauses it for the
+duration of the vacuum and resumes it afterwards.  When the news system is
+stopped, the vacuum runs offline.
+
+=head1 REQUIREMENTS
+
+The C<DBI> Perl module with the C<DBD::SQLite> driver must be installed for
+this program to work.  They are present in most distributions as a package
+named like C<libdbd-sqlite3-perl>, C<perl-DBD-SQLite> or C<p5-DBD-SQLite>.
+They can also be directly installed from CPAN (C<DBI> and C<DBD-SQLite>
+distributions available at L<https://metacpan.org/dist/DBI> and
+L<https://metacpan.org/dist/DBD-SQLite>).
+
+Naturally, a hissqlite history database also needs to be in use, as detailed
+in the hissqlite(5) manual page.
+
+=head1 OPTIONS
+
+Only one action may be given at a time.  With no action, B<-A> is assumed.
+
+=over 4
+
+=item B<-A>
+
+Audit the history database for problems and report them to standard error,
+without trying to fix them.  This reports the schema version and entry
+counts, checks for rows with a missing arrival time, and runs SQLite's
+C<integrity_check>.  This is the default action.
+
+=item B<-c>
+
+Print the total, real (token-bearing), and remembered (token-less) entry
+counts.
+
+=item B<-d>
+
+Dump all history records as text, one per line: the hash in hexadecimal,
+the arrival, posting, and expiration timestamps (in seconds since epoch),
+and the storage API token in its usual textual form, hexadecimal surrounded
+with C<@> (or C<remembered> for a token-less entry).
+
+=item B<-h>
+
+Print a usage message and exit.
+
+=item B<-O> I<order>
+
+Sort history records by I<order> time when dumped with B<-d>.  Possible values
+for I<order> are C<arrival>, C<expiration> and C<posting>.
+
+When sorting by arrival or expiration time, history records with a similar
+such time are then also sorted by posting time.  When sorting by posting time,
+history records with a similar such time are then also sorted by arrival time.
+
+=item B<-p> I<path>
+
+Act on the F<history.sqlite> database in I<path> instead of the default
+I<pathhistory> directory from F<inn.conf>.
+
+=item B<-s>
+
+Print database storage and history entry statistics.  The report contains
+the SQLite and schema versions, journal and auto-vacuum modes, page usage,
+database and journal file sizes, total, real and remembered entry counts,
+the number of real entries with an explicit expiration (I<expires> greater
+than zero; C<0> or C<NULL> means no article-level expiry), and the
+arrival-time range.  It remains available when B<innd> is not running.
+
+The database-derived values are collected from one consistent read snapshot.
+Logical size is the page count multiplied by the page size.  Non-freelist
+page capacity is an estimate based on SQLite's page accounting, not a measure
+of how full each page is.  Freelist pages can be reused by later writes or
+recovered with a full C<VACUUM> (see B<-v>).  File sizes are point-in-time
+values and may change while B<innd> or another process is writing.  Files
+that do not currently exist, such as a WAL or rollback journal, have a
+reported size of zero.
+
+=item B<-v>
+
+Vacuum the history database: rewrite it with SQLite C<VACUUM> so freelist
+pages are removed and the file shrinks toward its logical size.  Prints
+page and freelist statistics before and after the rewrite.
+
+A vacuum needs free disk space roughly equal to the current database file
+size (SQLite builds a compact copy, then replaces the original).  On a
+large history, this can take a long time and will block other writers; when
+B<innd> is running, it is paused for the duration.  Readers may block while
+the exclusive rewrite runs.
+
+Vacuuming is not needed in normal operation.  SQLite keeps deleted pages on
+a freelist and reuses them for later inserts, so a steady-state spool that
+expires roughly as much as it receives tends to stabilize near a high-water
+mark size.  That high-water mark is usually desirable: the file does not
+churn on every expire, and subsequent growth can reuse free pages without
+extending the file.  Run B<-v> only when you deliberately want a smaller
+file, for example after a large permanent reduction in retention (so the
+spool will not grow back to the old size), after a bulk delete, or when
+changing the page size (which requires a vacuum; see hissqlite(5)).
+
+See also L<hissqlite(5)/"VACUUMING">.
+
+=item B<-V>
+
+Print the version of this tool and the database schema version.
+
+=back
+
+=head1 EXAMPLES
+
+Audit the history database for problems:
+
+    hissqlite-util -A
+
+Print entry counts for a database in F</news/db>:
+
+    hissqlite-util -c -p /news/db
+
+Dump history records by posting time:
+
+    hissqlite-util -d -O posting
+
+Print storage and entry statistics:
+
+    hissqlite-util -s
+
+After shrinking retention and letting expire finish, reclaim freelist space:
+
+    hissqlite-util -v
+
+=head1 HISTORY
+
+Written by Kevin Bowling for InterNetNews.
+
+=head1 SEE ALSO
+
+hissqlite(5), inn.conf(5).
+
+=cut

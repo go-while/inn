@@ -5,6 +5,9 @@
 #
 # Written by Olaf Titz in June 1998.  Use and distribution of this work is
 # permitted under the same terms as the INN package.
+#
+# Various bug fixes, code and documentation improvements since then
+# in 2001, 2007, 2011, 2012, 2021-2026.
 
 use warnings;
 
@@ -39,7 +42,7 @@ $opt_f = 50000;    # required space in kilobytes
 $opt_i = 5000;     # required space in inodes
 $opt_m = 7;        # minimum normal (class 100) time in days
 $opt_x = 86400;    # absolute minimum hold time in seconds
-$opt_N = 0;        # dont actually delete articles
+$opt_N = 0;        # don't actually delete articles
 $opt_v = 0;        # verbosity level
 $opt_M = 0;        # install man page
 getopts("f:i:m:MNrt:v:x:") || usage();
@@ -489,7 +492,7 @@ classes above 200.  See L<"EXAMPLES">.
 
 =item 3.
 
-Ensure to start this daemon along with B<innd>.
+Make sure to start this daemon along with B<innd>.
 
 =item 4.
 
@@ -579,7 +582,7 @@ Here is an example F<storage.conf> file:
         class: 201
     }
 
-    # Expires lines are honored if they dont exceed 90 days.
+    # Expires lines are honored if they don't exceed 90 days.
     # Exempt those postings from thdexpire handling.
     method timehash {
         newsgroups: *

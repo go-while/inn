@@ -1,5 +1,12 @@
+/*
+**  Written by Katsuhiro Kondou in 1999.
+**
+**  Various bug fixes, code and documentation improvements since then
+**  in 1999-2004, 2006, 2009, 2015, 2017, 2021, 2022, 2026.
+*/
+
 #ifndef INN_OV_H
-#define INN_OV_H 1
+#define INN_OV_H
 
 #include "inn/history.h"
 #include "inn/portable-macros.h"
@@ -19,7 +26,8 @@ typedef enum {
     OVSTATICSEARCH,
     OVSTATALL,
     OVCACHEKEEP,
-    OVCACHEFREE
+    OVCACHEFREE,
+    OVTOKENCACHE
 } OVCTLTYPE;
 #define OV_NOSPACE 100
 typedef enum {
@@ -51,6 +59,7 @@ typedef struct _OVGE {
 } OVGE;
 
 extern bool OVstatall;
+
 bool OVopen(int mode);
 bool OVgroupstats(char *group, int *lo, int *hi, int *count, int *flag);
 bool OVgroupadd(char *group, ARTNUM lo, ARTNUM hi, char *flag);

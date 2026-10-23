@@ -41,7 +41,6 @@ my %paths = (
     'moderators'        => "$INN::Config::pathetc/moderators",
     'most_logs'         => "$INN::Config::pathlog",
     'newsbin'           => "$INN::Config::pathbin",
-    'newsboot'          => "$INN::Config::pathbin/rc.news",
     'newsfeeds'         => "$INN::Config::newsfeeds",
     'newsetc'           => "$INN::Config::pathetc",
     'newslib'           => "$INN::Config::newslib",
@@ -282,7 +281,7 @@ sub parse_config {
         }
 
         # include-file hack: ignore; user needs to check it separately
-        if (defined $options->{'<include>'}->{$word}) {
+        if (defined $options->{'<include>'}{$word}) {
             $parse_error = 0;
             my $includefile_unused = get_config_word();
             next;
@@ -295,14 +294,14 @@ sub parse_config {
         eprint "$file:$line: duplicate option $word "
           . "in $group->{'type'} $group->{'name'}\n"
           if exists $group->{$word}
-          and not defined $options->{'<multi>'}->{$word};
+          and not defined $options->{'<multi>'}{$word};
 
         my $type
           = defined $options->{ $group->{'type'} }->{$word}
           ? $options->{ $group->{'type'} }->{$word}
           : (
-              defined $options->{'<anywhere>'}->{$word}
-              ? $options->{'<anywhere>'}->{$word}
+              defined $options->{'<anywhere>'}{$word}
+              ? $options->{'<anywhere>'}{$word}
               : undef
           );
         if ($type) {
@@ -340,12 +339,12 @@ sub parse_config {
 sub active {
     my ($group, $hi, $lo, $f, $alias, %groups, %aliases);
 
-  INPUT:
+  INPUTACTIVE:
     while (<$IN>) {
         $line++;
         unless (($group, $hi, $lo, $f) = /^([^ ]+) (\d+) (\d+) (.+)\n$/) {
             eprint "$file:$line: malformed line.\n";
-            next INPUT;
+            next INPUTACTIVE;
         }
 
         eprint "$file:$line: group `$group' already appeared\n"
@@ -353,14 +352,14 @@ sub active {
         eprint "$file:$line: `$hi' <  '$lo'.\n"
           if $hi < $lo && $lo != $hi + 1;
 
-        next INPUT if $f =~ /^[jmynx]$/;
+        next INPUTACTIVE if $f =~ /^[jmynx]$/;
         unless (($alias) = $f =~ /^=(.*)$/) {
             eprint "$file:$line: bad flag `$f'.\n";
-            next INPUT;
+            next INPUTACTIVE;
         }
         if ($alias eq "") {
             eprint "$file:$line: empty alias.\n";
-            next INPUT;
+            next INPUTACTIVE;
         }
         $aliases{$alias} = $line
           unless defined $groups{$alias};
@@ -400,24 +399,24 @@ my %control_actions = (
 sub control_ctl {
     my ($msg, $from, $ng, $act);
 
-  INPUT:
+  INPUTCONTROLCTL:
     while (<$IN>) {
-        next INPUT if spacious($file, ++$line);
+        next INPUTCONTROLCTL if spacious($file, ++$line);
 
         if (/^\/localencoding\//) {
             unless (($msg, $act) = /^(\/localencoding\/):([^:=]+)$/) {
                 eprint "$file:$line: malformed line.\n";
             }
-            next INPUT;
+            next INPUTCONTROLCTL;
         }
 
         unless (($msg, $from, $ng, $act) = /^([^:]+):([^:]+):([^:]+):(.+)$/) {
             eprint "$file:$line: malformed line.\n";
-            next INPUT;
+            next INPUTCONTROLCTL;
         }
         if (!defined $control_messages{$msg}) {
             eprint "$file:$line: unknown control message `$msg'.\n";
-            next INPUT;
+            next INPUTCONTROLCTL;
         }
         eprint "$file:$line: action for unknown control messages is `doit'.\n"
           if $msg eq "default" && $act eq "doit";
@@ -436,7 +435,7 @@ sub control_ctl {
           if $ng ne "*" && $ng !~ /\./ && $ng !~ /^control\|/;
         if ($act !~ /([^=]+)(=.+)?/) {
             eprint "$file:$line: malformed line.\n";
-            next INPUT;
+            next INPUTCONTROLCTL;
         }
         $act =~ s/=.*//;
         $act = "verify" if ($act =~ /^verify-.+/);
@@ -457,21 +456,21 @@ sub expire_ctl {
 
     $groupbaseexpiry = $INN::Config::groupbaseexpiry;
     $groupbaseexpiry =~ tr/A-Z/a-z/;
-  INPUT:
+  INPUTEXPIRECTL:
     while (<$IN>) {
-        next INPUT if spacious($file, ++$line);
+        next INPUTEXPIRECTL if spacious($file, ++$line);
 
         if (($v) = m@/remember/:(.+)@) {
             eprint "$file:$line: more than one /remember/ line.\n"
               if $rem++;
             if ($v !~ /[\d\.]+/) {
                 eprint "$file:$line: illegal value `$v' for remember.\n";
-                next INPUT;
+                next INPUTEXPIRECTL;
             }
             eprint "$file:$line: are you sure about your /remember/ value?\n"
               ##  These are arbitrary "sane" values.
               if $v != 0 && ($v > 60.0 || $v < 5.0);
-            next INPUT;
+            next INPUTEXPIRECTL;
         }
 
         ##  Could check for conflicting lines, but that's hard.
@@ -488,7 +487,7 @@ sub expire_ctl {
                    ([\d\.]+|never)$/x
             ) {
                 eprint "$file:$line: malformed line.\n";
-                next INPUT;
+                next INPUTEXPIRECTL;
             }
             eprint "$file:$line: duplicate default line\n"
               if $pat eq "*" && $flag eq "a" && $def++;
@@ -499,7 +498,7 @@ sub expire_ctl {
                 = /^(\d+):([\d\.]+|never):([\d\.]+|never):([\d\.]+|never)$/)
             {
                 eprint "$file:$line: malformed line.\n";
-                next INPUT;
+                next INPUTEXPIRECTL;
             }
             eprint "$file:$line: invalid class\n"
               if $class < 0;
@@ -534,7 +533,7 @@ sub incoming_conf {
             },
             'group' => {},
             'peer'  => {},
-        },
+        }
     );
     return;
 }
@@ -660,22 +659,22 @@ sub innfeed_conf {
             '<include>' => {
                 '$INCLUDE' => 'ignore',
             },
-        },
+        }
     );
     # check some numeric values
     foreach my $group (keys %groups) {
         eprint "$file:$groups{$group}->{'type'} $groups{$group}->{'name'}:"
           . " dynamic-method must be between 0 and 3\n"
-          if (defined $groups{$group}->{'dynamic-method'}
-              && $groups{$group}->{'dynamic-method'} > 3);
+          if (defined $groups{$group}{'dynamic-method'}
+              && $groups{$group}{'dynamic-method'} > 3);
         eprint "$file:$groups{$group}->{'type'} $groups{$group}->{'name'}:"
           . " dynamic-backlog-filter must be between 0.0 and 1.0\n"
-          if (defined $groups{$group}->{'dynamic-backlog-filter'}
-              && $groups{$group}->{'dynamic-backlog-filter'} > 1.0);
+          if (defined $groups{$group}{'dynamic-backlog-filter'}
+              && $groups{$group}{'dynamic-backlog-filter'} > 1.0);
         eprint "$file:$groups{$group}->{'type'} $groups{$group}->{'name'}:"
           . " backlog-factor must be larger than 1.0\n"
-          if (defined $groups{$group}->{'backlog-factor'}
-              && $groups{$group}->{'backlog-factor'} <= 1.0);
+          if (defined $groups{$group}{'backlog-factor'}
+              && $groups{$group}{'backlog-factor'} <= 1.0);
     }
     return;
 }
@@ -686,18 +685,18 @@ sub innfeed_conf {
 sub moderators {
     my ($k, $v);
 
-  INPUT:
+  INPUTMODERATORS:
     while (<$IN>) {
-        next INPUT if spacious($file, ++$line);
+        next INPUTMODERATORS if spacious($file, ++$line);
 
         unless (($k, $v) = /^([^:]+):(.+)$/) {
             eprint "$file:$line: malformed line.\n";
-            next INPUT;
+            next INPUTMODERATORS;
         }
 
         if ($k eq "" || $v eq "") {
             eprint "$file:$line: missing field\n";
-            next INPUT;
+            next INPUTMODERATORS;
         }
         eprint "$file:$line: not an e-mail address\n"
           if $pedantic && $v !~ /[@!]/;
@@ -734,14 +733,15 @@ my %newsfeeds_flags = (
 
 sub newsfeeds {
     my ($next, $start, @muxes, %sites);
-    my ($site, $pats, $dists, $flags, $param, $type, $k, $v, $defsub);
+    my ($site, $pats, $dists, $flags, $param, $type, $k, $v);
     my ($bang, $nobang, $prog, $dir);
     my %variables;
+    my $defsub = '';
 
-  INPUT:
+  INPUTNEWSFEEDS:
     while (<$IN>) {
         $line++;
-        next INPUT if /^$/;
+        next INPUTNEWSFEEDS if /^$/;
         chop;
         eprint "$file:$line: starts with whitespace\n"
           if /^\s+/;
@@ -755,7 +755,7 @@ sub newsfeeds {
             $next =~ s/^\s*//;
             $_ .= $next;
         }
-        next INPUT if /^#/;
+        next INPUTNEWSFEEDS if /^#/;
         eprint "$file:$line: ends with whitespace\n"
           if /\s+$/;
 
@@ -769,14 +769,14 @@ sub newsfeeds {
             eprint "$file:$line: variable name too long\n"
               if length($1) > 31;
             $variables{$1} = $2;
-            next INPUT;
+            next INPUTNEWSFEEDS;
         }
 
         unless (($site, $pats, $flags, $param)
             = /^([^:]+):([^:]*):([^:]*):(.*)$/)
         {
             eprint "$file:$line: malformed line.\n";
-            next INPUT;
+            next INPUTNEWSFEEDS;
         }
 
         eprint "$file:$line: Newsfeed `$site' has whitespace in its name\n"
@@ -823,7 +823,6 @@ sub newsfeeds {
         ##  Check distributions.
         if (($dists) = $pats =~ m@.*/(.*)@) {
             $bang = $nobang = 0;
-          DIST:
             foreach my $d (split(/,/, $dists, -1)) {
                 if ($d =~ /^!/) {
                     $bang++;
@@ -837,22 +836,22 @@ sub newsfeeds {
               if $bang && $nobang;
         }
         $type = "f";
-      FLAG:
+      FLAGNEWSFEEDS:
         # Use -1 as a limit in split() so that trailing empty fields are not
         # skipped.
         foreach my $flag (split(/,/, $flags, -1)) {
             ($k, $v) = $flag =~ /(.)(.*)/;
             if (!defined($k)) {
                 eprint "$file:$start: empty flag in `$flags'\n";
-                next FLAG;
+                next FLAGNEWSFEEDS;
             }
             if (!defined $newsfeeds_flags{$k}) {
                 eprint "$file:$start: unknown flag `$flag'\n";
-                next FLAG;
+                next FLAGNEWSFEEDS;
             }
             if ($v !~ /$newsfeeds_flags{$k}/) {
                 eprint "$file:$start: bad value `$v' for flag `$k'\n";
-                next FLAG;
+                next FLAGNEWSFEEDS;
             }
             $type = $v
               if $k eq "T";
@@ -906,25 +905,25 @@ sub newsfeeds {
 sub nntpsend_ctl {
     my ($site, $fqdn, $flags, $f, $v);
 
-  INPUT:
+  INPUTNNTPSENCTL:
     while (<$IN>) {
-        next INPUT if spacious($file, ++$line);
+        next INPUTNNTPSENCTL if spacious($file, ++$line);
 
         ##  Ignore the size info for now.
         unless (($site, $fqdn, $flags) = /^([\w\-\.]+):([^:]*):[^:]*:([^:]*)$/)
         {
             eprint "$file:$line: malformed line.\n";
-            next INPUT;
+            next INPUTNNTPSENCTL;
         }
         eprint "$file:$line: FQDN is empty for `$site'\n"
           if $fqdn eq "";
 
-        next INPUT if $flags eq "";
-      FLAG:
+        next INPUTNNTPSENCTL if $flags eq "";
+      FLAGNNTPSENDCTL:
         foreach (split(/ /, $flags)) {
             unless (($f, $v) = /^-([adrvtTpSP])(.*)$/) {
                 eprint "$file:$line: unknown argument for `$site'\n";
-                next FLAG;
+                next FLAGNNTPSENDCTL;
             }
             eprint "$file:$line: unknown argument to option `$f': $flags\n"
               if ($f eq "P"
@@ -944,13 +943,13 @@ sub nntpsend_ctl {
 sub passwd_nntp {
     my ($name, $pass);
 
-  INPUT:
+  INPUTPASSWDNNTP:
     while (<$IN>) {
-        next INPUT if spacious($file, ++$line);
+        next INPUTPASSWDNNTP if spacious($file, ++$line);
 
         unless (($name, $pass) = /^[\w\-\.]+:([^:]*):([^:]*)(:authinfo)?$/) {
             eprint "$file:$line: malformed line.\n";
-            next INPUT;
+            next INPUTPASSWDNNTP;
         }
         eprint "$file:$line: missing username\n"
           if ($name eq "");
@@ -1032,18 +1031,17 @@ sub readers_conf {
                 'log'     => 'string',
                 'program' => 'string',
             },
-            '<multi>' =>
-              {    # hack: "don't warn about duplicates for these keys"
-                  'res'         => 1,
-                  'auth'        => 1,
-                  'perl_auth'   => 1,
-                  'python_auth' => 1,
-                  'log'         => 1,
-              },
+            '<multi>' => { # hack: "don't warn about duplicates for these keys"
+                'res'         => 1,
+                'auth'        => 1,
+                'perl_auth'   => 1,
+                'python_auth' => 1,
+                'log'         => 1,
+            },
             '<include>' => {
                 'include' => 'ignore',
             },
-        },
+        }
     );
     return;
 }
@@ -1064,7 +1062,7 @@ sub storage_conf {
                 'filtered'   => 'boolean',
                 'path'       => 'string',    # uwildmat_poison
             },
-        },
+        }
     );
     # allowed method names include: cnfs timecaf timehash tradspool trash
     foreach my $method (keys %groups) {
@@ -1174,7 +1172,8 @@ my @newsbin_public = qw(
 );
 my @newsbin_private = qw(
     buffindexed_d cnfsheadconf ctlinnd expire expireover expirerm gencancel
-    imapfeed inncheck innfeed innstat innupgrade innwatch makedbz makehistory
+    hissqlite-convert hissqlite-util imapfeed inncheck innfeed
+    innstat innupgrade innwatch makedbz makehistory
     mod-active news.daily ovdb_init ovdb_monitor ovdb_server ovdb_stat
     overchan ovsqlite-server ovsqlite-util procbatch prunehistory rc.news
     scanlogs tally.control tdx-util writelog
@@ -1208,11 +1207,19 @@ sub check_all_perms {
         checkperm($paths{$_}, $modes{$_})
           if defined $modes{$_};
     }
-    checkperm($paths{'history'}, [0600, $INN::Config::filemode]);
-    # Commented out for now since it depends on the history type.
-    #checkperm($paths{'history'} . ".dir", [0600, $INN::Config::filemode]);
-    #checkperm($paths{'history'} . ".index", [0600, $INN::Config::filemode]);
-    #checkperm($paths{'history'} . ".hash", [0600, $INN::Config::filemode]);
+    if (-f $paths{'history'}) {
+        checkperm($paths{'history'}, [0600, $INN::Config::filemode]);
+        # No check for history.dir, history.index or history.hash as
+        # it depends on the history type.
+    } elsif (-f $paths{'history'} . ".sqlite") {
+        checkperm(
+            $paths{'history'} . ".sqlite",
+            [0600, $INN::Config::filemode],
+        );
+        # No check for history.sqlite-wal or history.sqlite-shm.
+    } else {
+        eprint $paths{'history'} . "{.sqlite}:0: missing history database\n";
+    }
     foreach (@newsbin_private) {
         checkperm("$newsbin/$_", [0500, 0550]);
     }

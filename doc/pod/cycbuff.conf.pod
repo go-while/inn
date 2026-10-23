@@ -81,10 +81,12 @@ actually put articles in a cycbuff, it has to be listed as part of some
 metacycbuff which is then referenced in F<storage.conf>.
 
 <name> is the symbolic name of the metacycbuff, referred to in the options:
-field of C<cnfs> entries in F<storage.conf>.  It must be no longer than
-eight characters.  <buffer> is the name of a cycbuff (the <name> part of
-a cycbuff line), and any number of cycbuffs may be specified, separated
-by commas.
+field of C<cnfs> entries in F<storage.conf>.  Unlike a cycbuff name, its
+length is not checked when F<cycbuff.conf> is parsed, but it is stored
+internally in a fixed-size buffer, so it is recommended to keep it no
+longer than eight characters, the same limit as a cycbuff name.
+<buffer> is the name of a cycbuff (the <name> part of a cycbuff line),
+and any number of cycbuffs may be specified, separated by commas.
 
 If there is more than one cycbuff in a metacycbuff, there are two ways
 that INN can distribute articles between the cycbuffs.  The default mode,
@@ -124,7 +126,7 @@ Adding a new cycbuff just requires creating it (see below), adding a
 cycbuff line, adding it to a metacycbuff, and then restarting B<innd>.
 Similarly, changing the allocation of an existing cycbuff from a
 metacycbuff to another one just requires modifying the two metacycbuffs
-accordingly, and then restarting B<innd>.  (Only the cycbuff is noted
+accordingly, and then restarting B<innd>.  (Only the cycbuff is
 noted in the storage API tokens.)
 
 =head1 CREATING CYCBUFFS
@@ -223,6 +225,6 @@ Rewritten into POD by Russ Allbery <eagle@eyrie.org>.
 
 =head1 SEE ALSO
 
-ctlinnd(8), innd(8), nnrpd(8), sm(1), storage.conf(5).
+ctlinnd(8), innd(8), nnrpd(8), sm(8), storage.conf(5).
 
 =cut

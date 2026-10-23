@@ -1,6 +1,9 @@
 /*
 ** Declarations needed for handling CAF (Crunched Article Files)
 ** Written by Richard Todd (rmtodd@mailhost.ecn.uoknor.edu) 3/24/96
+**
+** Various bug fixes, code and documentation improvements since then
+** in 1998-2000, 2002, 2004, 2009, 2021, 2022, 2024, 2026.
 */
 
 
@@ -154,12 +157,11 @@ extern int CAFIsBlockFree(CAFBITMAP *bm, int fd, off_t block);
 extern int caf_error; /* last error encountered by library. */
 extern int caf_errno; /* saved value of errno here if I/O error hit by lib. */
 
-#define CAF_ERR_IO            1 /* generic I/O error, check caf_errno for details */
-#define CAF_ERR_BADFILE       2 /* corrupt file */
-#define CAF_ERR_ARTNOTHERE    3 /* article not in the database */
-#define CAF_ERR_CANTCREATECAF 4 /* can't create the CAF file, see errno. */
-#define CAF_ERR_FILEBUSY      5 /* file locked by someone else. */
-#define CAF_ERR_ARTWONTFIT    6 /* outside the range in the TOC */
-#define CAF_ERR_ARTALREADYHERE \
-    7 /* tried to create an article that was already here. */
-#define CAF_ERR_BOGUSPATH 8 /* pathname not parseable. */
+#define CAF_ERR_IO             1 /* generic I/O error, see caf_errno */
+#define CAF_ERR_BADFILE        2 /* corrupt file */
+#define CAF_ERR_ARTNOTHERE     3 /* article not in the database */
+#define CAF_ERR_CANTCREATECAF  4 /* can't create the CAF file, see errno */
+#define CAF_ERR_FILEBUSY       5 /* file locked by someone else */
+#define CAF_ERR_ARTWONTFIT     6 /* outside the range in the TOC */
+#define CAF_ERR_ARTALREADYHERE 7 /* try to create an article already here */
+#define CAF_ERR_BOGUSPATH      8 /* pathname not parseable */

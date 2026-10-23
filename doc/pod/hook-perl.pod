@@ -218,7 +218,7 @@ the fields of a history(5) database entry, the I<arrival> is normally
 the time at which the server accepts the article, the I<articledate>
 is from the Date header field of the article, the I<expire> is from
 the Expires header field of the article, and the I<paths> field is
-the storage API token.  All three times as measured as a time_t since
+the storage API token.  All three times are measured as a time_t since
 the epoch.)  Returns true on success, false otherwise.
 
 =item INN::article(I<messageid>)
@@ -605,28 +605,41 @@ which make use of this filter mechanism.
 
 =over 4
 
-=item Cleanfeed
+=item cleanfeed-ng
 
-URL: L<http://www.mixmin.net/cleanfeed/> (maintained by Steve Crook)
+URL: L<https://github.com/infybofh/cleanfeed-ng/> (maintained by Ivo Gandolfo)
 
-Cleanfeed is an extremely powerful spam filter, probably the most widely
-used spam filter on Usenet currently.  It catches excessive multiposting
-and a host of other things, and is highly configurable.  It uses
-F<filter_innd.pl> exclusively and requires the MD5 Perl module.
+cleanfeed-ng is a maintained, lightweight continuation of the historical
+Cleanfeed filter.  It is designed for server-to-server Usenet transit
+filtering, with particular attention to predictable behaviour, low overhead,
+safe configuration changes, and useful diagnostics.
 
-Cleanfeed was originally developed by Jeremy Nixon who maintained it
-until 1998.  Then Marco d'Itri until 2002.  Steve Crook has been
-maintaining it since 2007.
+cleanfeed-ng is an extremely powerful spam filter, probably the most widely
+used spam filter on Usenet currently.  It catches excessive multiposting and
+a host of other things, and is highly configurable.  It uses F<filter_innd.pl>
+exclusively and requires the MD5 Perl module.
 
-=item Postfilter
+Since 2026, cleanfeed-ng has continued the historical work of Cleanfeed,
+originally developed by Jeremy Nixon, who maintained it until 1998.
+Further development was then taken on by Marco d'Itri until 2002, followed
+by later updates and maintenance by Steve Crook from 2007 to 2020 (at
+L<http://www.mixmin.net/cleanfeed/> but no longer maintained).
 
-URL: L<https://github.com/Aioe/postfilter> (by Paolo Amoroso)
+=item Postfilter-NG
 
-Postfilter is an B<nnrpd> Perl filter (F<filter_nnrpd.pl>) which scans all
-messages sent by local users in order to block abuses.  Postfilter can limit
-the number of messages per user, IP or domain, provides a set of powerful
-ban lists, supports RBLs and URIBLs, can handle connections that come from
-TOR and is able to deeply modify the headers.  It's designed for large sites.
+URL: L<https://github.com/infybofh/postfilter-ng/> (maintained by Ivo Gandolfo)
+
+Postfilter-NG is an B<nnrpd> Perl filter (F<filter_nnrpd.pl>) which scans
+all messages sent by local users in order to block abuses.  Postfilter-NG
+validates articles before acceptance, applies text and binary policies,
+records searchable audit events in SQLite, and supports staged deployment
+through audit mode.  It can limit the number of messages per user, IP or
+domain, provides a set of powerful ban lists, supports RBLs and URIBLs,
+can handle connections that come from TOR and is able to deeply modify the
+headers.  It is designed for large sites.
+
+Since 2026, Postfilter-NG has continued the historical work of Postfilter,
+originally developed in 2005 by Paolo Amoroso, who maintained it until 2020.
 
 =item News Shogun
 
@@ -635,6 +648,8 @@ URL: L<http://www.panix.com/shogun/> (by Aidan Cully)
 A posting filter for helping a site enforce Usenet-II soundness,
 and for quota'ing the number of messages any user can post to
 Usenet daily.  It uses F<filter_nnrpd.pl>.
+
+The project is no longer maintained.
 
 =back
 

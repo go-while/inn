@@ -1,7 +1,10 @@
 /*
 **  Feed articles to an IMAP server via LMTP and IMAP.
 **
-**  Written by Tim Martin.
+**  Written by Tim Martin in 2000.
+**
+**  Various bug fixes, code and documentation improvements since then
+**  in 2000-2004, 2006-2011, 2013-2016, 2018, 2021, 2022, 2024-2026.
 **
 **  Instead of feeding articles via nntp to another host this feeds the
 **  messages via lmtp to a host and the control messages (cancel's etc..) it
@@ -215,7 +218,7 @@ typedef struct article_queue_s {
     time_t arrived;
     time_t nextsend; /* time we should next try to send article */
 
-    int trys;
+    int tries;
 
     int counts_toward_size;
 
@@ -290,7 +293,6 @@ typedef struct connection_s {
     lmtp_capabilities_t *lmtp_capabilities;
 
     int lmtp_disconnects;
-    char *lmtp_tofree_str;
 
     article_queue_t *current_article;
     Buffer *current_bufs;
@@ -338,7 +340,6 @@ typedef struct connection_s {
 
     imap_state_t imap_state;
     int imap_disconnects;
-    char *imap_tofree_str;
 
     char imap_currentTag[IMAP_TAGLENGTH + 1];
     int imap_tag_num;
@@ -423,11 +424,15 @@ static void QueueForgetAbout(connection_t *cxn, article_queue_t *item,
 
 static void delConnection(Connection cxn);
 static void DeleteIfDisconnected(Connection cxn);
+static void DisconnectBothAndDelete(Connection cxn, bool notify_dead);
 static void DeferAllArticles(connection_t *cxn, Q_t *q);
 
 static void lmtp_Disconnect(connection_t *cxn);
 static void imap_Disconnect(connection_t *cxn);
+static void lmtp_DisconnectNoDelete(connection_t *cxn);
+static void imap_DisconnectNoDelete(connection_t *cxn);
 static conn_ret imap_listenintro(connection_t *cxn);
+static void CloseEndpoint(EndPoint *endpoint, int *sockfd);
 
 static void imap_writeTimeoutCbk(TimeoutId id, void *data);
 static void lmtp_writeTimeoutCbk(TimeoutId id, void *data);
@@ -560,7 +565,7 @@ lmtp_stateToString(int state)
  *            For example a cancel message canceling a message in multiple
  *            newsgroups will create >1 queue item but we only want it to count
  *            once towards the queue
- *  must    - wheather we must take it even though it may put us over our max
+ *  must    - whether we must take it even though it may put us over our max
  * size
  */
 
@@ -588,7 +593,7 @@ AddToQueue(Q_t *q, void *item, control_type_t type, int addsmsg, bool must)
     /* send as soon as possible */
     newentry->nextsend = newentry->arrived = time(NULL);
 
-    newentry->trys = 0;
+    newentry->tries = 0;
 
     newentry->data.generic = item;
     newentry->next = NULL;
@@ -649,14 +654,17 @@ PopFromQueue(Q_t *q, article_queue_t **item)
 static void
 ReQueue(connection_t *cxn, Q_t *q, article_queue_t *entry)
 {
+    if (entry == cxn->current_article)
+        cxn->current_article = NULL;
+
     /* look at the time it's been here */
     entry->nextsend =
-        time(NULL) + (entry->trys * 30); /* xxx better formula? */
+        time(NULL) + (entry->tries * 30); /* xxx better formula? */
 
-    entry->trys++;
+    entry->tries++;
 
     /* give up after 5 tries xxx configurable??? */
-    if (entry->trys >= 5) {
+    if (entry->tries >= 5) {
         QueueForgetAbout(cxn, entry, MSG_FAIL_DELIVER);
         return;
     }
@@ -697,6 +705,9 @@ QueueForgetAbout(connection_t *cxn, article_queue_t *item,
                  enum failure_type failed)
 {
     Article art = NULL;
+
+    if (item == cxn->current_article)
+        cxn->current_article = NULL;
 
     switch (item->type) {
     case DELIVER:
@@ -929,7 +940,8 @@ WriteToWire(connection_t *cxn, EndpRWCB callback, EndPoint endp, Buffer *array)
     if (array == NULL)
         return RET_FAIL;
 
-    prepareWrite(endp, array, NULL, callback, cxn);
+    if (!prepareWrite(endp, array, NULL, callback, cxn))
+        return RET_FAIL;
 
     return RET_OK;
 }
@@ -947,10 +959,13 @@ WriteToWire_str(connection_t *cxn, EndpRWCB callback, EndPoint endp, char *str,
 
     buff = newBufferByCharP(str, slen + 1, slen);
     ASSERT(buff != NULL);
+    bufferSetDeletedCbk(buff, free, str);
 
     writeArr = makeBufferArray(buff, NULL);
 
     result = WriteToWire(cxn, callback, endp, writeArr);
+    if (result != RET_OK)
+        freeBufferArray(writeArr);
 
     return result;
 }
@@ -958,6 +973,8 @@ WriteToWire_str(connection_t *cxn, EndpRWCB callback, EndPoint endp, char *str,
 static conn_ret
 WriteToWire_imapstr(connection_t *cxn, char *str, int slen)
 {
+    conn_ret result;
+
     /* prepare the timeouts */
     clearTimer(cxn->imap_readBlockedTimerId);
 
@@ -967,13 +984,17 @@ WriteToWire_imapstr(connection_t *cxn, char *str, int slen)
     if (cxn->imap_writeTimeout > 0)
         cxn->imap_writeBlockedTimerId =
             prepareSleep(imap_writeTimeoutCbk, cxn->imap_writeTimeout, cxn);
-    cxn->imap_tofree_str = str;
-    return WriteToWire_str(cxn, imap_writeCB, cxn->imap_endpoint, str, slen);
+    result = WriteToWire_str(cxn, imap_writeCB, cxn->imap_endpoint, str, slen);
+    if (result != RET_OK)
+        clearTimer(cxn->imap_writeBlockedTimerId);
+    return result;
 }
 
 static conn_ret
 WriteToWire_lmtpstr(connection_t *cxn, char *str, int slen)
 {
+    conn_ret result;
+
     /* prepare the timeouts */
     clearTimer(cxn->lmtp_readBlockedTimerId);
 
@@ -984,8 +1005,10 @@ WriteToWire_lmtpstr(connection_t *cxn, char *str, int slen)
         cxn->lmtp_writeBlockedTimerId =
             prepareSleep(lmtp_writeTimeoutCbk, cxn->lmtp_writeTimeout, cxn);
 
-    cxn->lmtp_tofree_str = str;
-    return WriteToWire_str(cxn, lmtp_writeCB, cxn->lmtp_endpoint, str, slen);
+    result = WriteToWire_str(cxn, lmtp_writeCB, cxn->lmtp_endpoint, str, slen);
+    if (result != RET_OK)
+        clearTimer(cxn->lmtp_writeBlockedTimerId);
+    return result;
 }
 
 static conn_ret
@@ -1158,7 +1181,8 @@ AddControlMsg(connection_t *cxn, Article art, Buffer *bufs,
 
         item->article = art;
 
-        if (AddToQueue(&(cxn->imap_controlMsg_q), item, t, 1, must)
+        if (AddToQueue(&(cxn->imap_controlMsg_q), item, (control_type_t) t, 1,
+                       must)
             != RET_OK) {
             d_printf(1,
                      "%s:%u addCancelItem(): "
@@ -1234,8 +1258,9 @@ AddControlMsg(connection_t *cxn, Article art, Buffer *bufs,
         /* huh?!? */
         d_printf(0, "%s:%u internal error in addControlMsg()\n",
                  hostPeerName(cxn->myHost), cxn->ident);
+        res = RET_FAIL;
     }
-    return RET_FAIL;
+    return res;
 }
 
 /*
@@ -1329,7 +1354,7 @@ getsecret(sasl_conn_t *conn, void *context UNUSED, int id,
     return SASL_OK;
 }
 
-#    if __GNUC__ > 7 || LLVM_VERSION_MAJOR > 12
+#    if __GNUC__ > 7 || (defined(__clang__) && __clang_major__ > 12)
 #        pragma GCC diagnostic ignored "-Wcast-function-type"
 #    endif
 
@@ -1342,7 +1367,7 @@ static sasl_callback_t saslcallbacks[] = {
     {SASL_CB_LIST_END, NULL,                          NULL}
 };
 
-#    if __GNUC__ > 7 || LLVM_VERSION_MAJOR > 12
+#    if __GNUC__ > 7 || (defined(__clang__) && __clang_major__ > 12)
 #        pragma GCC diagnostic warning "-Wcast-function-type"
 #    endif
 
@@ -1441,11 +1466,47 @@ SetSASLProperties(sasl_conn_t *conn, int sock, int minssf, int maxssf)
 /************************* Startup functions
  * **********************************/
 
+/*
+ * Close a protocol endpoint, or a socket that has not yet been transferred
+ * to an endpoint.
+ */
+static void
+CloseEndpoint(EndPoint *endpoint, int *sockfd)
+{
+    if (*endpoint != NULL) {
+        delEndPoint(*endpoint);
+        *endpoint = NULL;
+    } else if (*sockfd >= 0) {
+        close(*sockfd);
+    }
+    *sockfd = -1;
+}
+
+static void
+ClearLMTPCapabilities(connection_t *cxn)
+{
+    if (cxn->lmtp_capabilities == NULL)
+        return;
+    free(cxn->lmtp_capabilities->saslmechs);
+    free(cxn->lmtp_capabilities);
+    cxn->lmtp_capabilities = NULL;
+}
+
+static void
+ClearIMAPCapabilities(connection_t *cxn)
+{
+    if (cxn->imap_capabilities == NULL)
+        return;
+    free(cxn->imap_capabilities->saslmechs);
+    free(cxn->imap_capabilities);
+    cxn->imap_capabilities = NULL;
+}
+
 static conn_ret
 Initialize(connection_t *cxn, int respTimeout)
 {
 #ifdef HAVE_SASL
-    conn_ret saslresult;
+    int saslresult;
 #endif /* HAVE_SASL */
 
     d_printf(1, "%s:%u initializing....\n", hostPeerName(cxn->myHost),
@@ -1517,6 +1578,7 @@ init_net(char *serverFQDN, int port, int *sock)
     struct sockaddr_in addr;
     struct hostent *hp;
 
+    *sock = -1;
     if ((hp = gethostbyname(serverFQDN)) == NULL) {
         d_printf(0, "gethostbyname(): %s\n", strerror(errno));
         return RET_FAIL;
@@ -1534,6 +1596,8 @@ init_net(char *serverFQDN, int port, int *sock)
 
     if (connect((*sock), (struct sockaddr *) &addr, sizeof(addr)) < 0) {
         d_printf(0, "connect(): %s\n", strerror(errno));
+        close(*sock);
+        *sock = -1;
         return RET_FAIL;
     }
 
@@ -1556,6 +1620,9 @@ SetupLMTPConnection(connection_t *cxn, char *serverName, int port)
                  cxn->ident);
         return RET_FAIL;
     }
+
+    CloseEndpoint(&cxn->lmtp_endpoint, &cxn->sockfd_lmtp);
+    ClearLMTPCapabilities(cxn);
 
 #ifdef HAVE_SASL
     /* Free the SASL connection if we already had one */
@@ -1591,16 +1658,11 @@ SetupLMTPConnection(connection_t *cxn, char *serverName, int port)
     cxn->lmtp_respBuffer = xmalloc(4096);
     cxn->lmtp_respBuffer[0] = '\0';
 
-    /* Free if we had an existing one */
-    if (cxn->lmtp_endpoint != NULL) {
-        delEndPoint(cxn->lmtp_endpoint);
-        cxn->lmtp_endpoint = NULL;
-    }
-
     cxn->lmtp_endpoint = newEndPoint(cxn->sockfd_lmtp);
     if (cxn->lmtp_endpoint == NULL) {
         d_printf(0, "%s:%u:LMTP failure creating endpoint\n",
                  hostPeerName(cxn->myHost), cxn->ident);
+        CloseEndpoint(&cxn->lmtp_endpoint, &cxn->sockfd_lmtp);
         return RET_FAIL;
     }
 
@@ -1611,6 +1673,7 @@ SetupLMTPConnection(connection_t *cxn, char *serverName, int port)
     if (result != RET_OK) {
         d_printf(0, "%s:%u:LMTP error setting SASL properties\n",
                  hostPeerName(cxn->myHost), cxn->ident);
+        CloseEndpoint(&cxn->lmtp_endpoint, &cxn->sockfd_lmtp);
         return RET_FAIL;
     }
 #endif /* HAVE_SASL */
@@ -1634,6 +1697,9 @@ SetupIMAPConnection(connection_t *cxn, char *serverName, int port)
                  cxn->ident);
         return RET_FAIL;
     }
+
+    CloseEndpoint(&cxn->imap_endpoint, &cxn->imap_sockfd);
+    ClearIMAPCapabilities(cxn);
 
 #ifdef HAVE_SASL
     /* Free the SASL connection if we already had one */
@@ -1667,16 +1733,11 @@ SetupIMAPConnection(connection_t *cxn, char *serverName, int port)
     cxn->imap_respBuffer = xmalloc(4096);
     cxn->imap_respBuffer[0] = '\0';
 
-    /* Free if we had an existing one */
-    if (cxn->imap_endpoint != NULL) {
-        delEndPoint(cxn->imap_endpoint);
-        cxn->imap_endpoint = NULL;
-    }
-
     cxn->imap_endpoint = newEndPoint(cxn->imap_sockfd);
     if (cxn->imap_endpoint == NULL) {
         d_printf(0, "%s:%u:IMAP Failure creating imap endpoint\n",
                  hostPeerName(cxn->myHost), cxn->ident);
+        CloseEndpoint(&cxn->imap_endpoint, &cxn->imap_sockfd);
         return RET_FAIL;
     }
 
@@ -1686,6 +1747,7 @@ SetupIMAPConnection(connection_t *cxn, char *serverName, int port)
     if (result != RET_OK) {
         d_printf(0, "%s:%u:IMAP Error setting sasl properties",
                  hostPeerName(cxn->myHost), cxn->ident);
+        CloseEndpoint(&cxn->imap_endpoint, &cxn->imap_sockfd);
         return result;
     }
 #endif /* HAVE_SASL */
@@ -1753,7 +1815,10 @@ lmtp_listenintro(connection_t *cxn)
 
     /* set up to receive */
     readBuffers = makeBufferArray(bufferTakeRef(cxn->lmtp_rBuffer), NULL);
-    prepareRead(cxn->lmtp_endpoint, readBuffers, lmtp_readCB, cxn, 5);
+    if (!prepareRead(cxn->lmtp_endpoint, readBuffers, lmtp_readCB, cxn, 5)) {
+        freeBufferArray(readBuffers);
+        return RET_FAIL;
+    }
 
     cxn->lmtp_state = LMTP_READING_INTRO;
 
@@ -1770,11 +1835,15 @@ imap_Connect(connection_t *cxn)
 
     ASSERT(cxn->imap_sleepTimerId == 0);
 
-    /* make the IMAP connection */ SetupIMAPConnection(cxn, cxn->ServerName,
-                                                       IMAP_PORT);
+    /* Make the IMAP connection. */
+    result = SetupIMAPConnection(cxn, cxn->ServerName, IMAP_PORT);
+    if (result != RET_OK)
+        return result;
 
     /* Listen to the intro and start the authenticating process */
     result = imap_listenintro(cxn);
+    if (result != RET_OK)
+        CloseEndpoint(&cxn->imap_endpoint, &cxn->imap_sockfd);
 
     return result;
 }
@@ -1822,9 +1891,7 @@ imap_readTimeoutCbk(TimeoutId id, void *data)
     cxnLogStats(cxn, true);
 
     if (cxn->imap_state == IMAP_DISCONNECTED) {
-        imap_Disconnect(cxn);
-        lmtp_Disconnect(cxn);
-        delConnection(cxn);
+        DisconnectBothAndDelete(cxn, false);
     } else {
         imap_Disconnect(cxn);
     }
@@ -1857,25 +1924,35 @@ imap_reopenTimeoutCbk(TimeoutId id, void *data)
 }
 
 static void
-imap_Disconnect(connection_t *cxn)
+imap_DisconnectNoDelete(connection_t *cxn)
 {
     clearTimer(cxn->imap_sleepTimerId);
     cxn->imap_sleepTimerId = 0;
     clearTimer(cxn->imap_readBlockedTimerId);
     clearTimer(cxn->imap_writeBlockedTimerId);
 
-    DeferAllArticles(
-        cxn, &(cxn->imap_controlMsg_q)); /* give any articles back to Host */
+    CloseEndpoint(&cxn->imap_endpoint, &cxn->imap_sockfd);
+
+    /* Give the active item and any queued items back to the host. */
+    if (cxn->current_control != NULL)
+        QueueForgetAbout(cxn, cxn->current_control, MSG_GIVE_BACK);
+    DeferAllArticles(cxn, &(cxn->imap_controlMsg_q));
 
     cxn->imap_state = IMAP_DISCONNECTED;
 
     cxn->imap_disconnects++;
 
-    cxn->imap_respBuffer[0] = '\0';
+    if (cxn->imap_respBuffer != NULL)
+        cxn->imap_respBuffer[0] = '\0';
 
     if (cxn->issue_quit == 0)
         prepareReopenCbk(cxn, 0);
+}
 
+static void
+imap_Disconnect(connection_t *cxn)
+{
+    imap_DisconnectNoDelete(cxn);
     DeleteIfDisconnected(cxn);
 }
 
@@ -1904,31 +1981,49 @@ lmtp_Connect(connection_t *cxn)
 
     /* Listen to the intro */
     result = lmtp_listenintro(cxn);
+    if (result != RET_OK)
+        CloseEndpoint(&cxn->lmtp_endpoint, &cxn->sockfd_lmtp);
 
     return result;
 }
 
 
 static void
-lmtp_Disconnect(connection_t *cxn)
+lmtp_DisconnectNoDelete(connection_t *cxn)
 {
     clearTimer(cxn->lmtp_sleepTimerId);
     cxn->lmtp_sleepTimerId = 0;
     clearTimer(cxn->lmtp_readBlockedTimerId);
     clearTimer(cxn->lmtp_writeBlockedTimerId);
 
-    /* give any articles back to Host */
+    CloseEndpoint(&cxn->lmtp_endpoint, &cxn->sockfd_lmtp);
+
+    /* Release locally-owned buffers before returning the active article. */
+    if (cxn->current_bufs != NULL) {
+        freeBufferArray(cxn->current_bufs);
+        cxn->current_bufs = NULL;
+    }
+    if (cxn->current_article != NULL)
+        QueueForgetAbout(cxn, cxn->current_article, MSG_GIVE_BACK);
+
+    /* Give any queued articles back to the host. */
     DeferAllArticles(cxn, &(cxn->lmtp_todeliver_q));
 
     cxn->lmtp_state = LMTP_DISCONNECTED;
 
     cxn->lmtp_disconnects++;
 
-    cxn->lmtp_respBuffer[0] = '\0';
+    if (cxn->lmtp_respBuffer != NULL)
+        cxn->lmtp_respBuffer[0] = '\0';
 
     if (cxn->issue_quit == 0)
         prepareReopenCbk(cxn, 1);
+}
 
+static void
+lmtp_Disconnect(connection_t *cxn)
+{
+    lmtp_DisconnectNoDelete(cxn);
     DeleteIfDisconnected(cxn);
 }
 
@@ -2025,9 +2120,7 @@ lmtp_readTimeoutCbk(TimeoutId id, void *data)
     cxnLogStats(cxn, true);
 
     if (cxn->lmtp_state == LMTP_DISCONNECTED) {
-        imap_Disconnect(cxn);
-        lmtp_Disconnect(cxn);
-        delConnection(cxn);
+        DisconnectBothAndDelete(cxn, false);
     } else {
         lmtp_Disconnect(cxn);
     }
@@ -2098,14 +2191,7 @@ lmtp_getcapabilities(connection_t *cxn)
     conn_ret result;
     char *p;
 
-    if (cxn->lmtp_capabilities != NULL) {
-        if (cxn->lmtp_capabilities->saslmechs) {
-            free(cxn->lmtp_capabilities->saslmechs);
-        }
-        free(cxn->lmtp_capabilities);
-        cxn->lmtp_capabilities = NULL;
-    }
-
+    ClearLMTPCapabilities(cxn);
     cxn->lmtp_capabilities = xcalloc(1, sizeof(lmtp_capabilities_t));
     cxn->lmtp_capabilities->saslmechs = NULL;
 
@@ -2173,8 +2259,10 @@ lmtp_authenticate(connection_t *cxn)
 
         saslresult = sasl_encode64(out, outlen, inbase64, outlen * 2 + 8,
                                    (unsigned *) &inbase64len);
-        if (saslresult != SASL_OK)
+        if (saslresult != SASL_OK) {
+            free(inbase64);
             return RET_FAIL;
+        }
         p = concat("AUTH ", mechusing, " ", inbase64, "\r\n", (char *) 0);
         free(inbase64);
     }
@@ -2228,6 +2316,8 @@ lmtp_getauthline(char *str, char **line, int *linelen)
                                (unsigned *) linelen);
     if (saslresult != SASL_OK) {
         d_printf(0, "?:?:LMTP base64 decoding error\n");
+        free(*line);
+        *line = NULL;
         return STAT_NO;
     }
 
@@ -2236,23 +2326,30 @@ lmtp_getauthline(char *str, char **line, int *linelen)
 #endif /* HAVE_SASL */
 
 static void
-lmtp_writeCB(EndPoint e UNUSED, IoStatus i UNUSED, Buffer *b, void *d)
+lmtp_writeCB(EndPoint e, IoStatus i, Buffer *b, void *d)
 {
     connection_t *cxn = (connection_t *) d;
     Buffer *readBuffers;
 
     clearTimer(cxn->lmtp_writeBlockedTimerId);
 
-    /* Free the string that was written */
+    /* Free the buffers and their attached string. */
     freeBufferArray(b);
-    if (cxn->lmtp_tofree_str != NULL) {
-        free(cxn->lmtp_tofree_str);
-        cxn->lmtp_tofree_str = NULL;
+    if (i != IoDone) {
+        errno = endPointErrno(e);
+        syslog(LOG_ERR, "%s:%u LMTP write failed: %m",
+               hostPeerName(cxn->myHost), cxn->ident);
+        lmtp_Disconnect(cxn);
+        return;
     }
 
     /* set up to receive */
     readBuffers = makeBufferArray(bufferTakeRef(cxn->lmtp_rBuffer), NULL);
-    prepareRead(cxn->lmtp_endpoint, readBuffers, lmtp_readCB, cxn, 5);
+    if (!prepareRead(cxn->lmtp_endpoint, readBuffers, lmtp_readCB, cxn, 5)) {
+        freeBufferArray(readBuffers);
+        lmtp_Disconnect(cxn);
+        return;
+    }
 
     /* set up the response timer. */
     clearTimer(cxn->lmtp_readBlockedTimerId);
@@ -2309,23 +2406,30 @@ lmtp_writeCB(EndPoint e UNUSED, IoStatus i UNUSED, Buffer *b, void *d)
 
 
 static void
-imap_writeCB(EndPoint e UNUSED, IoStatus i UNUSED, Buffer *b, void *d)
+imap_writeCB(EndPoint e, IoStatus i, Buffer *b, void *d)
 {
     connection_t *cxn = (connection_t *) d;
     Buffer *readBuffers;
 
     clearTimer(cxn->imap_writeBlockedTimerId);
 
-    /* free the string we just wrote out */
+    /* Free the buffers and their attached string. */
     freeBufferArray(b);
-    if (cxn->imap_tofree_str != NULL) {
-        free(cxn->imap_tofree_str);
-        cxn->imap_tofree_str = NULL;
+    if (i != IoDone) {
+        errno = endPointErrno(e);
+        syslog(LOG_ERR, "%s:%u IMAP write failed: %m",
+               hostPeerName(cxn->myHost), cxn->ident);
+        imap_Disconnect(cxn);
+        return;
     }
 
     /* set up to receive */
     readBuffers = makeBufferArray(bufferTakeRef(cxn->imap_rBuffer), NULL);
-    prepareRead(cxn->imap_endpoint, readBuffers, imap_readCB, cxn, 5);
+    if (!prepareRead(cxn->imap_endpoint, readBuffers, imap_readCB, cxn, 5)) {
+        freeBufferArray(readBuffers);
+        imap_Disconnect(cxn);
+        return;
+    }
 
     /* set up the response timer. */
     clearTimer(cxn->imap_readBlockedTimerId);
@@ -2444,8 +2548,10 @@ imap_sendAuthStep(connection_t *cxn, char *str)
     saslresult = sasl_encode64(out, outlen, inbase64, outlen * 2 + 8,
                                (unsigned *) &inbase64len);
 
-    if (saslresult != SASL_OK)
+    if (saslresult != SASL_OK) {
+        free(inbase64);
         return RET_FAIL;
+    }
 
     /* Append endline. */
     strlcpy(inbase64 + inbase64len, "\r\n", outlen * 2 + 10 - inbase64len);
@@ -2469,7 +2575,7 @@ imap_sendAuthenticate(connection_t *cxn)
     char *p;
 
 #ifdef HAVE_SASL
-    const char *mechusing;
+    const char *mechusing = NULL;
     int saslresult = SASL_NOMECH;
 
     sasl_interact_t *client_interact = NULL;
@@ -2683,7 +2789,7 @@ imap_sendSimple(connection_t *cxn, const char *atom, int st)
     if (result != RET_OK)
         return result;
 
-    cxn->imap_state = st;
+    cxn->imap_state = (imap_state_t) st;
 
     return RET_OK;
 }
@@ -2725,7 +2831,10 @@ imap_listenintro(connection_t *cxn)
 
     /* set up to receive */
     readBuffers = makeBufferArray(bufferTakeRef(cxn->imap_rBuffer), NULL);
-    prepareRead(cxn->imap_endpoint, readBuffers, imap_readCB, cxn, 5);
+    if (!prepareRead(cxn->imap_endpoint, readBuffers, imap_readCB, cxn, 5)) {
+        freeBufferArray(readBuffers);
+        return RET_FAIL;
+    }
 
     cxn->imap_state = IMAP_READING_INTRO;
 
@@ -2853,11 +2962,13 @@ reset:
         readBuffers = makeBufferArray(bufferTakeRef(cxn->imap_rBuffer), NULL);
 
         if (!prepareRead(e, readBuffers, imap_readCB, cxn, 1)) {
+            freeBufferArray(readBuffers);
             imap_Disconnect(cxn);
         }
         return;
 
     } else if (ret != RET_OK) {
+        imap_Disconnect(cxn);
         return;
     }
 
@@ -3145,10 +3256,8 @@ reset:
             d_printf(1, "%s:%u:IMAP Read quit response\n",
                      hostPeerName(cxn->myHost), cxn->ident);
 
-            cxn->imap_state = IMAP_DISCONNECTED;
-
-            DeleteIfDisconnected(cxn);
-            break;
+            imap_Disconnect(cxn);
+            return;
 
         default:
             d_printf(0, "%s:%u:IMAP I don't understand state %u [%s]\n",
@@ -3249,7 +3358,11 @@ reset:
 
         /* set up to receive some more */
         readBuffers = makeBufferArray(bufferTakeRef(cxn->lmtp_rBuffer), NULL);
-        prepareRead(cxn->lmtp_endpoint, readBuffers, lmtp_readCB, cxn, 5);
+        if (!prepareRead(cxn->lmtp_endpoint, readBuffers, lmtp_readCB, cxn,
+                         5)) {
+            freeBufferArray(readBuffers);
+            lmtp_Disconnect(cxn);
+        }
         return;
     }
 
@@ -3401,6 +3514,7 @@ reset:
                          hostPeerName(cxn->myHost), cxn->ident,
                          sasl_errstring(saslresult, NULL, NULL));
 
+                free(inbase64);
                 lmtp_Disconnect(cxn);
                 return;
             }
@@ -3492,7 +3606,7 @@ reset:
                      str);
 
             /* if got a 5xx don't try to send anymore */
-            cxn->current_article->trys = 100;
+            cxn->current_article->tries = 100;
 
             cxn->current_rcpts_issued--;
         } else {
@@ -3513,13 +3627,15 @@ reset:
             goto reset;
         }
         if (cxn->current_rcpts_issued == 0) {
-            if (cxn->current_article->trys < 100) {
+            if (cxn->current_article->tries < 100) {
                 d_printf(1,
                          "%s:%u:LMTP None of the rcpts "
                          "were accepted for this message. Re-queueing\n",
                          hostPeerName(cxn->myHost), cxn->ident);
             }
 
+            freeBufferArray(cxn->current_bufs);
+            cxn->current_bufs = NULL;
             ReQueue(cxn, &(cxn->lmtp_todeliver_q), cxn->current_article);
 
             cxn->lmtp_state = LMTP_AUTHED_IDLE;
@@ -3531,6 +3647,8 @@ reset:
                 lmtp_Disconnect(cxn);
                 return;
             }
+            /* The endpoint owns the array once the write is registered. */
+            cxn->current_bufs = NULL;
 
             cxn->lmtp_state = LMTP_WRITING_CONTENTS;
         }
@@ -3592,10 +3710,8 @@ reset:
         d_printf(1, "%s:%u:LMTP read quit\n", hostPeerName(cxn->myHost),
                  cxn->ident);
 
-        cxn->lmtp_state = LMTP_DISCONNECTED;
-
-        DeleteIfDisconnected(cxn);
-        break;
+        lmtp_Disconnect(cxn);
+        return;
 
     default:
 
@@ -3841,19 +3957,23 @@ retry:
 
     switch (item->type) {
     case CREATE_FOLDER:
-        imap_CreateGroup(cxn, item->data.control->folder);
+        result = imap_CreateGroup(cxn, item->data.control->folder);
         break;
 
     case CANCEL_MSG:
-        imap_CancelMsg(cxn, item->data.control->folder);
+        result = imap_CancelMsg(cxn, item->data.control->folder);
         break;
 
     case DELETE_FOLDER:
-        imap_DeleteGroup(cxn, item->data.control->folder);
+        result = imap_DeleteGroup(cxn, item->data.control->folder);
         break;
     default:
+        result = RET_FAIL;
         break;
     }
+
+    if (result != RET_OK)
+        imap_Disconnect(cxn);
 
     return;
 }
@@ -3861,7 +3981,7 @@ retry:
 
 /*
  *
- * Pulls a message off the queue and trys to start sending it. If the
+ * Pulls a message off the queue and tries to start sending it. If the
  * message is a control message put it in the control queue and grab
  * another message. If the message doesn't exist on disk or something
  * is wrong with it tell the host and try again. If we run out of
@@ -3939,12 +4059,14 @@ retry:
     if (result == RET_OK) {
         result = AddControlMsg(cxn, item->data.article, bufs, control_header,
                                control_header_end, 1);
+        freeBufferArray(bufs);
         if (result != RET_OK) {
             d_printf(1, "%s:%u Error adding to [imap] control queue\n",
                      hostPeerName(cxn->myHost), cxn->ident);
             ReQueue(cxn, &(cxn->lmtp_todeliver_q), item);
             return;
         }
+        free(item);
 
         switch (cxn->imap_state) {
         case IMAP_IDLE_AUTHED:
@@ -3970,10 +4092,8 @@ retry:
         goto retry;
     }
 
-    if (cxn->current_bufs != NULL) {
-        /* freeBufferArray(cxn->current_bufs); */
-        cxn->current_bufs = NULL;
-    }
+    if (cxn->current_bufs != NULL)
+        freeBufferArray(cxn->current_bufs);
     cxn->current_bufs = bufs;
     cxn->current_article = item;
 
@@ -3992,6 +4112,8 @@ retry:
     if ((result != RET_OK) || (rcpt_list == NULL)) {
         d_printf(1, "%s:%u Didn't find Newsgroups header field\n",
                  hostPeerName(cxn->myHost), cxn->ident);
+        freeBufferArray(cxn->current_bufs);
+        cxn->current_bufs = NULL;
         QueueForgetAbout(cxn, cxn->current_article, MSG_FAIL_DELIVER);
         goto retry;
     }
@@ -4006,6 +4128,7 @@ retry:
     p = concat("RSET\r\n"
                "MAIL FROM:<",
                mailfrom_name, ">\r\n", rcpt_list, "DATA\r\n", (char *) 0);
+    free(rcpt_list);
 
     cxn->lmtp_state = LMTP_WRITING_UPTODATA;
     result = WriteToWire_lmtpstr(cxn, p, strlen(p));
@@ -4020,6 +4143,7 @@ retry:
     if (deliver_to_header) {
         char *to_list, *to_list_end;
         int i, len;
+        size_t to_list_len;
 
         result = FindHeader(cxn->current_bufs, "Followup-To", &to_list,
                             &to_list_end);
@@ -4041,8 +4165,10 @@ retry:
             cxn->current_bufs[i] = cxn->current_bufs[i - 1];
         }
 
+        to_list_len = strlen(to_list);
         cxn->current_bufs[0] =
-            newBufferByCharP(to_list, strlen(to_list + 1), strlen(to_list));
+            newBufferByCharP(to_list, to_list_len + 1, to_list_len);
+        bufferSetDeletedCbk(cxn->current_bufs[0], free, to_list);
     }
 
     hostArticleOffered(cxn->myHost, cxn);
@@ -4115,7 +4241,7 @@ DeferAllArticles(connection_t *cxn, Q_t *q)
             QueueForgetAbout(cxn, cur, MSG_GIVE_BACK);
         } else {
             d_printf(0,
-                     "%s:%u Error emptying queue (deffering all articles)\n",
+                     "%s:%u Error emptying queue (deferring all articles)\n",
                      hostPeerName(cxn->myHost), cxn->ident);
             return;
         }
@@ -4148,15 +4274,21 @@ delConnection(Connection cxn)
 
     ASSERT(c != NULL);
 
-    if (cxn->lmtp_endpoint != NULL)
-        delEndPoint(cxn->lmtp_endpoint);
-    if (cxn->imap_endpoint != NULL)
-        delEndPoint(cxn->imap_endpoint);
+    CloseEndpoint(&cxn->lmtp_endpoint, &cxn->sockfd_lmtp);
+    CloseEndpoint(&cxn->imap_endpoint, &cxn->imap_sockfd);
+    ClearLMTPCapabilities(cxn);
+    ClearIMAPCapabilities(cxn);
+#ifdef HAVE_SASL
+    if (cxn->saslconn_lmtp != NULL)
+        sasl_dispose(&cxn->saslconn_lmtp);
+    if (cxn->imap_saslconn != NULL)
+        sasl_dispose(&cxn->imap_saslconn);
+#endif /* HAVE_SASL */
 
     delBuffer(cxn->imap_rBuffer);
     delBuffer(cxn->lmtp_rBuffer);
 
-    /* tell the Host we're outta here. */
+    /* tell the Host we're out of here. */
     shutDown = hostCxnGone(cxn->myHost, cxn);
 
     cxn->ident = 0;
@@ -4214,8 +4346,8 @@ delConnection(Connection cxn)
  *    before considering the connection dead.
  * CLOSEPERIOD is the number of seconds after connecting that the
  *     connections should be closed down and reinitialized (due to problems
- *     with old NNTP servers that hold history files open. Value of 0 means
- *     no close down.
+ *     with old NNTP servers that hold history database files open).
+ *     Value of 0 means no close down.
  */
 
 Connection
@@ -4230,6 +4362,8 @@ newConnection(Host host, unsigned int ident, const char *ipname,
 
     /* allocate connection structure */
     cxn = xcalloc(1, sizeof(connection_t));
+    cxn->sockfd_lmtp = -1;
+    cxn->imap_sockfd = -1;
 
     cxn->ident = ident;
     cxn->ServerName = xstrdup(ipname);
@@ -4238,11 +4372,13 @@ newConnection(Host host, unsigned int ident, const char *ipname,
     /* setup mailfrom user */
     if (gethostname(hostname, MAXHOSTNAMELEN) != 0) {
         d_printf(0, "%s gethostname failed\n", ipname);
+        free(cxn->ServerName);
+        free(cxn);
         return NULL;
     }
 
-
-    mailfrom_name = concat("news@", hostname, (char *) 0);
+    if (mailfrom_name == NULL)
+        mailfrom_name = concat("news@", hostname, (char *) 0);
 
     cxn->next = gCxnList;
     gCxnList = cxn;
@@ -4321,6 +4457,22 @@ DeleteIfDisconnected(Connection cxn)
     }
 }
 
+/*
+ * Disconnect both protocol endpoints before deleting the shared connection.
+ * issue_quit value 4 suppresses the normal delete-on-second-disconnect path,
+ * which would otherwise free cxn between these two calls.
+ */
+static void
+DisconnectBothAndDelete(Connection cxn, bool notify_dead)
+{
+    cxn->issue_quit = 4;
+    imap_DisconnectNoDelete(cxn);
+    lmtp_DisconnectNoDelete(cxn);
+    if (notify_dead)
+        hostCxnDead(cxn->myHost, cxn);
+    delConnection(cxn);
+}
+
 /* puts the connection into the wait state (i.e. waits for an article
    before initiating a connect). Can only be called right after
    newConnection returns, or while the Connection is in the (internal)
@@ -4331,6 +4483,7 @@ cxnWait(Connection cxn)
     cxn->issue_quit = 1;
 
     QuitIfIdle(cxn);
+    DeleteIfDisconnected(cxn);
 }
 
 /* The Connection will disconnect as if cxnDisconnect were called and then
@@ -4341,6 +4494,7 @@ cxnFlush(Connection cxn)
     cxn->issue_quit = 2;
 
     QuitIfIdle(cxn);
+    DeleteIfDisconnected(cxn);
 }
 
 
@@ -4371,6 +4525,7 @@ cxnTerminate(Connection cxn)
     DeferAllArticles(cxn, &(cxn->imap_controlMsg_q));
 
     QuitIfIdle(cxn);
+    DeleteIfDisconnected(cxn);
 }
 
 /* Blow away the connection gracelessly and immediately clean up */
@@ -4385,11 +4540,7 @@ cxnNuke(Connection cxn)
     DeferAllArticles(cxn, &(cxn->lmtp_todeliver_q));
     DeferAllArticles(cxn, &(cxn->imap_controlMsg_q));
 
-    imap_Disconnect(cxn);
-    lmtp_Disconnect(cxn);
-
-    hostCxnDead(cxn->myHost, cxn);
-    delConnection(cxn);
+    DisconnectBothAndDelete(cxn, true);
 }
 
 /*

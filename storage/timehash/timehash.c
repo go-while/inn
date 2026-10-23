@@ -1,5 +1,10 @@
 /*
 **  Storage manager module for timehash method.
+**
+**  Written by Clayton O'Neill in 1997.
+**
+**  Various bug fixes, code and documentation improvements since then
+**  in 1997-2010, 2015, 2017, 2021, 2022, 2024, 2026.
 */
 
 #include "portable/system.h"
@@ -72,7 +77,7 @@ timehash_explaintoken(const TOKEN token)
               (unsigned int) token.class, (unsigned long) ntohl(arrival),
               (unsigned long) ntohs(seqnum), innconf->patharticles,
               token.class, (ntohl(arrival) >> 16) & 0xff,
-              (ntohl(arrival) >> 8) & 0xff, ntohs(seqnum),
+              (ntohl(arrival) >> 8) & 0xff, (unsigned int) ntohs(seqnum),
               (ntohl(arrival) >> 24) & 0xff, ntohl(arrival) & 0xff);
 
     return text;
@@ -272,6 +277,13 @@ OpenArticle(const char *path, RETRTYPE amount)
     if (fstat(fd, &sb) < 0) {
         SMseterror(SMERR_UNDEFINED, NULL);
         syswarn("timehash: could not fstat article");
+        close(fd);
+        free(art);
+        return NULL;
+    }
+    if (sb.st_size < 0 || sb.st_size > INT_MAX) {
+        SMseterror(SMERR_UNDEFINED, "article is too large");
+        close(fd);
         free(art);
         return NULL;
     }
@@ -285,6 +297,7 @@ OpenArticle(const char *path, RETRTYPE amount)
             == MAP_FAILED) {
             SMseterror(SMERR_UNDEFINED, NULL);
             syswarn("timehash: could not mmap article");
+            close(fd);
             free(art->private);
             free(art);
             return NULL;
@@ -295,9 +308,10 @@ OpenArticle(const char *path, RETRTYPE amount)
             madvise(private->base, sb.st_size, MADV_SEQUENTIAL);
     } else {
         private->base = xmalloc(private->len);
-        if (read(fd, private->base, private->len) < 0) {
+        if (xread(fd, private->base, private->len) < 0) {
             SMseterror(SMERR_UNDEFINED, NULL);
             syswarn("timehash: could not read article");
+            close(fd);
             free(private->base);
             free(art->private);
             free(art);
@@ -475,7 +489,9 @@ timehash_next(ARTHANDLE *article, const RETRTYPE amount)
 
     length = strlen(innconf->patharticles) + 32;
     path = xmalloc(length);
-    if (article == NULL) {
+    if (article == NULL || article->private == NULL) {
+        if (article != NULL)
+            free(article);
         priv.top = NULL;
         priv.sec = NULL;
         priv.ter = NULL;
@@ -566,6 +582,8 @@ timehash_next(ARTHANDLE *article, const RETRTYPE amount)
         art->private = xmalloc(sizeof(PRIV_TIMEHASH));
         newpriv = (PRIV_TIMEHASH *) art->private;
         newpriv->base = NULL;
+    } else if (art->private == NULL) {
+        art->private = xcalloc(1, sizeof(PRIV_TIMEHASH));
     }
     newpriv = (PRIV_TIMEHASH *) art->private;
     newpriv->top = priv.top;

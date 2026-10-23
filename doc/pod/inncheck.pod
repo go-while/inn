@@ -15,7 +15,7 @@ but generally are things like permissions, ownership, syntax errors in
 config files, etc.
 
 B<inncheck> does not make changes to any files S<-- it> just reports what
-it thinks may be wrong, and it is up to the operator to fix the problem
+it thinks may be wrong, and it is up to the operator to fix the problem.
 
 The set of files checked may be restricted by using I<file> or
 I<file>B<=>I<path> arguments.  For example, putting C<incoming.conf>
@@ -144,8 +144,8 @@ Written by Brendan Kehoe <brendan@cygnus.com> and Rich Salz
 
 =head1 SEE ALSO
 
-active(5), control.ctl(5), expire.ctl(5), history(5), incoming.conf(5),
-inn.conf(5), innfeed.conf(5), moderators(5), newsfeeds(5), nntpsend.ctl(5),
-passwd.nntp(5), readers.conf(5), storage.conf(5).
+active(5), control.ctl(5), expire.ctl(5), hissqlite(5), history(5),
+incoming.conf(5), inn.conf(5), innfeed.conf(5), moderators(5), newsfeeds(5),
+nntpsend.ctl(5), passwd.nntp(5), readers.conf(5), storage.conf(5).
 
 =cut

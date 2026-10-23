@@ -2,6 +2,11 @@
 
 ##  Synchronize INN files maintained in rra-c-util with upstream.
 ##
+##  Initial version written in November 2013 by Julien ÉLIE.
+##
+##  Various bug fixes, code and documentation improvements since then
+##  in 2014-2018, 2020-2026.
+##
 ##  This script downloads the latest version of the files maintained
 ##  in the rra-c-util package that INN uses for most of its utility and
 ##  portability functions.  These files are available at
@@ -16,7 +21,7 @@
 ##  if all looks right, commit the changes.
 
 ##  URL where the files can be downloaded.
-URL_START="https://git.eyrie.org/?p=devel/rra-c-util.git;a=blob_plain;hb=HEAD;f="
+URL_START="https://raw.githubusercontent.com/rra/rra-c-util/refs/heads/main/"
 
 ##  This function downloads the files and copies them to the expected
 ##  location in the INN source code, after having performed a few minimal
@@ -50,32 +55,29 @@ download() {
 
             # Remove useless function for INN.
             if [ "$3" = "cc-flags.m4" ]; then
-                sed -i -e '/dnl Provides INN_PROG_CC_WARNINGS_FLAGS/,+6d' \
+                sed -i -e '/dnl Provides INN_PROG_CC_WARNINGS_FLAGS/,+4d' \
+                    -e '/AC_PROG_CC/a \ AC_REQUIRE([INN_PROG_CC_CLANG])' \
                     -e '/dnl Determine the full set/,$d' \
-                    -e '/test x"$CLANG" = xyes/,+1d' \
                     ${TEMP}
                 sed -i -e '$d' ${TEMP}
             elif [ "$3" = "sqlite3.m4" ]; then
                 sed -i -e '49 i \
-dnl Ensures SQLite v3 meets our minimum version requirement.\
-AC_DEFUN([_INN_LIB_SQLITE3_SOURCE], [[\
-#include <sqlite3.h>\
-\
-int main(void) {\
-    return sqlite3_libversion_number() < 3008002;\
-}\
-]])\
-\
-dnl Checks if SQLite v3 is present.  The single argument, if "true", says to\
-dnl fail if the SQLite library could not be found.\
+dnl Checks if SQLite v3 is present. The single argument, if "true", says to\
+dnl fail if the SQLite library could not be found. We do not use pkg-config\
+dnl like the upstream version of this file as we have a specific check to\
+dnl ensure that SQLite v3 meets our minimum version requirement.\
 AC_DEFUN([_INN_LIB_SQLITE3_INTERNAL],\
 [AC_CACHE_CHECK([for a sufficiently recent SQLite],\
     [inn_cv_have_sqlite3],\
     [INN_LIB_HELPER_PATHS([SQLITE3])\
      INN_LIB_SQLITE3_SWITCH\
      LIBS="-lsqlite3 $LIBS"\
-     AC_RUN_IFELSE([AC_LANG_SOURCE([_INN_LIB_SQLITE3_SOURCE])],\
-        [inn_cv_have_sqlite3=yes],\
+     AC_COMPUTE_INT([_INN_LIB_SQLITE3_VERSION], [SQLITE_VERSION_NUMBER],\
+        [#include <sqlite3.h>])\
+     AS_IF([test "x$_INN_LIB_SQLITE3_VERSION" != x],\
+        [AS_IF([test "$_INN_LIB_SQLITE3_VERSION" -ge 3024000],\
+            [inn_cv_have_sqlite3=yes],\
+            [inn_cv_have_sqlite3=no])],\
         [inn_cv_have_sqlite3=no])\
      INN_LIB_SQLITE3_RESTORE])\
  AS_IF([test x"$inn_cv_have_sqlite3" = xyes],\
@@ -83,7 +85,7 @@ AC_DEFUN([_INN_LIB_SQLITE3_INTERNAL],\
     [AS_IF([test x"$1" = xtrue],\
         [AC_MSG_ERROR([cannot find usable SQLite v3 library])])])])\
 ' \
-                    -e '49,69d' \
+                    -e '49,71d' \
                     ${TEMP}
             fi
         elif [ "$2" = "include/inn" ] || [ "$2" = "include/portable" ] \
@@ -329,6 +331,8 @@ extern char *strtok(char *, const char *);\
 
         case "$3" in
         *.c | *.h)
+            # Remove values in header guards (for clang-format recognition).
+            sed -i -e 's/^\(#define .*_H\) 1/\1/' ../$2/$3
             clang-format --style=file -i ../$2/$3
             ;;
         esac
@@ -347,6 +351,7 @@ extern char *strtok(char *, const char *);\
 ##  Synchronize Autoconf macros from upstream.
 download m4/bdb.m4 m4 bdb.m4
 download m4/cc-flags.m4 m4 cc-flags.m4
+download m4/clang.m4 m4 clang.m4
 download m4/inet-ntoa.m4 m4 inet-ntoa.m4
 download m4/krb5-config.m4 m4 krb5-config.m4
 download m4/krb5.m4 m4 krb5.m4

@@ -19,14 +19,11 @@
 #include <assert.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <limits.h>
 #include <signal.h>
 #include <sys/stat.h>
 #include <sys/uio.h>
 #include <syslog.h>
-
-#ifdef HAVE_LIMITS_H
-#    include <limits.h>
-#endif
 
 #ifdef HAVE_SYS_SELECT_H
 #    include <sys/select.h>
@@ -995,7 +992,7 @@ static IoStatus
 doExcept(EndPoint endp)
 {
     int optval;
-    socklen_t size;
+    socklen_t size = sizeof(optval);
     int fd = endPointFd(endp);
 
     if (getsockopt(fd, SOL_SOCKET, SO_ERROR, (char *) &optval, &size) != 0)
@@ -1484,7 +1481,7 @@ handleSignals(void)
             if (sigprocmask(SIG_SETMASK, &oset, (sigset_t *) NULL) != 0)
                 die("sigprocmask failed: %s", strerror(errno));
 #else
-                /* hope for the best */
+            /* hope for the best */
 #endif
         }
     }

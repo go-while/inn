@@ -1,9 +1,16 @@
 /*
-** Internal history API interface exposed to HISxxx
+**  Internal history API interface exposed to HISxxx
+**
+**  Written by Alex Kiernan in 2001.
+**
+**  Various bug fixes, code and documentation improvements since then
+**  in 2001, 2009, 2020, 2021, 2026.
 */
 
 #ifndef HISV6_H
-#define HISV6_H 1
+#define HISV6_H
+
+#include "inn/libinn.h"
 
 struct token;
 struct histopts;
@@ -32,7 +39,7 @@ bool hisv6_expire(void *, const char *, const char *, bool, void *,
                                  struct token *));
 
 bool hisv6_walk(void *, const char *, void *,
-                bool (*)(void *, time_t, time_t, time_t,
+                bool (*)(void *, const HASH *, time_t, time_t, time_t,
                          const struct token *));
 
 const char *hisv6_error(void *);

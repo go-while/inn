@@ -1,11 +1,6 @@
 pragma foreign_keys = 1;
 
-pragma journal_mode = 'PERSIST';
-
 pragma busy_timeout = 999999999;
-
--- .random
-select randomblob(?1);
 
 -- .getmisc
 select value from misc

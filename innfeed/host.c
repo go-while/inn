@@ -13,14 +13,11 @@
 #include <ctype.h>
 #include <errno.h>
 #include <float.h>
+#include <limits.h>
 #include <math.h>
 #include <netdb.h>
 #include <sys/param.h>
 #include <syslog.h>
-
-#ifdef HAVE_LIMITS_H
-#    include <limits.h>
-#endif
 
 #include "inn/innconf.h"
 #include "inn/libinn.h"
@@ -158,7 +155,7 @@ struct host_s {
     /* these numbers get reset periodically (after a 'final' logging). */
     unsigned int artsOffered; /* # of articles we offered to remote. */
     unsigned int artsOffered_checkpoint;
-    unsigned int artsAccepted; /* # of articles succesfully transferred */
+    unsigned int artsAccepted; /* # of articles successfully transferred */
     unsigned int artsAccepted_checkpoint;
     unsigned int artsNotWanted; /* # of articles remote already had */
     unsigned int artsNotWanted_checkpoint;
@@ -180,7 +177,7 @@ struct host_s {
     unsigned int artsHostClose_checkpoint;
     unsigned int artsFromTape; /* # of articles we pulled off tape */
     unsigned int artsFromTape_checkpoint;
-    double artsSizeAccepted; /* size of articles succesfully transferred */
+    double artsSizeAccepted; /* size of articles successfully transferred */
     double artsSizeAccepted_checkpoint;
     double artsSizeRejected; /* size of articles remote rejected */
     double artsSizeRejected_checkpoint;
@@ -1220,6 +1217,7 @@ gPrintHostInfo(FILE *fp, unsigned int indentAmt)
 }
 
 
+/* Send SIGINT (kill -2) to innfeed to write these data to SNAPSHOT_FILE. */
 void
 printHostInfo(Host host, FILE *fp, unsigned int indentAmt)
 {
@@ -1293,8 +1291,6 @@ printHostInfo(Host host, FILE *fp, unsigned int indentAmt)
     fprintf(fp, "%s    max-connections : %u\n", indent, host->maxConnections);
     fprintf(fp, "%s    backlog-feed-first : %s\n", indent,
             boolToString(host->params->backlogFeedFirst));
-
-
     fprintf(fp, "%s    statistics-id : %d\n", indent, host->statsId);
     fprintf(fp, "%s    ChkCxns-id : %d\n", indent, host->ChkCxnsId);
     fprintf(fp, "%s    deferred-id : %d\n", indent, host->deferredId);
@@ -1320,14 +1316,13 @@ printHostInfo(Host host, FILE *fp, unsigned int indentAmt)
     fprintf(fp, "%s    articles spooled : %u\n", indent, host->artsToTape);
     fprintf(fp, "%s      because of queue overflow : %u\n", indent,
             host->artsQueueOverflow);
-    fprintf(fp, "%s      when the we closed the host : %u\n", indent,
+    fprintf(fp, "%s      when we closed the host : %u\n", indent,
             host->artsHostClose);
     fprintf(fp, "%s      because the host was asleep : %u\n", indent,
             host->artsHostSleep);
     fprintf(fp, "%s    articles unspooled : %u\n", indent, host->artsFromTape);
     fprintf(fp, "%s    articles requeued from dropped connections : %u\n",
             indent, host->artsCxnDrop);
-
     fprintf(fp, "%s    process articles offered : %u\n", indent,
             host->gArtsOffered);
     fprintf(fp, "%s    process articles accepted : %u\n", indent,
@@ -1344,7 +1339,7 @@ printHostInfo(Host host, FILE *fp, unsigned int indentAmt)
             host->gArtsToTape);
     fprintf(fp, "%s      because of queue overflow : %u\n", indent,
             host->gArtsQueueOverflow);
-    fprintf(fp, "%s      when the we closed the host : %u\n", indent,
+    fprintf(fp, "%s      when we closed the host : %u\n", indent,
             host->gArtsHostClose);
     fprintf(fp, "%s      because the host was asleep : %u\n", indent,
             host->gArtsHostSleep);
@@ -1353,7 +1348,6 @@ printHostInfo(Host host, FILE *fp, unsigned int indentAmt)
     fprintf(fp,
             "%s    process articles requeued from dropped connections : %u\n",
             indent, host->gArtsCxnDrop);
-
     fprintf(fp, "%s    average (mean) defer length : %.1f\n", indent,
             (double) host->dlAccum / cnt);
     fprintf(fp, "%s    average (mean) queue length : %.1f\n", indent,
@@ -1400,7 +1394,6 @@ printHostInfo(Host host, FILE *fp, unsigned int indentAmt)
         fprintf(fp, "%s    %p\n", indent, (void *) qe->article);
 #endif
     }
-
     fprintf(fp, "%s    }\n", indent);
 
     fprintf(fp, "%s    IN PROCESS articles {\n", indent);
@@ -1411,8 +1404,8 @@ printHostInfo(Host host, FILE *fp, unsigned int indentAmt)
         fprintf(fp, "%s    %p\n", indent, (void *) qe->article);
 #endif
     }
-
     fprintf(fp, "%s    }\n", indent);
+
     fprintf(fp, "%s    DEFERRED articles {\n", indent);
     for (qe = host->deferred; qe != NULL; qe = qe->next) {
 #if defined(INNFEED_DEBUG)
@@ -1421,19 +1414,7 @@ printHostInfo(Host host, FILE *fp, unsigned int indentAmt)
         fprintf(fp, "%s    %p\n", indent, (void *) qe->article);
 #endif
     }
-
     fprintf(fp, "%s    }\n", indent);
-    fprintf(fp, "%s    DEFERRED articles {\n", indent);
-    for (qe = host->deferred; qe != NULL; qe = qe->next) {
-#if defined(INNFEED_DEBUG)
-        printArticleInfo(qe->article, fp, indentAmt + INDENT_INCR);
-#else
-        fprintf(fp, "%s    %p\n", indent, (void *) qe->article);
-#endif
-    }
-
-    fprintf(fp, "%s    }\n", indent);
-
 
     fprintf(fp, "%s    Connections {\n", indent);
     for (i = 0; i < host->maxConnections; i++) {
@@ -1464,7 +1445,7 @@ printHostInfo(Host host, FILE *fp, unsigned int indentAmt)
 
 /* close down all the connections of the Host. All articles that are in
  * processes are still pushed out and then a QUIT is issued. The Host will
- * also spool all inprocess articles to tape incase the process is about to
+ * also spool all inprocess articles to tape in case the process is about to
  * be killed (they'll be refused next time around). When all Connections
  * report that they're gone, then the Host will delete itself.
  */
@@ -1678,7 +1659,7 @@ hostSendArticle(Host host, Article article)
         Article extraRef;
         Connection cxn = NULL;
 
-        extraRef = artTakeRef(article); /* the referrence we give away */
+        extraRef = artTakeRef(article); /* the reference we give away */
 
         /* stick on the queue of articles we've handed off--we're hopeful. */
         queueArticle(article, &host->processed, &host->processedTail, 0);
@@ -1790,7 +1771,7 @@ hostSendArticle(Host host, Article article)
 
 /*
  * called by the Host's connection when the remote is refusing postings
- * from us becasue we're not allowed (banner code 400).
+ * from us because we're not allowed (banner code 400).
  */
 void
 hostCxnBlocked(Host host, Connection cxn, char *reason)
@@ -2066,7 +2047,7 @@ hostArticleOffered(Host host, Connection cxn UNUSED)
 
 
 /*
- * Article was succesfully transferred.
+ * Article was successfully transferred.
  */
 void
 hostArticleAccepted(Host host, Connection cxn, Article article)
@@ -3156,13 +3137,17 @@ hostLogStatus(void)
         Default peer configuration parameters:
             article timeout: 600       initial connections: 1
            response timeout: 300           max connections: 5
+          reconnection time: 30      max reconnection time: 3600
                close period: 6000               max checks: 25
+           DNS retry period: 900         DNS expire period: 86400
+                   port num: 119                force IPv4: false
              want streaming: true           dynamic method: 1
-                no-check on: 95.0%     dynamic backlog low: 25%
-               no-check off: 90.0%    dynamic backlog high: 50%
+                no-check on: 95.0%     dynamic backlog low: 25.0%
+               no-check off: 90.0%    dynamic backlog high: 50.0%
             no-check filter: 50.0   dynamic backlog filter: 0.7
-          backlog low limit: 1024                 port num: 119
-         backlog high limit: 1280       backlog feed first: false
+          backlog limit low: 1024            drop-deferred: false
+         backlog limit high: 1280            min-queue-cxn: false
+         backlog feed first: false
              backlog factor: 1.1
         */
         fprintf(fp, "%sDefault peer configuration parameters:%s\n",
@@ -3175,7 +3160,7 @@ hostLogStatus(void)
                 defaultParams->absMaxConnections);
         fprintf(fp, "  reconnection time: %-5u   max reconnection time: %u\n",
                 init_reconnect_period, max_reconnect_period);
-        fprintf(fp, "       close period: %-5u              max checks: %u\n",
+        fprintf(fp, "       close period: %-10u         max checks: %u\n",
                 defaultParams->closePeriod, defaultParams->maxChecks);
         fprintf(fp, "   DNS retry period: %-5u       DNS expire period: %u\n",
                 dnsRetPeriod, dnsExpPeriod);
@@ -3186,28 +3171,28 @@ hostLogStatus(void)
                 defaultParams->wantStreaming ? "true " : "false",
                 defaultParams->dynamicMethod);
         fprintf(fp,
-                "        no-check on: %-2.1f%%     dynamic backlog low: "
-                "%-2.1f%%\n",
+                "        no-check on: %-4.1f%%     dynamic backlog low: "
+                "%-4.1f%%\n",
                 defaultParams->lowPassHigh,
                 defaultParams->dynBacklogLowWaterMark);
         fprintf(fp,
-                "       no-check off: %-2.1f%%    dynamic backlog high: "
-                "%-2.1f%%\n",
+                "       no-check off: %-4.1f%%    dynamic backlog high: "
+                "%-4.1f%%\n",
                 defaultParams->lowPassLow,
                 defaultParams->dynBacklogHighWaterMark);
         fprintf(
             fp,
-            "    no-check filter: %-2.1f   dynamic backlog filter: %-2.1f\n",
+            "    no-check filter: %-4.1f   dynamic backlog filter: %-3.1f\n",
             defaultParams->lowPassFilter, defaultParams->dynBacklogFilter);
-        fprintf(fp, "  backlog limit low: %-7u         drop-deferred: %s\n",
+        fprintf(fp, "  backlog limit low: %-10u      drop-deferred: %s\n",
                 defaultParams->backlogLimit,
                 defaultParams->dropDeferred ? "true " : "false");
-        fprintf(fp, " backlog limit high: %-7u         min-queue-cxn: %s\n",
+        fprintf(fp, " backlog limit high: %-10u      min-queue-cxn: %s\n",
                 defaultParams->backlogLimitHigh,
                 defaultParams->minQueueCxn ? "true " : "false");
         fprintf(fp, " backlog feed first: %s\n",
                 defaultParams->backlogFeedFirst ? "true " : "false");
-        fprintf(fp, "     backlog factor: %1.1f\n\n",
+        fprintf(fp, "     backlog factor: %3.1f\n\n",
                 defaultParams->backlogFactor);
 
         tapeLogGlobalStatus(fp);
@@ -3285,20 +3270,19 @@ hostLogStatus(void)
  *  deferred: 0         no-check off: 95.0%       max cxns: 8/10
  *  requeued: 0        no-check fltr: 50.0    queue length: 0.0/200
  *   spooled: 0       dynamic method: 0              empty: 100.0%
- *[overflow]: 0        dyn b'log low: 25%          >0%-25%: 0.0%
- *[on_close]: 0       dyn b'log high: 50%          25%-50%: 0.0%
- *[sleeping]: 0       dyn b'log stat: 37%          50%-75%: 0.0%
+ *[overflow]: 0        dyn b'log low: 25.0%        >0%-25%: 0.0%
+ *[on_close]: 0       dyn b'log high: 50.0%        25%-50%: 0.0%
+ *[sleeping]: 0       dyn b'log stat: 37.0%        50%-75%: 0.0%
  * unspooled: 0       dyn b'log fltr: 0.7        75%-<100%: 0.0%
  *  no queue: 1234    avr.cxns queue: 0.0             full: 0.0%
- *accpt size: 121.1 MB drop-deferred: false   defer length: 0
+ *accpt size: 121.1 MB drop-deferred: false   defer length: 0.0
  *rejct size: 27.1 MB  min-queue-cxn: false
  *                 backlog low limit: 1000000
  *                backlog high limit: 2000000 (factor 2.0)
  *                 backlog shrinkage: 0 bytes (from current file)
- *   offered:  1.13 art/s   accepted:  0.69 art/s (101.71 KB/s)
- *   refused:  0.01 art/s   rejected:  0.42 art/s (145.11 KB/s)
+ *   offered:  1.13 art/s   accepted:  0.69 art/s, 101.71 KB/s
+ *   refused:  0.01 art/s   rejected:  0.42 art/s, 145.11 KB/s
  *   missing 0 spooled 0
- *
  */
 static void
 hostPrintStatus(Host host, FILE *fp)
@@ -3372,18 +3356,18 @@ hostPrintStatus(Host host, FILE *fp)
             host->params->initialConnections);
 
     fprintf(fp,
-            "   missing: %-7ld    no-check on: %-3.1f%%      idle cxns: %u\n",
+            "   missing: %-7ld    no-check on: %-4.1f%%      idle cxns: %u\n",
             (long) host->gArtsMissing, host->params->lowPassHigh,
             host->maxConnections - (host->activeCxns + host->sleepingCxns));
 
     fprintf(
         fp,
-        "  deferred: %-7ld   no-check off: %-3.1f%%       max cxns: %u/%u\n",
+        "  deferred: %-7ld   no-check off: %-4.1f%%       max cxns: %u/%u\n",
         (long) host->gArtsDeferred, host->params->lowPassLow,
         host->maxConnections, host->params->absMaxConnections);
 
     fprintf(fp,
-            "  requeued: %-7ld  no-check fltr: %-3.1f    queue length: "
+            "  requeued: %-7ld  no-check fltr: %-4.1f    queue length: "
             "%-3.1f/%u\n",
             (long) host->gArtsCxnDrop, host->params->lowPassFilter,
             (double) host->blAccum / cnt, hostHighwater);
@@ -3395,20 +3379,20 @@ hostPrintStatus(Host host, FILE *fp)
         100.0 * host->blNone / cnt);
 
     fprintf(fp,
-            "[overflow]: %-7ld  dyn b'log low: %-3.1f%%        %s0%%-25%%: "
+            "[overflow]: %-7ld  dyn b'log low: %-4.1f%%        %s0%%-25%%: "
             "%-3.1f%%\n",
             (long) host->gArtsQueueOverflow,
             host->params->dynBacklogLowWaterMark, genHtml ? "&gt;" : ">",
             100.0 * host->blQuartile[0] / cnt);
 
     fprintf(fp,
-            "[on_close]: %-7ld dyn b'log high: %-3.1f%%        25%%-50%%: "
+            "[on_close]: %-7ld dyn b'log high: %-4.1f%%        25%%-50%%: "
             "%-3.1f%%\n",
             (long) host->gArtsHostClose, host->params->dynBacklogHighWaterMark,
             100.0 * host->blQuartile[1] / cnt);
 
     fprintf(fp,
-            "[sleeping]: %-7ld dyn b'log stat: %-3.1f%%        50%%-75%%: "
+            "[sleeping]: %-7ld dyn b'log stat: %-4.1f%%        50%%-75%%: "
             "%-3.1f%%\n",
             (long) host->gArtsHostSleep,
             host->backlogFilter * 100.0
@@ -3416,7 +3400,7 @@ hostPrintStatus(Host host, FILE *fp)
             100.0 * host->blQuartile[2] / cnt);
 
     fprintf(fp,
-            " unspooled: %-7ld dyn b'log fltr: %-3.1f       75%%-%s100%%: "
+            " unspooled: %-7ld dyn b'log fltr: %-4.1f       75%%-%s100%%: "
             "%-3.1f%%\n",
             (long) host->gArtsFromTape, host->params->dynBacklogLowWaterMark,
             genHtml ? "&lt;" : "<", 100.0 * host->blQuartile[3] / cnt);
@@ -3597,16 +3581,6 @@ queuesToTape(Host host)
 
     while ((art = remHead(&host->queued, &host->queuedTail)) != NULL) {
         host->backlog--;
-        host->artsHostClose++;
-        host->gArtsHostClose++;
-        host->artsToTape++;
-        host->gArtsToTape++;
-        procArtsToTape++;
-        tapeTakeArticle(host->myTape, art);
-    }
-
-    while ((art = remHead(&host->deferred, &host->deferredTail)) != NULL) {
-        host->deferLen--;
         host->artsHostClose++;
         host->gArtsHostClose++;
         host->artsToTape++;

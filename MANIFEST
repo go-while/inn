@@ -1,7 +1,9 @@
 File Name                             Description
 -------------------------------------------------------------------------------
 .clang-format                         Configuration for clang-format
+.codespellrc                          Configuration for codespell
 .github                               GitHub configuration (Directory)
+.github/CODE_OF_CONDUCT.md            Code of Conduct of the project
 .github/dependabot.yml                Configuration for GitHub dependabot
 .github/workflows                     GitHub Actions workflows (Directory)
 .github/workflows/build.yaml          Default GitHub Actions testing workflow
@@ -16,6 +18,7 @@ Makefile                              Top-level makefile
 Makefile.global.in                    Make variables for all Makefiles
 NEWS                                  Changes since last version
 README                                Introduction to the INN package
+SECURITY.md                           The security policy of the INN package
 TODO                                  The list of pending INN projects
 authprogs                             The authentication programs (Directory)
 authprogs/Makefile                    Makefile for auth programs
@@ -64,6 +67,7 @@ contrib                               External contributions (Directory)
 contrib/Makefile                      Makefile for contrib programs
 contrib/README                        Contents of the contrib directory
 contrib/analyze-traffic.in            Track which groups are getting traffic
+contrib/apt-get_install_inn2.yaml     Installing INN in a GitHub Action
 contrib/archivegz.in                  Compressing version of archive
 contrib/auth_pass.README              README corresponding to auth_pass.c
 contrib/auth_pass.c                   Sample for use with AUTHINFO GENERIC
@@ -129,6 +133,7 @@ doc/man/INN__ovsqlite_client.3pm      Manpage for INN::ovsqlite_client module
 doc/man/Makefile                      Makefile for nroff documentation
 doc/man/active.5                      Manpage for active database
 doc/man/active.times.5                Manpage for active.times file
+doc/man/actmerge.8                    Manpage for active file merge program
 doc/man/actsync.8                     Manpage for active file synch program
 doc/man/archive.8                     Manpage for archive backend
 doc/man/auth_krb5.8                   Manpage for auth_krb5 authenticator
@@ -139,12 +144,13 @@ doc/man/ckpasswd.8                    Manpage for ckpasswd authenticator
 doc/man/cnfsheadconf.8                Manpage for cnfsheadconf
 doc/man/cnfsstat.8                    Manpage for cnfsstat
 doc/man/control.ctl.5                 Manpage for control.ctl config file
+doc/man/controlbatch.8                Manpage for controlbatch
 doc/man/controlchan.8                 Manpage for controlchan backend
 doc/man/convdate.1                    Manpage for convdate utility
 doc/man/ctlinnd.8                     Manpage for ctlinnd frontend
 doc/man/cvtbatch.8                    Manpage for cvtbatch utility
 doc/man/cycbuff.conf.5                Manpage for cycbuff.conf config file
-doc/man/delayer.1                     Manpage for delayer
+doc/man/delayer.8                     Manpage for delayer
 doc/man/distrib.pats.5                Manpage for distrib.pats config file
 doc/man/distributions.5               Manpage for distributions config file
 doc/man/docheckgroups.8               Manpage for docheckgroups
@@ -157,6 +163,9 @@ doc/man/fastrm.1                      Manpage for fastrm utility
 doc/man/gencancel.1                   Manpage for gencancel program
 doc/man/getlist.1                     Manpage for getlist frontend
 doc/man/grephistory.1                 Manpage for grephistory
+doc/man/hissqlite-convert.8           Manpage for hissqlite-convert
+doc/man/hissqlite-util.8              Manpage for hissqlite-util
+doc/man/hissqlite.5                   Manpage for the hissqlite history method
 doc/man/history.5                     Manpage for history database
 doc/man/ident.8                       Manpage for ident resolver
 doc/man/incoming.conf.5               Manpage for incoming.conf config file
@@ -232,10 +241,10 @@ doc/man/scanspool.8                   Manpage for scanspool
 doc/man/send-ihave.8                  Manpage for send-ihave
 doc/man/send-uucp.8                   Manpage for send-uucp
 doc/man/sendinpaths.8                 Manpage for sendinpaths
-doc/man/shlock.1                      Manpage for shlock backend utility
+doc/man/shlock.8                      Manpage for shlock backend utility
 doc/man/shrinkfile.1                  Manpage for shrinkfile utility
 doc/man/simpleftp.1                   Manpage for simpleftp utility
-doc/man/sm.1                          Manpage for sm
+doc/man/sm.8                          Manpage for sm
 doc/man/storage.conf.5                Manpage for storage.conf config file
 doc/man/subscriptions.5               Manpage for subscriptions list
 doc/man/tally.control.8               Manpage for tally.control
@@ -246,6 +255,7 @@ doc/pod                               POD documentation (Directory)
 doc/pod/Makefile                      Maintainer rules for derived files
 doc/pod/active.pod                    Master file for active.5
 doc/pod/active.times.pod              Master file for active.times.5
+doc/pod/actmerge.pod                  Master file for actmerge.8
 doc/pod/actsync.pod                   Master file for actsync.8
 doc/pod/archive.pod                   Master file for archive.8
 doc/pod/auth_krb5.pod                 Master file for auth_krb5.8
@@ -257,6 +267,7 @@ doc/pod/ckpasswd.pod                  Master file for ckpasswd.8
 doc/pod/cnfsheadconf.pod              Master file for cnfsheadconf.8
 doc/pod/cnfsstat.pod                  Master file for cnfsstat.8
 doc/pod/control.ctl.pod               Master file for control.ctl.5
+doc/pod/controlbatch.pod              Master file for controlbatch.8
 doc/pod/controlchan.pod               Master file for controlchan.8
 doc/pod/convdate.pod                  Master file for convdate.1
 doc/pod/ctlinnd.pod                   Master file for ctlinnd.8
@@ -276,6 +287,9 @@ doc/pod/gencancel.pod                 Master file for gencancel.1
 doc/pod/getlist.pod                   Master file for getlist.1
 doc/pod/grephistory.pod               Master file for grephistory.1
 doc/pod/hacking.pod                   Master file for HACKING
+doc/pod/hissqlite-convert.pod         Master file for hissqlite-convert.8
+doc/pod/hissqlite-util.pod            Master file for hissqlite-util.8
+doc/pod/hissqlite.pod                 Master file for hissqlite.5
 doc/pod/history.pod                   Master file for history.5
 doc/pod/hook-perl.pod                 Master file for doc/hook-perl
 doc/pod/hook-python.pod               Master file for doc/hook-python
@@ -351,10 +365,10 @@ doc/pod/scanlogs.pod                  Master file for scanlogs.8
 doc/pod/scanspool.pod                 Master file for scanspool.8
 doc/pod/send-ihave.pod                Master file for send-ihave.8
 doc/pod/sendinpaths.pod               Master file for sendinpaths.8
-doc/pod/shlock.pod                    Master file for shlock.1
+doc/pod/shlock.pod                    Master file for shlock.8
 doc/pod/shrinkfile.pod                Master file for shrinkfile.1
 doc/pod/simpleftp.pod                 Master file for simpleftp.1
-doc/pod/sm.pod                        Master file for sm.1
+doc/pod/sm.pod                        Master file for sm.8
 doc/pod/storage.conf.pod              Master file for storage.conf.5
 doc/pod/subscriptions.pod             Master file for subscriptions.5
 doc/pod/tally.control.pod             Master file for tally.control.8
@@ -402,6 +416,23 @@ history/his.c                         History API glue implementation
 history/hisinterface.h                History API interface
 history/hismethods.c                  Generated table of history methods
 history/hismethods.h                  Generated interface to history methods
+history/hissqlite                     hissqlite history method (Directory)
+history/hissqlite/hismethod.config    buildconfig definition for hissqlite
+history/hissqlite/hismethod.mk        Make rules for hissqlite
+history/hissqlite/hissqlite-convert.c Convert a history database to hissqlite
+history/hissqlite/hissqlite-init.c    Generated database setup implementation
+history/hissqlite/hissqlite-init.h    Generated database setup interface
+history/hissqlite/hissqlite-init.sql  SQLite code for database setup
+history/hissqlite/hissqlite-main.c    Generated daily operation implementation
+history/hissqlite/hissqlite-main.h    Generated daily operation interface
+history/hissqlite/hissqlite-main.sql  SQLite code for daily operation
+history/hissqlite/hissqlite-private.h Private header for hissqlite
+history/hissqlite/hissqlite-read.c    Generated read-only query implementation
+history/hissqlite/hissqlite-read.h    Generated read-only query interface
+history/hissqlite/hissqlite-read.sql  SQLite code for direct reader queries
+history/hissqlite/hissqlite-util.in   Utility program for hissqlite
+history/hissqlite/hissqlite.c         hissqlite history method
+history/hissqlite/hissqlite.h         Header for hissqlite history
 history/hisv6                         History v6 method (Directory)
 history/hisv6/hismethod.config        hisbuildconfig definition
 history/hisv6/hisv6-private.h         Private header file for hisv6
@@ -412,6 +443,7 @@ include/Makefile                      Makefile for header files
 include/conffile.h                    Header file for reading *.conf files
 include/config.h.in                   Template configuration data
 include/inn                           Installed header files (Directory)
+include/inn/bloom.h                   Header file for Bloom filter
 include/inn/buffer.h                  Header file for reusable counted buffers
 include/inn/concat.h                  Header file for string concatenation
 include/inn/confparse.h               Header file for configuration parser
@@ -439,8 +471,10 @@ include/inn/paths.h.in                Header file for paths
 include/inn/qio.h                     Header file for quick I/O package
 include/inn/secrets.h                 Header file for the secrets struct
 include/inn/sequence.h                Header file for sequence space arithmetic
+include/inn/sqlite-helper.h           SQLite code package interface
 include/inn/storage.h                 Header file for storage API
 include/inn/timer.h                   Header file for generic timers
+include/inn/tombstone.h               Header file for cancel tombstone log
 include/inn/tst.h                     Header file for ternary search tries
 include/inn/utility.h                 Header file for utility functions
 include/inn/vector.h                  Header file for vectors of strings
@@ -518,6 +552,7 @@ lib/Makefile                          Makefile for library
 lib/argparse.c                        Functions for parsing arguments
 lib/artnumber.c                       Manipulation of article numbers
 lib/asprintf.c                        asprintf replacement
+lib/bloom.c                           Bloom filter implementation
 lib/buffer.c                          Reusable counted buffer
 lib/canlock.c                         Routines for Cancel-Lock
 lib/cleanfrom.c                       Clean out a From line
@@ -582,6 +617,8 @@ lib/setenv.c                          setenv replacement
 lib/seteuid.c                         seteuid replacement
 lib/setproctitle.c                    setproctitle replacement
 lib/snprintf.c                        snprintf and vsnprintf replacement
+lib/sqlite-helper-gen.in              Package SQLite code for convenient use
+lib/sqlite-helper.c                   SQLite code package implementation
 lib/strcasecmp.c                      Case-insensitive string comparison (BSD)
 lib/strlcat.c                         strlcat replacement
 lib/strlcpy.c                         strlcpy replacement
@@ -600,10 +637,11 @@ lib/xwrite.c                          write that handles partial transfers
 m4                                    Autoconf support macros (Directory)
 m4/aux-libs.m4                        Autoconf macro for extra libraries
 m4/bdb.m4                             Autoconf macros for Berkeley DB
-m4/blacklist.m4                       Autoconf macros for blacklistd (BSD OS)
+m4/blocklist.m4                       Autoconf macros for blocklistd (BSD OS)
 m4/canlock.m4                         Autoconf macros for Cancel-Lock support
 m4/cc-c-o.m4                          Autoconf macro for -c -o compiler support
 m4/cc-flags.m4                        Autoconf macro for compiler flags
+m4/clang.m4                           Autoconf macro for Clang detection
 m4/compress.m4                        Autoconf macro for compress detection
 m4/inet-ntoa.m4                       Autoconf macro to check inet_ntoa
 m4/iov-max.m4                         Autoconf macro for IOV_MAX
@@ -791,9 +829,9 @@ storage/ovsqlite/sql-init.sql         SQLite code for database setup
 storage/ovsqlite/sql-main.c           Generated daily operation implementation
 storage/ovsqlite/sql-main.h           Generated daily operation interface
 storage/ovsqlite/sql-main.sql         SQLite code for daily operation
-storage/ovsqlite/sqlite-helper-gen.in Package SQLite code for convenient use
-storage/ovsqlite/sqlite-helper.c      SQLite code package implementation
-storage/ovsqlite/sqlite-helper.h      SQLite code package interface
+storage/ovsqlite/sql-read.c           Generated read-only query implementation
+storage/ovsqlite/sql-read.h           Generated read-only query interface
+storage/ovsqlite/sql-read.sql         SQLite code for direct reader queries
 storage/timecaf                       timecaf storage method (Directory)
 storage/timecaf/README.CAF            README the CAF file format
 storage/timecaf/caf.c                 CAF file implementation
@@ -805,6 +843,7 @@ storage/timehash                      timehash storage method (Directory)
 storage/timehash/method.config        buildconfig definition
 storage/timehash/timehash.c           timehash storage routines
 storage/timehash/timehash.h           Header for timehash
+storage/tombstone.c                   Cancel tombstone log helpers
 storage/tradindexed                   tradindexed overview method (Directory)
 storage/tradindexed/ovmethod.config   buildconfig definition
 storage/tradindexed/ovmethod.mk       Make rules for tradindexed overview
@@ -931,6 +970,10 @@ tests/data/upgrade/readers.conf.ok    Fixed readers.conf file
 tests/data/upgrade/sasl.conf          Obsolete sasl.conf config file
 tests/docs                            Test suite for documentation (Directory)
 tests/docs/pod.t.in                   Tests for POD formatting
+tests/expire                          Test suite for expire (Directory)
+tests/expire/tombstone-e2e.t          End-to-end tests for tombstone log
+tests/expire/tombstone-hisexpire-t.c  HISexpire integration test for tombstone
+tests/expire/tombstone-t.c            Tests for tombstone library
 tests/innd                            Test suite for innd (Directory)
 tests/innd/artparse-t.c               Tests for ARTparse in innd
 tests/innd/chan-t.c                   Tests for CHAN functions in innd
@@ -938,6 +981,8 @@ tests/innd/fakeinnd.c                 Provide symbols defined by innd/innd.c
 tests/lib                             Test suite for libinn (Directory)
 tests/lib/artnumber-t.c               Tests for lib/artnumber.c
 tests/lib/asprintf-t.c                Tests for lib/asprintf.c
+tests/lib/bloom-hiswalk-t.c           Integration test for Bloom filter with HISwalk
+tests/lib/bloom-t.c                   Tests for lib/bloom.c
 tests/lib/buffer-t.c                  Tests for lib/buffer.c
 tests/lib/canlock-t.c                 Tests for lib/canlock.c
 tests/lib/concat-t.c                  Tests for lib/concat.c
@@ -955,6 +1000,10 @@ tests/lib/hash-t.c                    Tests for lib/hash.c
 tests/lib/hashtab-t.c                 Tests for lib/hashtab.c
 tests/lib/headers-t.c                 Tests for lib/headers.c
 tests/lib/hex-t.c                     Tests for lib/hex.c
+tests/lib/hissqlite-convert-t.c       Tests for the hissqlite-convert tool
+tests/lib/hissqlite-t.c               Tests for the hissqlite history method
+tests/lib/hissqlite-util.t            Smoke tests for hissqlite-util
+tests/lib/history-bench.c             Benchmark for the history backends
 tests/lib/inet_aton-t.c               Tests for lib/inet_aton.c
 tests/lib/inet_ntoa-t.c               Tests for lib/inet_ntoa.c
 tests/lib/inet_ntop-t.c               Tests for lib/inet_ntop.c
@@ -972,7 +1021,9 @@ tests/lib/network/server-t.c          Tests for lib/network.c (server-oriented)
 tests/lib/pread-t.c                   Tests for lib/pread.c
 tests/lib/pwrite-t.c                  Tests for lib/pwrite.c
 tests/lib/qio-t.c                     Tests for lib/qio.c
+tests/lib/readin-t.c                  Tests for lib/readin.c
 tests/lib/reallocarray-t.c            Tests for lib/reallocarray.c
+tests/lib/reservedfd-t.c              Tests for reserved file descriptors
 tests/lib/setenv-t.c                  Tests for lib/setenv.c
 tests/lib/snprintf-t.c                Tests for lib/snprintf.c
 tests/lib/strlcat-t.c                 Tests for lib/strlcat.c
@@ -991,12 +1042,19 @@ tests/overview                        Test suite for overview (Directory)
 tests/overview/api-t.c                Basic tests for overview API
 tests/overview/overchan.t             Tests for backends/overchan
 tests/overview/overview-t.c           Basic tests for overview methods
+tests/overview/ovsqlite-integ.t       Integration test for ovsqlite direct reader
+tests/overview/ovsqlite-read-t.c      Direct reader verification for integration test
+tests/overview/ovsqlite-t.c           Unit tests for ovsqlite direct reader
+tests/overview/ovsqlite-write-t.c     Writer helper for ovsqlite integration test
+tests/overview/tdx-group-t.c          Tests for tradindexed group index sizes
 tests/overview/xref-t.c               Test storing overview data by Xref
 tests/perl                            Test suite for Perl scripts (Directory)
 tests/perl/minimum-version.t.in       Tests for not too-new features of Perl
 tests/runtests.c                      The test suite driver program
 tests/storage                         Test suite for storage (Directory)
 tests/storage/archive.t               Tests for backends/archive
+tests/storage/caf-t.c                 Tests for CAF file validation and cleaning
+tests/storage/cancel-tombstone-t.c    Tests for SMcanceltombstone
 tests/storage/makehistory.t           Tests for expire/makehistory
 tests/storage/sm.t                    Tests for frontends/sm
 tests/tap                             Helper scripts for TAP (Directory)

@@ -3,6 +3,9 @@
 **
 **  Copyright (c) 2001, Thus plc
 **
+**  Various bug fixes, code and documentation improvements since then
+**  in 2002-2006, 2009, 2010, 2016, 2017, 2021, 2024, 2026.
+**
 **  Redistribution and use of the source code in source and binary
 **  forms, with or without modification, are permitted provided that
 **  the following 3 conditions are met:
@@ -48,6 +51,7 @@
 #include "inn/qio.h"
 #include "inn/sequence.h"
 #include "inn/timer.h"
+#include <ctype.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <limits.h>
@@ -98,6 +102,7 @@ hisv6_splitline(const char *line, const char **error, HASH *hash,
 {
     const char *p = line;
     char *end;
+    size_t i;
     unsigned long l;
     int r = 0;
 
@@ -107,13 +112,19 @@ hisv6_splitline(const char *line, const char **error, HASH *hash,
         return -1;
     }
     ++p;
-    if (hash)
-        *hash = TextToHash(p);
-    p += 32;
-    if (*p != ']') {
+    for (i = 0; i < 32; i++) {
+        if (p[i] == '\0' || !isxdigit((unsigned char) p[i])) {
+            *error = "invalid hash in history line";
+            return -1;
+        }
+    }
+    if (p[32] != ']') {
         *error = "`]' missing from history line";
         return -1;
     }
+    if (hash)
+        *hash = TextToHash(p);
+    p += 32;
     ++p;
     r |= HISV6_HAVE_HASH;
     if (*p != HISV6_FIELDSEP) {
@@ -267,8 +278,16 @@ hisv6_closefiles(struct hisv6 *h)
     /* FIXME - mips defines dev_t to be 64-bits whereas st_dev is 32-bits,
      * so we have an overflow when casting to dev_t.
      * As we always compare against st_ino as well, it shouldn't
-     * matter though. */
+     * matter though.  The formally correct fix is probably to figure out
+     * the size of the struct stat st_dev field in Autoconf and explicitly
+     * cast -1 to that size, whatever it is. */
+#if __GNUC__ > 7
+#    pragma GCC diagnostic ignored "-Woverflow"
+#endif
     h->st.st_dev = (dev_t) -1;
+#if __GNUC__ > 7
+#    pragma GCC diagnostic warning "-Woverflow"
+#endif
     return r;
 }
 
@@ -359,7 +378,7 @@ hisv6_reopen(struct hisv6 *h)
                on-disk copies out of sync with the mmap'ed copies most of
                the time.  So if innd is using INCORE_MMAP, then we force
                everything else to use it, too (unless we're on NFS) */
-            if (!innconf->nfsreader) {
+            if (innconf != NULL && !innconf->nfsreader) {
                 opt.pag_incore = INCORE_MMAP;
                 opt.exists_incore = INCORE_MMAP;
             }
@@ -474,11 +493,19 @@ hisv6_new(const char *path, int flags, struct history *history)
     h->dirty = 0;
     h->synccount = 0;
     h->st.st_ino = (ino_t) -1;
-    /* FIXME - mips defines dev_t to be 64-bits whereas st_dev is 32-bits,
-     * so we have an overflow when casting to dev_t.
-     * As we always compare against st_ino as well, it shouldn't
-     * matter though. */
+/* FIXME - mips defines dev_t to be 64-bits whereas st_dev is 32-bits,
+ * so we have an overflow when casting to dev_t.
+ * As we always compare against st_ino as well, it shouldn't
+ * matter though.  The formally correct fix is probably to figure out
+ * the size of the struct stat st_dev field in Autoconf and explicitly
+ * cast -1 to that size, whatever it is. */
+#if __GNUC__ > 7
+#    pragma GCC diagnostic ignored "-Woverflow"
+#endif
     h->st.st_dev = (dev_t) -1;
+#if __GNUC__ > 7
+#    pragma GCC diagnostic warning "-Woverflow"
+#endif
     return h;
 }
 
@@ -1068,14 +1095,14 @@ fail:
 **  parameters the user callback expects
 **/
 static bool
-hisv6_traversecb(struct hisv6 *h UNUSED, void *cookie, const HASH *hash UNUSED,
+hisv6_traversecb(struct hisv6 *h UNUSED, void *cookie, const HASH *hash,
                  time_t arrived, time_t posted, time_t expires,
                  const TOKEN *token)
 {
     struct hisv6_walkstate *hiscookie = cookie;
 
-    return (*hiscookie->cb.walk)(hiscookie->cookie, arrived, posted, expires,
-                                 token);
+    return (*hiscookie->cb.walk)(hiscookie->cookie, hash, arrived, posted,
+                                 expires, token);
 }
 
 
@@ -1084,7 +1111,8 @@ hisv6_traversecb(struct hisv6 *h UNUSED, void *cookie, const HASH *hash UNUSED,
 */
 bool
 hisv6_walk(void *history, const char *reason, void *cookie,
-           bool (*callback)(void *, time_t, time_t, time_t, const TOKEN *))
+           bool (*callback)(void *, const HASH *, time_t, time_t, time_t,
+                            const TOKEN *))
 {
     struct hisv6 *h = history;
     struct hisv6_walkstate hiscookie;
@@ -1096,7 +1124,11 @@ hisv6_walk(void *history, const char *reason, void *cookie,
     hiscookie.cookie = cookie;
     hiscookie.new = NULL;
     hiscookie.paused = false;
-    hiscookie.ignore = false;
+    /* Ignore malformed history lines during walk.  The walk is a read-only
+       operation (e.g., building a Bloom filter for expireover); aborting
+       over one corrupt line in a potentially 180 GB file would be
+       catastrophic.  expire is what fixes corrupt history entries. */
+    hiscookie.ignore = true;
 
     r = hisv6_traverse(h, &hiscookie, reason, hisv6_traversecb);
 
@@ -1115,7 +1147,7 @@ hisv6_expirecb(struct hisv6 *h, void *cookie, const HASH *hash, time_t arrived,
     bool r = true;
 
     /* check if we've seen this message id already */
-    if (hiscookie->new &&dbzexists(*hash)) {
+    if (hiscookie->new && dbzexists(*hash)) {
         /* continue after duplicates, it's serious, but not fatal */
         hisv6_seterror(h, concat("duplicate message-id [", HashToText(*hash),
                                  "] in history ", hiscookie->new->histpath,
@@ -1417,6 +1449,24 @@ hisv6_ctl(void *history, int selector, void *val)
             h->npairs = 0;
         }
         break;
+
+    case HISCTLG_ENTRYESTIMATE: {
+        /* Minimum history line: 34 (hash) + 1 (tab) + 1 (arrived)
+         * + 1 (newline).  Dividing the text file size by this gives a
+         * conservative overestimate of the entry count. */
+        const size_t min_history_line = 37;
+        struct stat st;
+
+        if (h->histpath == NULL || stat(h->histpath, &st) != 0)
+            r = false;
+        else {
+            uintmax_t estimate = (uintmax_t) st.st_size / min_history_line;
+
+            *(size_t *) val =
+                estimate > SIZE_MAX ? SIZE_MAX : (size_t) estimate;
+        }
+        break;
+    }
 
     default:
         /* deliberately doesn't call hisv6_seterror as we don't want

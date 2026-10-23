@@ -1,5 +1,11 @@
 ##  Perl module which sets up any and all variables that an
 ##  INN Perl script might need.
+##
+##  Originally written by James Brister in 1996 as innshellvars.pl, and
+##  converted to this INN::Config Perl module by Julien Élie in 2007.
+##
+##  Various bug fixes, code and documentation improvements since then
+##  in 2007-2011, 2013, 2018, 2021, 2022, 2024, 2026.
 
 package INN::Config;
 
@@ -10,8 +16,9 @@ use Exporter;
 # Variables dynamically declared from innconfval, and used in this package.
 use vars qw(
     $ovmethod $patharchive $patharticles $pathbin $pathcontrol $pathdb
-    $pathetc $pathfilter $pathincoming $pathlog $pathnews $pathoutgoing
-    $pathoverview $pathrun $pathspool $pathtmp $runasuser $runasgroup
+    $pathetc $pathfilter $pathhistory $pathincoming $pathlog $pathnews
+    $pathoutgoing $pathoverview $pathrun $pathspool $pathtmp $runasuser
+    $runasgroup
 );
 
 our @ISA = qw(Exporter);
@@ -71,7 +78,7 @@ our $active = "${pathdb}/active";
 our $activetimes = "${pathdb}/active.times";
 our $newactive = "${pathdb}/active.tmp";
 our $oldactive = "${pathdb}/active.old";
-our $history = "${pathdb}/history";
+our $history = "${pathhistory}/history";
 our $newsgroups = "${pathdb}/newsgroups";
 our $ctlfile = "${newsetc}/control.ctl";
 our $ctlwatch = "${newsetc}/innwatch.ctl";
@@ -210,6 +217,8 @@ if (-x "${pathetc}/innshellvars.pl.local") {
 
 __END__
 
+=encoding utf-8
+
 =head1 NAME
 
 INN::Config - Export all the variables an INN Perl script might need
@@ -219,7 +228,7 @@ INN::Config - Export all the variables an INN Perl script might need
 This Perl module sets up any and all the variables that an INN Perl script
 might need.  More particularly, it allows using F<inn.conf> variables:
 they are all provided by B<innconfval>, as well as the version of INN
-(in the variable C<$INN::Config::VERSION> for its short number form, on in
+(in the variable C<$INN::Config::VERSION> for its short number form, or in
 C<$INN::Config::version> for its complete form).  Other useful variables
 are also provided (directories, files, programs, masks, parameters).
 The complete list can be obtained with the following script that prints
@@ -248,7 +257,7 @@ A local Perl script named F<innshellvars.pl.local> in I<pathetc> will be
 loaded, if present and executable, at the end of the run of this module.
 A typical use is to add or override variables.
 
-You only have to declare the module at the beginning of them:
+You only have to declare the module at the beginning of your script:
 
     use lib '<pathnews>/lib/perl';
     use INN::Config;
@@ -264,8 +273,8 @@ you write:
 
     use INN::Config 2.5.0;
 
-only versions of INN superior to 2.5.0 will be able to run the Perl
-script.
+only versions of INN equal to or later than 2.5.0 will be able to run the
+Perl script.
 
 It is also possible to import the variables directly in your namespace
 if you specify what you want to import:
@@ -283,7 +292,7 @@ module.
 
 F<innshellvars.pl> was written by James Brister <brister@vix.com>
 for InterNetNews in 1996.  It was converted to the INN::Config Perl
-module by Julien Elie in 2007.
+module by Julien Élie in 2007.
 
 =head1 SEE ALSO
 

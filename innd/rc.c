@@ -467,7 +467,7 @@ RCreader(CHANNEL *cp)
         }
     }
     if (j == chanlimit) {
-        syslog(L_ERROR, "%s internal RCreader wrong channel 0x%p", LogName,
+        syslog(L_ERROR, "%s internal RCreader wrong channel %p", LogName,
                (void *) cp);
         return;
     }
@@ -574,7 +574,7 @@ RCreader(CHANNEL *cp)
         /* Use cp->Rejected for the response code in CHANclose. */
         new->Rejected = reject_val;
         RCHANremove(new);
-        WCHANset(new, reject_message, (int) strlen(reject_message));
+        WCHANset(new, reject_message, strlen(reject_message));
         WCHANappend(new, RCterm, strlen(RCterm));
         WCHANadd(new);
         free(reject_message);
@@ -648,7 +648,7 @@ RCreader(CHANNEL *cp)
         /* Use cp->Rejected for the response code in CHANclose. */
         new->Rejected = reject_val;
         RCHANremove(new);
-        WCHANset(new, reject_message, (int) strlen(reject_message));
+        WCHANset(new, reject_message, strlen(reject_message));
         WCHANappend(new, RCterm, strlen(RCterm));
         WCHANadd(new);
         free(reject_message);

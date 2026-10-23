@@ -1,5 +1,12 @@
+/*
+**  Written by Alex Kiernan in 2001.
+**
+**  Various bug fixes, code and documentation improvements since then
+**  in 2001-2003, 2005, 2006, 2020-2022, 2026.
+*/
+
 #ifndef HISV6_PRIVATE_H
-#define HISV6_PRIVATE_H 1
+#define HISV6_PRIVATE_H
 
 #include "config.h"
 #include "inn/history.h"
@@ -64,7 +71,8 @@ struct hisv6 {
 struct hisv6_walkstate {
     union {
         bool (*expire)(void *, time_t, time_t, time_t, TOKEN *);
-        bool (*walk)(void *, time_t, time_t, time_t, const TOKEN *);
+        bool (*walk)(void *, const HASH *, time_t, time_t, time_t,
+                     const TOKEN *);
     } cb;
     void *cookie;
     bool paused;

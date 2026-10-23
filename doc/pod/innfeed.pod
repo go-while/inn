@@ -24,7 +24,7 @@ to B<innfeed> except for the delivery process.  The new version has two
 types of connections: an LMTP connection to deliver regular messages and
 an IMAP connection to handle control messages.
 
-Used in conjunction with delayer(1), B<innfeed> can send a delayed feed to
+Used in conjunction with delayer(8), B<innfeed> can send a delayed feed to
 remote peers or to another local instance of B<innd>, notably to permit the
 rejection of spam before it actually arrives.
 
@@ -148,8 +148,9 @@ and B<procbatch> can be invoked to process it afterwards.
 Upon receipt of a SIGALRM, B<innfeed> will close the funnel file specified
 on the command line, and will reopen it (see funnel file description above).
 
-B<innfeed> with catch SIGINT and will write a large debugging snapshot of
-the state of the running system.
+B<innfeed> will catch SIGINT and will write a large debugging snapshot of
+the state of the running system into a file named F<innfeed.snapshot> in
+I<pathlog>.
 
 B<innfeed> will catch SIGHUP and will reload both the config and the
 log files.  See innfeed.conf(5) for more details.
@@ -160,7 +161,7 @@ B<innfeed> will catch SIGTERM and will do an orderly shutdown.
 
 Upon receipt of a SIGUSR1, B<innfeed> will increment the debugging level
 by one; receipt of a SIGUSR2 will decrement it by one.  The debugging
-level starts at zero (unless the B<-d> option it used), in which case no
+level starts at zero (unless the B<-d> option is used), in which case no
 debugging information is emitted.  A larger value for the level means more
 debugging information.  Numbers up to 5 are currently useful.
 
@@ -255,7 +256,7 @@ to retry later by sending a 431 or 436 response.  B<innfeed> immediately
 puts these articles back on the tail of the queue.
 
 The second number is the average (mean) size of deferred articles during
-the previous logging interval
+the previous logging interval.
 
 =item requeued
 
@@ -460,7 +461,7 @@ prints its statistics.
 
 When using the B<-x> option, the config file entry's I<initial-connections>
 field will be the total number of connections created and used, no matter
-how many big the batch file, and no matter how big the I<max-connections>
+how big the batch file, and no matter how big the I<max-connections>
 field specifies.  Thus a value of C<0> for I<initial-connections> means
 nothing will happen in B<-x> mode.
 
@@ -509,6 +510,6 @@ B<innfeed> is now part of INN and shares the same version number.
 
 =head1 SEE ALSO
 
-ctlinnd(8), delayer(1), inn.conf(5), innfeed.conf(5), innd(8), procbatch(8).
+ctlinnd(8), delayer(8), inn.conf(5), innfeed.conf(5), innd(8), procbatch(8).
 
 =cut

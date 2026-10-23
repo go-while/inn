@@ -148,17 +148,16 @@ hooks in, you may also want to install S<Python 2.3.0> or later, or S<Python
 For support for authenticated control messages, you will need either PGP
 or GnuPG, the latter being recommended.  See F<INSTALL> for more details.
 
-For the C<ovdb> overview storage method, you'll need S<Berkeley
-DB 4.4> or later (4.7 or later recommended).  For the C<ovsqlite>
-overview storage method, you'll need S<SQLite 3.8.2> or later (3.20.0
-or later recommended).  If you have zlib available, you can also compress
-overview before it's stored into C<ovdb> or C<ovsqlite>, and enable the
-COMPRESS capability, an NNTP extension.  For support for news reading
-over TLS, you'll need OpenSSL or LibreSSL.  To support SASL authentication
-to B<nnrpd> or to feed newsgroups to an IMAP server with SASL
-authentication, you'll need the Cyrus SASL libraries.  INN can also
-check passwords against a Kerberos KDC; for this, you will need Kerberos
-libraries.
+For the C<ovdb> overview storage method, you'll need S<Berkeley DB 4.4> or
+later (4.7 or later recommended).  For the C<hissqlite> history storage method
+or the C<ovsqlite> overview storage method, you'll need S<SQLite 3.24.0> or
+later.  If you have zlib available, you can also compress overview before it's
+stored into C<ovdb> or C<ovsqlite>, and enable the COMPRESS capability, an
+NNTP extension.  For support for news reading over TLS, you'll need OpenSSL or
+LibreSSL.  To support SASL authentication to B<nnrpd> or to feed newsgroups to
+an IMAP server with SASL authentication, you'll need the Cyrus SASL libraries.
+INN can also check passwords against a Kerberos KDC; for this, you will need
+Kerberos libraries.
 
 =head1 Getting Started
 
@@ -182,7 +181,7 @@ exist on your operating system.
 
 When installing a new INN server, you may wish to download the latest
 snapshot of the stable branch rather than the last official release,
-so that to pick up possible bug fixes.
+so as to pick up possible bug fixes.
 
 =head2 Build and Install
 
@@ -210,13 +209,18 @@ documentation)
 =head1 Reporting Bugs
 
 We're interested in all bug reports.  Not just on the programs, but on the
-documentation too.  Please use the GitHub issue tracker to send such bug
-reports, or alternatively send them to
+documentation too.  Please use the GitHub issue tracker to send such
+non-security bug reports, or alternatively send them to
 
     inn-workers@lists.isc.org
 
 (patches are certainly welcome, see below).  Even if you post to Usenet,
 please CC the above address.
+
+Security issues must be reported through a
+dedicated private form on the L<GitHub Security
+Advisories|https://github.com/InterNetNews/inn/security/advisories/> of the
+project as they should not be made public until a fix is deployed.
 
 If you have general "how do I do this" questions or problems configuring
 your server that you don't believe are due to a bug in INN, you should
@@ -245,8 +249,8 @@ been tested by a human.
 
 =head2 Contributing Code
 
-If you have a patch or a utility that you'd like to be considered for
-inclusion into INN, please make a GitHub pull request, or alternatively
+If you have a non-security patch or a utility that you'd like to be considered
+for inclusion into INN, please make a GitHub pull request, or alternatively
 mail it to
 
     inn-workers@lists.isc.org
@@ -254,6 +258,11 @@ mail it to
 in the body of the message (not as an attachment because the mailing-list
 might strip it), or put it on a webpage and send a link.  Patches included
 with a bug report as described above should follow the same procedure.
+
+Patches related to security issues must not be made
+public.  A dedicated private form on the L<GitHub Security
+Advisories|https://github.com/InterNetNews/inn/security/advisories/> of the
+project must be used instead.
 
 Please submit all patches against the current main branch, not against a
 stable release.  The development version of INN is often much different
@@ -332,7 +341,7 @@ They've certainly got our thanks.
 This product includes software developed by UUNET Technologies, Inc. and
 by the University of California, Berkeley and its contributors.
 
-Last, but certainly not least, Rich Salz, the original author of INN
+Last, but certainly not least, Rich Salz, the original author of INN,
 deserves a lion's share of the credit for writing INN in the first place
 and making it the most popular news server software on the planet (no NNTP
 yet to the moon, but we plan to be there first).
@@ -346,26 +355,33 @@ answer questions about it.
 
 =over 4
 
-=item Cleanfeed
+=item cleanfeed-ng
 
-URL: L<https://www.mixmin.net/cleanfeed/> (maintained by Steve Crook)
+URL: L<https://github.com/infybofh/cleanfeed-ng/> (maintained by Ivo Gandolfo)
 
-Cleanfeed is an extremely powerful spam filter, probably the most widely
-used spam filter on Usenet currently.  It catches excessive multiposting
-and a host of other things, and is highly configurable.  Note that it
-requires that INN be built with Perl support (the B<--with-perl> option to
-configure).
+cleanfeed-ng is a maintained, lightweight continuation of the historical
+Cleanfeed filter.  It is designed for server-to-server Usenet transit
+filtering, with particular attention to predictable behaviour, low overhead,
+safe configuration changes, and useful diagnostics.
 
-Cleanfeed was originally developed by Jeremy Nixon who maintained it
-until 1998.  Then Marco d'Itri until 2002.  Steve Crook has been
-maintaining it since 2007.
+cleanfeed-ng is an extremely powerful spam filter, probably the most widely
+used spam filter on Usenet currently.  It catches excessive multiposting and a
+host of other things, and is highly configurable.  Note that it requires the
+MD5 Perl module and that INN be built with Perl support (the B<--with-perl>
+option to configure).
+
+Since 2026, cleanfeed-ng has continued the historical work of Cleanfeed,
+originally developed by Jeremy Nixon, who maintained it until 1998.
+Further development was then taken on by Marco d'Itri until 2002, followed
+by later updates and maintenance by Steve Crook from 2007 to 2020 (at
+L<http://www.mixmin.net/cleanfeed/> but no longer maintained).
 
 A Python-based variant of Cleanfeed, named PyClean, also exists and
 can be found at L<https://github.com/crooks/PyClean>.
 
 =item GUP (Group Update Program)
 
-URL: L<https://tracker.debian.org/pkg/gup>
+URL: L<https://github.com/rfc1036/gup>
 
 GUP provides a way for your peers to update their F<newsfeeds> entries as
 they want without having to ask you to edit the configuration file all the
@@ -379,7 +395,7 @@ L<https://www.chiark.greenend.org.uk/ucgi/~ian/git-manpage/innduct.git/innduct.8
 (maintained by Ian Jackson)
 
 A possible replacement for B<innfeed>, B<innxmit> and B<nntpsend>
-that quickly and reliably streams Usenet article to a remote site.
+that quickly and reliably streams Usenet articles to a remote site.
 B<innduct> is designed to be robust and not to lose any articles (when
 offered to peers) in case it unexpectedly dies, contrary to B<innfeed>.
 It also permits a realtime feed, contrary to B<innxmit> or B<nntpsend>.

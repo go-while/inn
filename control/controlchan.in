@@ -5,6 +5,9 @@
 ##
 ##  Copyright 2001 by Marco d'Itri <md@linux.it>
 ##
+##  Various bug fixes, code and documentation improvements since then
+##  in 2002, 2004, 2006-2009, 2011, 2012, 2014, 2016, 2021-2025.
+##
 ##  Redistribution and use in source and binary forms, with or without
 ##  modification, are permitted provided that the following conditions
 ##  are met:
@@ -177,18 +180,18 @@ while (<STDIN>) {
 
         if ($articledate > $maxdate) {
             logmsg('Control article injected or posted in the future ('
-                  . convdate('-d', '-c', "$articledate")
-                  . ')');
+                . convdate('-d', '-c', "$articledate")
+                . ')');
             $parser->filer->purge;
             next;
         }
 
         if ($INN::Config::artcutoff > 0 && $articledate < $mindate) {
             logmsg('Control article too old ('
-                  . convdate('-d', '-c', "$articledate")
-                  . '), artcutoff set to '
-                  . $INN::Config::artcutoff
-                  . ' days');
+                . convdate('-d', '-c', "$articledate")
+                . '), artcutoff set to '
+                . $INN::Config::artcutoff
+                . ' days');
             $parser->filer->purge;
             next;
         }
@@ -249,7 +252,7 @@ while (<STDIN>) {
                 }
             }
             logmsg("skipping $progname $type$sender"
-                  . " (pgpverify failed) in $curmsgid");
+                . " (pgpverify failed) in $curmsgid");
             next;
         }
 
@@ -272,11 +275,11 @@ while (<STDIN>) {
         my $approved = $hdr{'approved'} ? 1 : 0;
         $approved = -1 if $i > 0;
         logmsg("$subname, "
-              . join(' ', @progparams)
-              . " $sender $replyto $token, $exclusionpats, $droppats,"
-              . " $charset_to, $sitepath, $action"
-              . ($logname ? "=$logname" : '')
-              . ", $approved");
+            . join(' ', @progparams)
+            . " $sender $replyto $token, $exclusionpats, $droppats,"
+            . " $charset_to, $sitepath, $action"
+            . ($logname ? "=$logname" : '')
+            . ", $approved");
 
         if ($action ne 'drop') {
             &$subfind(
@@ -605,12 +608,14 @@ sub pgpverify {
     my $keyid = shift;
 
     if ($token =~ /^\@.+\@$/) {
-        open(PGPCHECK,
+        open(
+            PGPCHECK,
             "$INN::Config::newsbin/sm -q $token "
               . "| $INN::Config::newsbin/pgpverify --findid='$keyid' |",
         ) or goto ERROR;
     } else {
-        open(PGPCHECK,
+        open(
+            PGPCHECK,
             "$INN::Config::newsbin/pgpverify --findid='$keyid' < $token |",
         ) or goto ERROR;
     }
