@@ -196,11 +196,12 @@ them.  Many thanks to Kevin Bowling for the patches.
 
 =item *
 
-Fixed B<innd> not exiting on SIGTERM or SIGHUP while no connection was
-active: the signal was only noticed at the next connection or when the main
-loop timed out, up to several minutes later, so stopping it with C<kill> or
-C<docker stop> usually ended in a SIGKILL without the active file and history
-being flushed.
+Fixed B<innd> not shutting down when it received SIGTERM or SIGHUP (or
+SIGINT with B<-d>) while waiting for activity.  The signal was only acted on
+when the next connection or data arrived, or when the I<timer> interval
+elapsed (ten minutes by default), so stopping B<innd> with a signal instead
+of C<ctlinnd shutdown> often ended with it being killed without the active
+file and history being flushed.  This bug was introduced in INN 2.5.4.
 
 =back
 
