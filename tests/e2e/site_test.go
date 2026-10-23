@@ -431,3 +431,25 @@ func (s *Site) ReaderMode(tb testing.TB) *client.Conn {
 	expect(tb, c, 200, "MODE READER")
 	return c
 }
+
+// Syslog returns the syslog messages of this site's innd since it started (read with
+// journalctl by its PID), or skips the test when the journal is not readable for the user
+// running it.
+func (s *Site) Syslog(tb testing.TB) []string {
+	tb.Helper()
+	jc, err := exec.LookPath("journalctl")
+	if err != nil {
+		tb.Skip("journalctl not found: innd logs to syslog")
+	}
+	out, err := exec.Command(jc, "-q", "--no-pager", "-o", "cat",
+		"--since", "@"+strconv.FormatInt(s.start.Unix()-1, 10),
+		"_PID="+strconv.Itoa(s.Proc.Pid())).Output()
+	if err != nil {
+		tb.Skipf("journalctl: %v", err)
+	}
+	lines := strings.Split(strings.TrimRight(string(out), "\n"), "\n")
+	if len(lines) == 1 && lines[0] == "" {
+		tb.Skip("no syslog messages of innd readable: is the user in the systemd-journal group?")
+	}
+	return lines
+}
