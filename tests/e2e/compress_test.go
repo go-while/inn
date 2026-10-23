@@ -60,6 +60,7 @@ func TestCompress(t *testing.T) {
 	}
 
 	expect(t, c, 502, "COMPRESS DEFLATE")
+	expect(t, c, 502, "COMPRESS SHRINK") // any valid algorithm name while active, not 503
 	expect(t, c, 502, "STARTTLS")
 	expect(t, c, 502, "AUTHINFO USER e2e")
 	if err := c.ExpectNoPending(200 * time.Millisecond); err != nil {
