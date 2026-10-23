@@ -1,0 +1,105 @@
+#!/bin/sh
+
+##  Run the test suite of pynntp, a Python NNTP client, against an installed
+##  INN.
+##
+##  Usage: ci/pynntp <prefix> <pynntp-directory>
+##
+##  <prefix> is an INN installation (configure --prefix) made by the user
+##  running this script, which is also INN's news user (configure
+##  --with-news-user and --with-news-group).  innbind must be setuid root
+##  (make -C backends install-root) so that innd can bind port 119 and nnrpd
+##  port 563, the ports pynntp's tests use.
+##
+##  The script gives the installation what the tests expect (the groups
+##  local.general and local.test, a TLS certificate, no feeding peer on
+##  localhost so that local connections go to nnrpd), starts innd and an
+##  nnrpd with implicit TLS on port 563, runs pytest in <pynntp-directory>
+##  and stops the servers again.  The tests post articles, so run them
+##  against a fresh installation.
+
+set -eu
+
+prefix=$1
+pynntp=$2
+etc="$prefix/etc"
+db="$prefix/db"
+bin="$prefix/bin"
+run="$prefix/run"
+
+# set_conf KEY VALUE: set a parameter in inn.conf.
+set_conf() {
+    if grep -q "^$1:" "$etc/inn.conf"; then
+        sed -i "s|^$1:.*|$1: $2|" "$etc/inn.conf"
+    else
+        printf '%s: %s\n' "$1" "$2" >>"$etc/inn.conf"
+    fi
+}
+
+# wait_port PORT: wait until something accepts connections on localhost:PORT.
+wait_port() {
+    python3 - "$1" <<'EOF'
+import socket, sys, time
+for _ in range(100):
+    try:
+        socket.create_connection(("localhost", int(sys.argv[1])), timeout=1).close()
+        sys.exit(0)
+    except OSError:
+        time.sleep(0.1)
+sys.exit("nothing listens on localhost:" + sys.argv[1])
+EOF
+}
+
+stop() {
+    "$bin/ctlinnd" -t 10 shutdown "pynntp tests done" || true
+    if [ -f "$run/nnrpd-563.pid" ]; then
+        kill "$(cat "$run/nnrpd-563.pid")" || true
+    fi
+}
+
+# The build host's name need not be fully qualified.
+set_conf pathhost inn.ci.invalid
+set_conf domain ci.invalid
+# The default (16) makes nnrpd refuse readers on a busy machine.
+set_conf nnrpdloadlimit 0
+
+# No feeding peer: connections from localhost are readers, which innd hands
+# to nnrpd (pynntp sends STARTTLS before MODE READER, which innd does not
+# support).  The sample readers.conf lets localhost read and post.
+: >"$etc/incoming.conf"
+printf 'ME:*::\n' >"$etc/newsfeeds"
+
+for group in local.general local.test; do
+    if ! grep -q "^$group " "$db/active"; then
+        printf '%s 0000000000 0000000001 y\n' "$group" >>"$db/active"
+    fi
+done
+# The descriptions pynntp's tests compare LIST NEWSGROUPS with.  They have no
+# final period, unlike the ones of samples/newsgroups.minimal.
+cat >"$db/newsgroups" <<'EOF'
+control	Various control messages (no posting)
+control.cancel	Cancel messages (no posting)
+control.checkgroups	Hierarchy check control messages (no posting)
+control.newgroup	Newsgroup creation control messages (no posting)
+control.rmgroup	Newsgroup removal control messages (no posting)
+junk	Unfiled articles (no posting)
+local.general	Local general group
+local.test	Local test group
+EOF
+
+# A self-signed certificate for STARTTLS and port 563 (the tests do not
+# verify it).
+if [ ! -f "$etc/key.pem" ]; then
+    openssl req -x509 -newkey rsa:2048 -nodes -days 7 -subj /CN=localhost \
+        -keyout "$etc/key.pem" -out "$etc/cert.pem" 2>/dev/null
+    chmod 600 "$etc/key.pem"
+fi
+
+trap stop EXIT
+"$bin/innd"
+"$bin/nnrpd" -D -p 563 -S
+wait_port 119
+wait_port 563
+
+cd "$pynntp"
+python3 -m pytest -v

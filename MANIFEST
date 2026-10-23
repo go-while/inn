@@ -57,6 +57,7 @@ ci                                    Integration testing (Directory)
 ci/README.md                          Documentation for the ci directory
 ci/apt-packages                       Debian packages to install for tests
 ci/install                            Script to set up the test environment
+ci/pynntp                             Script to run pynntp's tests on INN
 ci/test                               Script to run tests
 configure                             Script to configure INN
 configure.ac                          Source file for configure
