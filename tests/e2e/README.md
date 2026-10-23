@@ -30,6 +30,7 @@ needs the Go standard library:
 | `TestPeerIHAVE` | innd | IHAVE from a peer (127.0.0.2), duplicate offer gets 435 |
 | `TestPeerStreaming` | innd | MODE STREAM, pipelined CHECK and TAKETHIS, 438 and 439 for held articles |
 | `TestSIGTERMWhileIdle` | innd | an idle innd exits on SIGTERM |
+| `TestSIGTERMWhileBusy` | innd, Perl filter | a SIGTERM received while innd is busy in a slow `filter_art` takes effect once the filter returns, not at the next connection |
 | `TestSIGTERMUnderLoad` | innd | innd exits with status 0 on SIGTERM while peers and readers connect |
 | `TestAuthinfo` | innd, nnrpd, ckpasswd | AUTHINFO USER/PASS: 480 before, 481 for a wrong password, 281, then no AUTHINFO in CAPABILITIES and 502 for another (RFC 4643) |
 | `TestStartTLS` | innd, nnrpd | STARTTLS: 382, TLS with the site's certificate, no STARTTLS in CAPABILITIES afterwards, reading and posting over TLS, 502 for a second STARTTLS (RFC 4642) |

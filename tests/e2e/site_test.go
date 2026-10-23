@@ -51,8 +51,8 @@ var DefaultGroups = []Group{
 }
 
 // SiteOptions configures a throwaway INN site. Every file not set here comes from the sample
-// configuration installed in INN_PREFIX/etc. In Readers, Incoming, Newsfeeds and Etc,
-// @bindir@ is replaced with pathbin and @etcdir@ with the site's etc directory.
+// configuration installed in INN_PREFIX/etc. In InnConf values, Readers, Incoming, Newsfeeds
+// and Etc, @bindir@ is replaced with pathbin and @etcdir@ with the site's etc directory.
 type SiteOptions struct {
 	Groups    []Group           // nil = DefaultGroups
 	InnConf   map[string]string // inn.conf parameters added or replacing the generated ones
@@ -132,7 +132,9 @@ func NewSite(tb testing.TB, o SiteOptions) *Site {
 		// The default (16) makes nnrpd refuse readers with a 400 on a busy machine.
 		"nnrpdloadlimit": "0",
 	}
-	maps.Copy(conf, o.InnConf)
+	for k, v := range o.InnConf {
+		conf[k] = s.expand(v)
+	}
 	var b strings.Builder
 	for _, k := range slices.Sorted(maps.Keys(conf)) {
 		fmt.Fprintf(&b, "%s: %s\n", k, conf[k])

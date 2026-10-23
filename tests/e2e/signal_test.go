@@ -25,6 +25,37 @@ func TestSIGTERMWhileIdle(t *testing.T) {
 	}
 }
 
+// slowFilter is a Perl filter_art that keeps innd busy for 3 seconds per article.
+const slowFilter = `sub filter_art {
+    sleep 3;
+    return "";
+}
+1;
+`
+
+// TestSIGTERMWhileBusy: a SIGTERM that arrives while innd is busy (here in a slow Perl
+// filter) is blocked until innd waits for activity again; innd must then exit at once rather
+// than at the next connection or timeout.
+func TestSIGTERMWhileBusy(t *testing.T) {
+	s := NewSite(t, SiteOptions{
+		InnConf: map[string]string{"pathfilter": "@etcdir@"},
+		Etc:     map[string]string{"filter_innd.pl": slowFilter},
+	})
+	p := s.Peer(t)
+	id := msgID(t)
+	expect(t, p, 335, "IHAVE %s", id)
+	send(t, p, wire(newArticle(id, "e2e.test", "slow filter", "body")))
+	time.Sleep(time.Second) // innd is now in filter_art
+	if err := s.Proc.Signal(syscall.SIGTERM); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-s.Proc.Done():
+	case <-time.After(10 * time.Second):
+		t.Errorf("innd still running 10s after a SIGTERM received while busy in a 3s filter")
+	}
+}
+
 // TestSIGTERMUnderLoad: innd exits cleanly (status 0) on SIGTERM while peers and readers are
 // connecting and feeding. Each round is a fresh site.
 func TestSIGTERMUnderLoad(t *testing.T) {
