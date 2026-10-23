@@ -76,6 +76,11 @@ contrib/authmysql.in                  Authenticator using MySQL table
 contrib/backlogstat.in                Analyze innfeed's backlog status
 contrib/cleannewsgroups.in            Script to clean newsgroups file
 contrib/count_overview.in             Count overview entries
+contrib/docker                        Docker image built from the tree (Directory)
+contrib/docker/Dockerfile             Image definition
+contrib/docker/Dockerfile.dockerignore Files left out of the build context
+contrib/docker/README.md              Documentation for the Docker image
+contrib/docker/entrypoint.sh          Entry point: prepares a site, runs innd
 contrib/expirectl.c                   Generate expire.ctl from template
 contrib/findreadgroups.in             Track which groups are being read
 contrib/fixhist.in                    Script to clean history
