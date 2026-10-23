@@ -510,21 +510,23 @@ CMDcompress(int ac, char *av[])
     bool result;
 
     /* Check the argument. */
-    if (ac > 1) {
-        if (!IsValidAlgorithm(av[1])) {
-            Reply("%d Syntax error in compression algorithm name\r\n",
-                  NNTP_ERR_SYNTAX);
-            return;
-        }
-        if (strcasecmp(av[1], "DEFLATE") != 0) {
-            Reply("%d Only the DEFLATE compression algorithm is supported\r\n",
-                  NNTP_ERR_UNAVAILABLE);
-            return;
-        }
+    if (ac > 1 && !IsValidAlgorithm(av[1])) {
+        Reply("%d Syntax error in compression algorithm name\r\n",
+              NNTP_ERR_SYNTAX);
+        return;
     }
 
+    /* RFC 8054 requires a 502 for any syntactically valid COMPRESS command
+       received while a compression layer is active, whatever the
+       algorithm. */
     if (compression_layer_on) {
         Reply("%d Already using a compression layer\r\n", NNTP_ERR_ACCESS);
+        return;
+    }
+
+    if (ac > 1 && strcasecmp(av[1], "DEFLATE") != 0) {
+        Reply("%d Only the DEFLATE compression algorithm is supported\r\n",
+              NNTP_ERR_UNAVAILABLE);
         return;
     }
 

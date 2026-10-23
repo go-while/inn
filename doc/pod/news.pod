@@ -194,6 +194,12 @@ malformed stored Xref records with tradspool and corrupt history records.
 The overview and storage backends also validate more structures before using
 them.  Many thanks to Kevin Bowling for the patches.
 
+=item *
+
+B<nnrpd> now answers a COMPRESS command naming another algorithm than
+DEFLATE with a 502 response code when a compression layer is already
+active, as S<RFC 8054> requires, instead of 503.
+
 =back
 
 =head1 Changes in 2.7.4 (2026-06-22)
