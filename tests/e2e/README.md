@@ -36,6 +36,8 @@ needs the Go standard library:
 | `TestStartTLS` | innd, nnrpd | STARTTLS: 382, TLS with the site's certificate, no STARTTLS in CAPABILITIES afterwards, reading and posting over TLS, 502 for a second STARTTLS (RFC 4642) |
 | `TestAuthinfoRequiresTLS` | innd, nnrpd, ckpasswd | with `require_encryption`, AUTHINFO gets 483 before STARTTLS and works after it |
 | `TestStartTLSWithoutCertificate` | innd, nnrpd | without a certificate, STARTTLS gets 580 and the connection goes on without TLS |
+| `TestCompress` | innd, nnrpd | COMPRESS DEFLATE: 206, no COMPRESS or STARTTLS in CAPABILITIES afterwards, a 3000-line article with dot-stuffed lines posted and read back intact, pipelining, 502 for COMPRESS, STARTTLS and AUTHINFO (RFC 8054) |
+| `TestCompressAfterStartTLS` | innd, nnrpd | COMPRESS DEFLATE on a STARTTLS connection |
 | `TestRnews` | innd, rnews | an rnews batch of two articles reaches innd over its local socket |
 | `TestInews` | innd, nnrpd, inews | inews posts through nnrpd; the article gets Injection-Info |
 | `TestInnxmitStreaming` | innd, innxmit | a batch is streamed to a peer and the batch file is emptied |

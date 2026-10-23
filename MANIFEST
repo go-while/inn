@@ -976,6 +976,7 @@ tests/e2e/README.md                   Documentation for the end-to-end tests
 tests/e2e/article_test.go             Article and reply helpers
 tests/e2e/auth_test.go                Tests of AUTHINFO with nnrpd and ckpasswd
 tests/e2e/client_test.go              Tests of innxmit, innfeed, getlist, pullnews
+tests/e2e/compress_test.go            Tests of COMPRESS DEFLATE with nnrpd
 tests/e2e/go.mod                      Go module definition
 tests/e2e/go.sum                      Go module checksums
 tests/e2e/inject_test.go              Tests of rnews and inews
