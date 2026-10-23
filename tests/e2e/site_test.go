@@ -3,6 +3,7 @@ package e2e
 import (
 	"bytes"
 	"context"
+	"crypto/x509"
 	"fmt"
 	"io/fs"
 	"maps"
@@ -50,7 +51,8 @@ var DefaultGroups = []Group{
 }
 
 // SiteOptions configures a throwaway INN site. Every file not set here comes from the sample
-// configuration installed in INN_PREFIX/etc.
+// configuration installed in INN_PREFIX/etc. In Readers, Incoming, Newsfeeds and Etc,
+// @bindir@ is replaced with pathbin and @etcdir@ with the site's etc directory.
 type SiteOptions struct {
 	Groups    []Group           // nil = DefaultGroups
 	InnConf   map[string]string // inn.conf parameters added or replacing the generated ones
@@ -58,10 +60,12 @@ type SiteOptions struct {
 	Incoming  string            // incoming.conf; "" = PeerIP as a streaming peer
 	Newsfeeds string            // newsfeeds; "" = "ME:*::" (accept everything, feed nobody)
 	Etc       map[string]string // further files in etc, by name (innfeed.conf, passwd.nntp, ...)
+	Args      []string          // further innd arguments (innd always gets -f)
 
-	// In Readers, Incoming, Newsfeeds and Etc, @bindir@ is replaced with pathbin and
-	// @etcdir@ with the site's etc directory.
-	Args []string // further innd arguments (innd always gets -f)
+	// TLS writes a self-signed certificate for 127.0.0.1 to etc/cert.pem and its key to
+	// etc/key.pem (mode 0600), the files nnrpd uses for STARTTLS by default; Site.CertPool
+	// trusts it.
+	TLS bool
 }
 
 // Site is one running innd with its own pathnews in a temporary directory.
@@ -71,7 +75,9 @@ type Site struct {
 	Addr   string   // innd's listening address, 127.0.0.1:port
 	Env    []string // INNCONF=Dir/etc/inn.conf, for INN programs run by the test
 	Proc   *proc.Process
-	start  time.Time
+
+	CertPool *x509.CertPool // trusts the site's certificate when SiteOptions.TLS is set
+	start    time.Time
 }
 
 // prefix returns INN_PREFIX or skips the test.
@@ -137,6 +143,14 @@ func NewSite(tb testing.TB, o SiteOptions) *Site {
 	s.WriteEtc(tb, "newsfeeds", s.expand(or(o.Newsfeeds, "ME:*::\n")))
 	for name, content := range o.Etc {
 		s.WriteEtc(tb, name, s.expand(content))
+	}
+	if o.TLS {
+		certPEM, keyPEM, pool := selfSigned(tb)
+		s.writeFile(tb, "etc/cert.pem", string(certPEM))
+		if err := os.WriteFile(filepath.Join(s.Dir, "etc", "key.pem"), keyPEM, 0o600); err != nil {
+			tb.Fatal(err)
+		}
+		s.CertPool = pool
 	}
 
 	groups := o.Groups

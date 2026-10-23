@@ -983,6 +983,7 @@ tests/e2e/peer_test.go                Tests of innd as a feeding peer
 tests/e2e/reader_test.go              Tests of nnrpd through innd
 tests/e2e/signal_test.go              Tests of innd signal handling
 tests/e2e/site_test.go                Throwaway INN site for each test
+tests/e2e/tls_test.go                 Tests of STARTTLS with nnrpd
 tests/expire                          Test suite for expire (Directory)
 tests/expire/tombstone-e2e.t          End-to-end tests for tombstone log
 tests/expire/tombstone-hisexpire-t.c  HISexpire integration test for tombstone

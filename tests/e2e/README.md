@@ -32,6 +32,9 @@ needs the Go standard library:
 | `TestSIGTERMWhileIdle` | innd | an idle innd exits on SIGTERM |
 | `TestSIGTERMUnderLoad` | innd | innd exits with status 0 on SIGTERM while peers and readers connect |
 | `TestAuthinfo` | innd, nnrpd, ckpasswd | AUTHINFO USER/PASS: 480 before, 481 for a wrong password, 281, then no AUTHINFO in CAPABILITIES and 502 for another (RFC 4643) |
+| `TestStartTLS` | innd, nnrpd | STARTTLS: 382, TLS with the site's certificate, no STARTTLS in CAPABILITIES afterwards, reading and posting over TLS, 502 for a second STARTTLS (RFC 4642) |
+| `TestAuthinfoRequiresTLS` | innd, nnrpd, ckpasswd | with `require_encryption`, AUTHINFO gets 483 before STARTTLS and works after it |
+| `TestStartTLSWithoutCertificate` | innd, nnrpd | without a certificate, STARTTLS gets 580 and the connection goes on without TLS |
 | `TestRnews` | innd, rnews | an rnews batch of two articles reaches innd over its local socket |
 | `TestInews` | innd, nnrpd, inews | inews posts through nnrpd; the article gets Injection-Info |
 | `TestInnxmitStreaming` | innd, innxmit | a batch is streamed to a peer and the batch file is emptied |
@@ -88,5 +91,6 @@ func TestSomething(t *testing.T) {
 
 `SiteOptions` replaces `readers.conf`, `incoming.conf`, `newsfeeds` or any
 other file in `etc` (`@bindir@` and `@etcdir@` in them become pathbin and the
-site's etc directory), and adds `inn.conf` parameters. Other INN programs run with the site's `INNCONF` through `s.Run`
+site's etc directory), adds `inn.conf` parameters, and with `TLS` writes a
+self-signed certificate for STARTTLS (`Site.CertPool` trusts it). Other INN programs run with the site's `INNCONF` through `s.Run`
 and `s.Ctlinnd`.
