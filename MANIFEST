@@ -7,6 +7,7 @@ File Name                             Description
 .github/dependabot.yml                Configuration for GitHub dependabot
 .github/workflows                     GitHub Actions workflows (Directory)
 .github/workflows/build.yaml          Default GitHub Actions testing workflow
+.github/workflows/e2e.yaml            GitHub Actions workflow for tests/e2e
 .perlcriticrc                         Configuration for perlcritic
 .perltidyrc                           Configuration for perltidy
 CONTRIBUTORS                          List of contributors
@@ -970,6 +971,15 @@ tests/data/upgrade/readers.conf.ok    Fixed readers.conf file
 tests/data/upgrade/sasl.conf          Obsolete sasl.conf config file
 tests/docs                            Test suite for documentation (Directory)
 tests/docs/pod.t.in                   Tests for POD formatting
+tests/e2e                             End-to-end protocol tests in Go (Directory)
+tests/e2e/README.md                   Documentation for the end-to-end tests
+tests/e2e/article_test.go             Article and reply helpers
+tests/e2e/client_test.go              Tests of innxmit, innfeed, getlist, pullnews
+tests/e2e/go.mod                      Go module definition
+tests/e2e/peer_test.go                Tests of innd as a feeding peer
+tests/e2e/reader_test.go              Tests of nnrpd through innd
+tests/e2e/signal_test.go              Tests of innd signal handling
+tests/e2e/site_test.go                Throwaway INN site for each test
 tests/expire                          Test suite for expire (Directory)
 tests/expire/tombstone-e2e.t          End-to-end tests for tombstone log
 tests/expire/tombstone-hisexpire-t.c  HISexpire integration test for tombstone
