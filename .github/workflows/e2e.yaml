@@ -1,0 +1,36 @@
+##  Workflow for the end-to-end protocol tests in tests/e2e.
+
+name: e2e
+
+"on": [push, pull_request]
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: checkout
+        uses: actions/checkout@v6
+      - name: setup go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: tests/e2e/go.mod
+          cache-dependency-path: tests/e2e/go.sum
+      - name: install
+        run: sudo -E ci/install
+      - name: build
+        run: |
+          ./autogen
+          ./configure --prefix="$RUNNER_TEMP/inn" \
+              --with-news-user="$(id -un)" --with-news-group="$(id -gn)" \
+              --with-perl --with-openssl --with-sqlite3
+          make -j"$(nproc)"
+          make install
+      - name: test
+        working-directory: tests/e2e
+        run: INN_PREFIX="$RUNNER_TEMP/inn" go test -count=1 -v ./...
+      - name: syslog
+        if: failure()
+        run: >-
+          sudo journalctl -q --no-pager -o short-precise --since "-30 min"
+          -t innd -t nnrpd -t innfeed -t innxmit -t ctlinnd -t pullnews
