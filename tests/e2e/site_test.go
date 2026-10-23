@@ -56,9 +56,12 @@ type SiteOptions struct {
 	InnConf   map[string]string // inn.conf parameters added or replacing the generated ones
 	Readers   string            // readers.conf; "" = DefaultReaders
 	Incoming  string            // incoming.conf; "" = PeerIP as a streaming peer
-	Newsfeeds string            // newsfeeds; "" = "ME:*::" (accept everything, feed nobody); @bindir@ = pathbin
+	Newsfeeds string            // newsfeeds; "" = "ME:*::" (accept everything, feed nobody)
 	Etc       map[string]string // further files in etc, by name (innfeed.conf, passwd.nntp, ...)
-	Args      []string          // further innd arguments (innd always gets -f)
+
+	// In Readers, Incoming, Newsfeeds and Etc, @bindir@ is replaced with pathbin and
+	// @etcdir@ with the site's etc directory.
+	Args []string // further innd arguments (innd always gets -f)
 }
 
 // Site is one running innd with its own pathnews in a temporary directory.
@@ -120,6 +123,8 @@ func NewSite(tb testing.TB, o SiteOptions) *Site {
 		"port":        strconv.Itoa(port),
 		"bindaddress": "127.0.0.1",
 		"server":      "127.0.0.1",
+		// The default (16) makes nnrpd refuse readers with a 400 on a busy machine.
+		"nnrpdloadlimit": "0",
 	}
 	maps.Copy(conf, o.InnConf)
 	var b strings.Builder
@@ -127,12 +132,11 @@ func NewSite(tb testing.TB, o SiteOptions) *Site {
 		fmt.Fprintf(&b, "%s: %s\n", k, conf[k])
 	}
 	s.WriteEtc(tb, "inn.conf", b.String())
-	s.WriteEtc(tb, "readers.conf", or(o.Readers, DefaultReaders))
-	s.WriteEtc(tb, "incoming.conf", or(o.Incoming, DefaultIncoming))
-	s.WriteEtc(tb, "newsfeeds", strings.ReplaceAll(or(o.Newsfeeds, "ME:*::\n"), "@bindir@",
-		filepath.Join(s.Prefix, "bin")))
+	s.WriteEtc(tb, "readers.conf", s.expand(or(o.Readers, DefaultReaders)))
+	s.WriteEtc(tb, "incoming.conf", s.expand(or(o.Incoming, DefaultIncoming)))
+	s.WriteEtc(tb, "newsfeeds", s.expand(or(o.Newsfeeds, "ME:*::\n")))
 	for name, content := range o.Etc {
-		s.WriteEtc(tb, name, content)
+		s.WriteEtc(tb, name, s.expand(content))
 	}
 
 	groups := o.Groups
@@ -183,6 +187,12 @@ const DefaultIncoming = `peer e2e {
     streaming: true
 }
 `
+
+// expand replaces @bindir@ and @etcdir@ in a configuration file.
+func (s *Site) expand(content string) string {
+	return strings.NewReplacer("@bindir@", filepath.Join(s.Prefix, "bin"),
+		"@etcdir@", filepath.Join(s.Dir, "etc")).Replace(content)
+}
 
 // shutdown stops a running innd with "ctlinnd shutdown" and waits for it to exit.
 func (s *Site) shutdown(tb testing.TB) {
@@ -244,12 +254,25 @@ func (s *Site) Run(tb testing.TB, name string, args ...string) string {
 // TryRun is Run that returns the error instead of failing the test.
 func (s *Site) TryRun(name string, args ...string) (string, error) { return s.run(name, args...) }
 
-func (s *Site) run(name string, args ...string) (string, error) {
+// RunInput is Run with stdin as the program's standard input.
+func (s *Site) RunInput(tb testing.TB, stdin, name string, args ...string) string {
+	tb.Helper()
+	out, err := s.runInput(stdin, name, args...)
+	if err != nil {
+		tb.Fatalf("%s %s: %v\n%s", name, strings.Join(args, " "), err, out)
+	}
+	return out
+}
+
+func (s *Site) run(name string, args ...string) (string, error) { return s.runInput("", name, args...) }
+
+func (s *Site) runInput(stdin, name string, args ...string) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), testkit.Deadline())
 	defer cancel()
 	cmd := exec.CommandContext(ctx, filepath.Join(s.Prefix, "bin", name), args...)
 	cmd.Dir = s.Dir
 	cmd.Env = append(os.Environ(), s.Env...)
+	cmd.Stdin = strings.NewReader(stdin)
 	var out bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &out, &out
 	err := cmd.Run()

@@ -30,6 +30,10 @@ needs the Go standard library:
 | `TestPeerIHAVE` | innd | IHAVE from a peer (127.0.0.2), duplicate offer gets 435 |
 | `TestPeerStreaming` | innd | MODE STREAM, pipelined CHECK and TAKETHIS, 438 and 439 for held articles |
 | `TestSIGTERMWhileIdle` | innd | an idle innd exits on SIGTERM |
+| `TestSIGTERMUnderLoad` | innd | innd exits with status 0 on SIGTERM while peers and readers connect |
+| `TestAuthinfo` | innd, nnrpd, ckpasswd | AUTHINFO USER/PASS: 480 before, 481 for a wrong password, 281, then no AUTHINFO in CAPABILITIES and 502 for another (RFC 4643) |
+| `TestRnews` | innd, rnews | an rnews batch of two articles reaches innd over its local socket |
+| `TestInews` | innd, nnrpd, inews | inews posts through nnrpd; the article gets Injection-Info |
 | `TestInnxmitStreaming` | innd, innxmit | a batch is streamed to a peer and the batch file is emptied |
 | `TestInnxmitIHAVEFallback` | innd, innxmit | a peer that refuses MODE STREAM gets IHAVE |
 | `TestInnxmitRefused` | innd, innxmit | articles the peer has or rejects are dropped from the batch |
@@ -82,7 +86,7 @@ func TestSomething(t *testing.T) {
 }
 ```
 
-`SiteOptions` replaces `readers.conf`, `incoming.conf`, `newsfeeds` (with
-`@bindir@` for pathbin) or any other file in `etc`, and adds `inn.conf`
-parameters. Other INN programs run with the site's `INNCONF` through `s.Run`
+`SiteOptions` replaces `readers.conf`, `incoming.conf`, `newsfeeds` or any
+other file in `etc` (`@bindir@` and `@etcdir@` in them become pathbin and the
+site's etc directory), and adds `inn.conf` parameters. Other INN programs run with the site's `INNCONF` through `s.Run`
 and `s.Ctlinnd`.
