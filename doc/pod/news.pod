@@ -201,7 +201,9 @@ SIGINT with B<-d>) while waiting for activity.  The signal was only acted on
 when the next connection or data arrived, or when the I<timer> interval
 elapsed (ten minutes by default), so stopping B<innd> with a signal instead
 of C<ctlinnd shutdown> often ended with it being killed without the active
-file and history being flushed.  This bug was introduced in INN 2.5.4.
+file and history being flushed.  This bug was introduced in INN 2.5.4.  A
+signal arriving while B<innd> was busy, for instance in a slow filter, was
+not acted on promptly either; that part of the problem is older.
 
 =back
 
