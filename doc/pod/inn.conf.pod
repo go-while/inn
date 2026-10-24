@@ -1565,10 +1565,12 @@ normal closure.  At C<2>, it also logs the start of the TLS/SSL engine and its
 failures to load the CA, certificate or key data, the steps of the handshake,
 and every alert.  At C<3>, it also logs a hexadecimal dump of the raw TLS/SSL
 records received during the handshake, and at C<4>, of all the records
-received on the connection (encrypted once the handshake is done).  Values
-above C<2> can produce a lot of logs and should only be used temporarily for
-debugging.  This parameter is only used if B<nnrpd> is built with TLS/SSL
-support.  The default value is C<0>, which disables these messages.
+received on the connection (encrypted once the handshake is done).  As the
+handshake itself is not encrypted, these dumps show what the client sends in
+it, such as the name of the server it requested.  Values above C<2> can
+produce a lot of logs and should only be used temporarily for debugging.  This
+parameter is only used if B<nnrpd> is built with TLS/SSL support.  The default
+value is C<0>, which disables these messages.
 
 =back
 
