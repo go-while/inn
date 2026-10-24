@@ -219,6 +219,12 @@ code, so the peer did not offer the article again.  It now sends a 400
 response code and closes the connection, as S<RFC 4644> requires, so that the
 peer offers the article again later.
 
+=item *
+
+A new I<tlsloglevel> parameter in F<inn.conf> permits enabling the logging
+of TLS/SSL connections by B<nnrpd> for debugging purposes.  It previously
+required changing an internal variable and rebuilding INN.
+
 =back
 
 =head1 Changes in 2.7.4 (2026-06-22)
