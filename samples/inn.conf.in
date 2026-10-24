@@ -153,6 +153,7 @@ backofftrigger:              10000
 #tlsciphers13:
 #tlscompression:             false
 #tlseccurve:
+#tlsloglevel:                0
 #tlspreferserverciphers:     true
 #tlsprotocols:               [ TLSv1.2 TLSv1.3 ]
 
