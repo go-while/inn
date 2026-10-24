@@ -194,6 +194,12 @@ malformed stored Xref records with tradspool and corrupt history records.
 The overview and storage backends also validate more structures before using
 them.  Many thanks to Kevin Bowling for the patches.
 
+=item *
+
+B<innd> now warns, in its reply to C<ctlinnd reload all> and in syslog,
+when F<inn.conf> has been modified since it started: changes to that file
+are not taken into account by a reload and require restarting B<innd>.
+
 =back
 
 =head1 Changes in 2.7.4 (2026-06-22)
