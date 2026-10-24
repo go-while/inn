@@ -194,6 +194,14 @@ malformed stored Xref records with tradspool and corrupt history records.
 The overview and storage backends also validate more structures before using
 them.  Many thanks to Kevin Bowling for the patches.
 
+=item *
+
+When B<innd> could not store an article received with TAKETHIS, or could not
+write its Message-ID to the history database, it answered with a 439 response
+code, so the peer did not offer the article again.  It now sends a 400
+response code and closes the connection, as S<RFC 4644> requires, so that the
+peer offers the article again later.
+
 =back
 
 =head1 Changes in 2.7.4 (2026-06-22)
