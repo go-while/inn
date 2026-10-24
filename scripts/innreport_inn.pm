@@ -543,6 +543,8 @@ sub collect($$$$$$) {
             return 1 if $left =~ /^SERVER changed -\w \d+$/o;
             # SERVER changed -T from 12 to 42
             return 1 if $left =~ /^SERVER changed -\w from \d+ to \d+$/o;
+            # SERVER inn.conf changed since startup, restart innd to apply it
+            return 1 if $left =~ /^SERVER inn\.conf changed since startup/o;
         }
         # channel tracing
         return 1 if $left =~ /^\S+:\d+(:\S+)? trace /o;

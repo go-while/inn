@@ -227,6 +227,12 @@ required changing an internal variable and rebuilding INN.  The hexadecimal
 dumps logged at levels C<3> and C<4> now also show the dumped bytes as
 characters, which they failed to do.
 
+=item *
+
+B<innd> now warns, in its reply to C<ctlinnd reload all> and in syslog,
+when F<inn.conf> has been modified since it started: changes to that file
+are not taken into account by a reload and require restarting B<innd>.
+
 =back
 
 =head1 Changes in 2.7.4 (2026-06-22)
