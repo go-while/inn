@@ -78,6 +78,13 @@ code, so the peer did not offer the article again.  It now sends a 400
 response code and closes the connection, as S<RFC 4644> requires, so that the
 peer offers the article again later.
 
+=item *
+
+The hexadecimal dumps of TLS/SSL connections that B<nnrpd> logs for
+debugging purposes at TLS log levels C<3> and C<4> (enabled by changing an
+internal variable and rebuilding INN) now also show the dumped bytes as
+characters, which they failed to do.
+
 =back
 
 =head1 Changes in 2.7.4 (2026-06-22)
