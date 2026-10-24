@@ -194,6 +194,12 @@ malformed stored Xref records with tradspool and corrupt history records.
 The overview and storage backends also validate more structures before using
 them.  Many thanks to Kevin Bowling for the patches.
 
+=item *
+
+A new I<tlsloglevel> parameter in F<inn.conf> permits enabling the logging
+of TLS/SSL connections by B<nnrpd> for debugging purposes.  It previously
+required changing an internal variable and rebuilding INN.
+
 =back
 
 =head1 Changes in 2.7.4 (2026-06-22)
