@@ -196,6 +196,7 @@ tls_dump(const char *s, int len)
         for (j = 0; j < DUMP_WIDTH; j++) {
             if (((i * DUMP_WIDTH) + j) >= len) {
                 strlcpy(ss, "   ", sizeof(buf) - (ss - buf));
+                ss += 3;
             } else {
                 ch = ((unsigned char) *((const char *) (s) + i * DUMP_WIDTH
                                         + j))
@@ -206,15 +207,15 @@ tls_dump(const char *s, int len)
             }
         }
         ss += strlen(ss);
-        *ss += ' ';
+        *ss++ = ' ';
         for (j = 0; j < DUMP_WIDTH; j++) {
             if (((i * DUMP_WIDTH) + j) >= len)
                 break;
             ch = ((unsigned char) *((const char *) (s) + i * DUMP_WIDTH + j))
                  & 0xff;
-            *ss += (((ch >= ' ') && (ch <= '~')) ? ch : '.');
+            *ss++ = (((ch >= ' ') && (ch <= '~')) ? ch : '.');
             if (j == 7)
-                *ss += ' ';
+                *ss++ = ' ';
         }
         *ss = 0;
         /* If this is the last call, then update the ddt_dump thing so that
