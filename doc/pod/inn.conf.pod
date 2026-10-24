@@ -1475,7 +1475,7 @@ use it.
 
 =back
 
-Finally, here are the parameters that can be used to tighten the level
+Here are the parameters that can be used to tighten the level
 of security provided by TLS/SSL in case new attacks exploitable in NNTP
 on the TLS protocol or some supported cipher suite are discovered:
 
@@ -1549,6 +1549,26 @@ to be more secure).
 
 C<SSLv2> was formally deprecated by S<RFC 6176> in 2011, C<SSLv3>
 by S<RFC 7568> in 2015, C<TLSv1.0> and C<TLSv1.1> by S<RFC 8996> in 2021.
+
+=back
+
+The following parameter may help when debugging TLS/SSL connections:
+
+=over 4
+
+=item I<tlsloglevel>
+
+How much B<nnrpd> logs about TLS/SSL connections, from C<0> to C<4> (a higher
+value is treated as C<4>).  At C<1>, it logs the setup of each TLS/SSL
+connection, the handshake steps that failed, and the alerts other than a
+normal closure.  At C<2>, it also logs the start of the TLS/SSL engine and its
+failures to load the CA, certificate or key data, the steps of the handshake,
+and every alert.  At C<3>, it also logs a hexadecimal dump of the raw TLS/SSL
+records received during the handshake, and at C<4>, of all the records
+received on the connection (encrypted once the handshake is done).  Values
+above C<2> can produce a lot of logs and should only be used temporarily for
+debugging.  This parameter is only used if B<nnrpd> is built with TLS/SSL
+support.  The default value is C<0>, which disables these messages.
 
 =back
 

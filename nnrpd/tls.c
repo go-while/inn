@@ -53,7 +53,7 @@ static const char *tls_cipher_name = NULL;
 static int tls_cipher_algbits = 0;
 int tls_cipher_usebits = 0;
 
-/* Set this value higher (from 1 to 4) to obtain more logs. */
+/* Set from the tlsloglevel parameter in inn.conf, from 0 to 4. */
 static int tls_loglevel = 0;
 
 
@@ -502,6 +502,8 @@ tls_init(void)
 
     if (tls_initialized)
         return 0;
+
+    tls_loglevel = innconf->tlsloglevel > 4 ? 4 : (int) innconf->tlsloglevel;
 
     ssl_result = tls_init_serverengine(
         5, /* Depth to verify. */
