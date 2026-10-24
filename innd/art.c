@@ -2598,7 +2598,7 @@ ARTpost(CHANNEL *cp)
     if (token.type == TOKEN_EMPTY) {
         syslog(L_ERROR, "%s cant store article: %s", LogName, SMerrorstr);
         snprintf(cp->Error, sizeof(cp->Error), "%d Can't store article",
-                 ihave ? NNTP_FAIL_IHAVE_DEFER : NNTP_FAIL_ACTION);
+                 ihave ? NNTP_FAIL_IHAVE_DEFER : NNTP_FAIL_TERMINATING);
         /* Do not remember the message-ID of the article because we want
          * it to be received again later. */
         ARTlog(data, ART_REJECT, cp->Error);
@@ -2642,8 +2642,8 @@ ARTpost(CHANNEL *cp)
         syslog(L_ERROR, "%s cant write history %s %m", LogName,
                HDR(HDR__MESSAGE_ID));
         snprintf(cp->Error, sizeof(cp->Error), "%d Can't write history, %s",
-                 ihave ? NNTP_FAIL_IHAVE_DEFER : NNTP_FAIL_ACTION,
-                 strerror(errno));
+                 ihave ? NNTP_FAIL_IHAVE_DEFER : NNTP_FAIL_TERMINATING,
+                 strerror(i));
         ARTlog(data, ART_REJECT, cp->Error);
         ARTreject(REJECT_OTHER, cp);
         return false;
