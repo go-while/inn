@@ -350,6 +350,8 @@ the message noting the reload.
 There is no way to reload F<inn.conf>, F<storage.conf>, or other
 configuration files for the storage or overview backends.  To pick up
 changes to those files, use C<ctlinnd xexec innd> to restart B<innd>.
+When everything is reloaded and F<inn.conf> has been modified since B<innd>
+started, B<innd> says so in its reply and in syslog.
 
 If I<what> is the empty string or the word C<all>, everything is
 reloaded.  If it is the word C<history>, the history database is closed
