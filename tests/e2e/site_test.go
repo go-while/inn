@@ -78,6 +78,10 @@ type Site struct {
 
 	CertPool *x509.CertPool // trusts the site's certificate when SiteOptions.TLS is set
 	start    time.Time
+
+	syslogFile   string // INN_E2E_SYSLOG: read syslog messages from this file, not the journal
+	syslogOffset int64  // size of syslogFile when the site started
+	syslogErr    error  // why syslogFile could not be read when the site started
 }
 
 // prefix returns INN_PREFIX or skips the test.
@@ -100,10 +104,13 @@ func prefix(tb testing.TB) string {
 // innd -f on a free port of 127.0.0.1 and waits for its greeting. The cleanup shuts innd down
 // with "ctlinnd shutdown" (the way rc.news stops it) and, when the test failed, logs innd's
 // output and the syslog messages of INN programs since the site started (via journalctl,
-// when present).
+// when present, or from the INN_E2E_SYSLOG file).
 func NewSite(tb testing.TB, o SiteOptions) *Site {
 	tb.Helper()
 	s := &Site{Dir: tb.TempDir(), Prefix: prefix(tb), start: time.Now()}
+	if s.syslogFile = os.Getenv(EnvSyslog); s.syslogFile != "" {
+		s.syslogOffset, s.syslogErr = syslogFileSize(s.syslogFile)
+	}
 	port := freePort(tb)
 	s.Addr = net.JoinHostPort("127.0.0.1", strconv.Itoa(port))
 	s.Env = []string{"INNCONF=" + filepath.Join(s.Dir, "etc", "inn.conf")}
@@ -241,14 +248,18 @@ func (s *Site) dumpSyslog(tb testing.TB) {
 			tb.Logf("%s:\n%s", name, b)
 		}
 	}
+	if s.syslogFile != "" {
+		s.dumpSyslogFile(tb)
+		return
+	}
 	jc, err := exec.LookPath("journalctl")
 	if err != nil {
-		tb.Logf("syslog: journalctl not found; see the system log for innd and nnrpd messages")
+		tb.Logf("syslog: journalctl not found; see the system log for innd and nnrpd messages, or set %s", EnvSyslog)
 		return
 	}
 	args := []string{"-q", "--no-pager", "-o", "short-precise",
 		"--since", "@" + strconv.FormatInt(s.start.Unix()-1, 10)}
-	for _, id := range []string{"innd", "nnrpd", "innfeed", "innxmit", "ctlinnd", "nntpget", "pullnews", "controlchan"} {
+	for _, id := range syslogIdents {
 		args = append(args, "-t", id)
 	}
 	out, _ := exec.Command(jc, args...).CombinedOutput()
@@ -433,13 +444,24 @@ func (s *Site) ReaderMode(tb testing.TB) *client.Conn {
 }
 
 // Syslog returns the syslog messages of this site's innd since it started (read with
-// journalctl by its PID), or skips the test when the journal is not readable for the user
-// running it.
+// journalctl by its PID, or from the INN_E2E_SYSLOG file), or skips the test when they are
+// not readable for the user running it. innd does not log its PID, so the file gives the
+// messages of every innd since the site started; the tests do not run in parallel.
 func (s *Site) Syslog(tb testing.TB) []string {
 	tb.Helper()
+	if s.syslogFile != "" {
+		pid := s.Proc.Pid()
+		lines := s.fileSyslog(tb, s.syslogOffset, func(l syslogLine) bool {
+			return l.ident == "innd" && (l.pid == 0 || l.pid == pid)
+		})
+		if len(lines) == 0 {
+			tb.Skipf("no syslog messages of innd in %s=%s: does the syslog daemon write there?", EnvSyslog, s.syslogFile)
+		}
+		return lines
+	}
 	jc, err := exec.LookPath("journalctl")
 	if err != nil {
-		tb.Skip("journalctl not found: innd logs to syslog")
+		tb.Skipf("journalctl not found: innd logs to syslog; set %s to read a syslog file", EnvSyslog)
 	}
 	out, err := exec.Command(jc, "-q", "--no-pager", "-o", "cat",
 		"--since", "@"+strconv.FormatInt(s.start.Unix()-1, 10),
@@ -454,13 +476,20 @@ func (s *Site) Syslog(tb testing.TB) []string {
 	return lines
 }
 
-// JournalCursor returns the cursor of the last journal entry, for ProgramSyslog, or skips the
-// test when journalctl is missing.
+// JournalCursor returns the cursor of the last journal entry (with INN_E2E_SYSLOG, the size
+// of the syslog file), for ProgramSyslog, or skips the test when journalctl is missing.
 func (s *Site) JournalCursor(tb testing.TB) string {
 	tb.Helper()
+	if s.syslogFile != "" {
+		size, err := syslogFileSize(s.syslogFile)
+		if err != nil {
+			tb.Skipf("%s: %v", EnvSyslog, err)
+		}
+		return strconv.FormatInt(size, 10)
+	}
 	jc, err := exec.LookPath("journalctl")
 	if err != nil {
-		tb.Skip("journalctl not found: INN programs log to syslog")
+		tb.Skipf("journalctl not found: INN programs log to syslog; set %s to read a syslog file", EnvSyslog)
 	}
 	out, err := exec.Command(jc, "-q", "-n", "0", "--show-cursor").Output()
 	if err != nil {
@@ -477,6 +506,13 @@ func (s *Site) JournalCursor(tb testing.TB) string {
 // instance "nnrpd") after the journal entry at cursor (from JournalCursor).
 func (s *Site) ProgramSyslog(tb testing.TB, ident, cursor string) []string {
 	tb.Helper()
+	if s.syslogFile != "" {
+		offset, err := strconv.ParseInt(cursor, 10, 64)
+		if err != nil {
+			tb.Fatalf("ProgramSyslog: cursor %q is not a file offset", cursor)
+		}
+		return s.fileSyslog(tb, offset, func(l syslogLine) bool { return l.ident == ident })
+	}
 	out, err := exec.Command("journalctl", "-q", "--no-pager", "-o", "cat",
 		"--after-cursor", cursor, "-t", ident).Output()
 	if err != nil {

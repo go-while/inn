@@ -79,7 +79,15 @@ INN programs log their notices to syslog. When a test fails, the harness prints:
   `pullnews` since the site started, read with `journalctl`.
 
 The user running the tests needs read access to the journal for the last one,
-e.g. membership in the `systemd-journal` group.
+e.g. membership in the `systemd-journal` group. Some tests read these messages
+too, and are skipped when they are not readable.
+
+On systems without journald, such as Alpine with BusyBox `syslogd` or a
+container running `rsyslogd`, set `INN_E2E_SYSLOG` to the file the syslog daemon
+writes, for instance `/var/log/messages`; the user running the tests needs read
+access to it. The messages are then read from that file instead of the journal.
+The file should not be rotated during the run: BusyBox `syslogd` rotates it at
+200 KB unless started with `-s 0`.
 
 ## Writing a test
 
