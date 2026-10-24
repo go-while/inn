@@ -12,7 +12,10 @@ import (
 	"encoding/pem"
 	"math/big"
 	"net"
+	"regexp"
 	"slices"
+	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -148,4 +151,104 @@ func TestStartTLSWithoutCertificate(t *testing.T) {
 	if err := c.ExpectNoPending(200 * time.Millisecond); err != nil {
 		t.Error(err)
 	}
+}
+
+// tlsSession negotiates TLS with STARTTLS, reads a group and quits, then returns the syslog
+// messages nnrpd logged for this session, once it has logged its exit statistics. It skips
+// the test when no nnrpd message is readable.
+func tlsSession(tb testing.TB, s *Site) []string {
+	tb.Helper()
+	cursor := s.JournalCursor(tb)
+	tc, _ := startTLS(tb, s, s.Reader(tb))
+	expect(tb, tc, 211, "GROUP e2e.test")
+	expect(tb, tc, 205, "QUIT")
+
+	var session []string
+	limit := time.Now().Add(testkit.Deadline())
+	for {
+		lines := s.ProgramSyslog(tb, "nnrpd", cursor)
+		session = nil
+		for i := len(lines) - 1; i >= 0; i-- {
+			if strings.HasPrefix(lines[i], "starttls: ") {
+				session = lines[i:]
+				break
+			}
+		}
+		if slices.ContainsFunc(session, func(l string) bool { return strings.Contains(l, " times user ") }) {
+			return lines
+		}
+		if time.Now().After(limit) {
+			if len(lines) == 0 {
+				tb.Skip("no syslog messages of nnrpd readable: is the user in the systemd-journal group?")
+			}
+			tb.Fatalf("nnrpd did not log the end of the TLS session:\n%s", strings.Join(lines, "\n"))
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+}
+
+// TestStartTLSLogLevel: the tlsloglevel parameter in inn.conf makes nnrpd log the setup of a
+// TLS connection (issue #272; the level was an internal variable set to 0).
+func TestStartTLSLogLevel(t *testing.T) {
+	s := NewSite(t, SiteOptions{TLS: true, InnConf: map[string]string{"tlsloglevel": "1"}})
+	lines := tlsSession(t, s)
+	if !slices.Contains(lines, "setting up TLS connection") {
+		t.Errorf("tlsloglevel 1: nnrpd did not log \"setting up TLS connection\":\n%s", strings.Join(lines, "\n"))
+	}
+}
+
+// dumpRow matches the offset that starts a line of nnrpd's hexadecimal dump of TLS data. The
+// offset is followed by 16 columns of "xx " (with "|" after the 8th byte, and spaces for
+// missing bytes), a space and the bytes as characters ("." for the unprintable ones, a space
+// after the 8th one).
+var dumpRow = regexp.MustCompile(`^[0-9a-f]{4} `)
+
+// TestStartTLSDump: with tlsloglevel 3, nnrpd logs a hexadecimal dump of the data received
+// during the TLS handshake. Every line must end with the dumped bytes as characters, aligned
+// after the 16 hexadecimal columns (issue #350).
+func TestStartTLSDump(t *testing.T) {
+	s := NewSite(t, SiteOptions{TLS: true, InnConf: map[string]string{"tlsloglevel": "3"}})
+	var rows int
+	for _, line := range tlsSession(t, s) {
+		if !dumpRow.MatchString(line) {
+			continue
+		}
+		if rows++; rows == 1 {
+			t.Logf("first dump line: %q", line)
+		}
+		// The journal drops trailing spaces: restore the hexadecimal columns.
+		cols := line + strings.Repeat(" ", max(0, 5+16*3-len(line)))
+		var b []byte
+		for k := range 16 {
+			cell := cols[5+3*k : 5+3*k+2]
+			if cell == "  " {
+				break
+			}
+			v, err := strconv.ParseUint(cell, 16, 8)
+			if err != nil {
+				t.Fatalf("dump line %q: column %d is %q", line, k, cell)
+			}
+			b = append(b, byte(v))
+		}
+		var want strings.Builder
+		want.WriteByte(' ')
+		for k, c := range b {
+			if c >= ' ' && c <= '~' {
+				want.WriteByte(c)
+			} else {
+				want.WriteByte('.')
+			}
+			if k == 7 {
+				want.WriteByte(' ')
+			}
+		}
+		if got := strings.TrimRight(cols[5+16*3:], " "); got != strings.TrimRight(want.String(), " ") {
+			t.Errorf("dump line %q: the character column after the 16 hexadecimal columns is %q, want %q",
+				line, got, want.String())
+		}
+	}
+	if rows == 0 {
+		t.Errorf("tlsloglevel 3: nnrpd logged no hexadecimal dump of the handshake")
+	}
+	t.Logf("%d dump lines checked", rows)
 }

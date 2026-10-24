@@ -453,3 +453,37 @@ func (s *Site) Syslog(tb testing.TB) []string {
 	}
 	return lines
 }
+
+// JournalCursor returns the cursor of the last journal entry, for ProgramSyslog, or skips the
+// test when journalctl is missing.
+func (s *Site) JournalCursor(tb testing.TB) string {
+	tb.Helper()
+	jc, err := exec.LookPath("journalctl")
+	if err != nil {
+		tb.Skip("journalctl not found: INN programs log to syslog")
+	}
+	out, err := exec.Command(jc, "-q", "-n", "0", "--show-cursor").Output()
+	if err != nil {
+		tb.Skipf("journalctl: %v", err)
+	}
+	cursor, ok := strings.CutPrefix(strings.TrimSpace(string(out)), "-- cursor: ")
+	if !ok {
+		tb.Skipf("journalctl --show-cursor: %q", out)
+	}
+	return cursor
+}
+
+// ProgramSyslog returns the syslog messages that INN programs logged under ident (for
+// instance "nnrpd") after the journal entry at cursor (from JournalCursor).
+func (s *Site) ProgramSyslog(tb testing.TB, ident, cursor string) []string {
+	tb.Helper()
+	out, err := exec.Command("journalctl", "-q", "--no-pager", "-o", "cat",
+		"--after-cursor", cursor, "-t", ident).Output()
+	if err != nil {
+		tb.Skipf("journalctl: %v", err)
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return strings.Split(strings.TrimRight(string(out), "\n"), "\n")
+}
