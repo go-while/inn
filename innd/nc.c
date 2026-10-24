@@ -260,6 +260,17 @@ NCpostit(CHANNEL *cp)
         /* The answer to TAKETHIS is a response code followed by a message-ID.
          */
         if (cp->Sendid.size > 3) {
+            /* The article could not be stored, or its message-ID could not
+             * be written to history: it was not rejected and is wanted
+             * later.  In streaming mode, there is no
+             * NNTP_FAIL_TAKETHIS_DEFER and RFC 4644 mentions that we MUST
+             * send 400 here and close the connection so as not to reject
+             * the article.  The peer will offer it again. */
+            if (atoi(cp->Error) == NNTP_FAIL_TERMINATING) {
+                cp->Reported++;
+                NCwriteshutdown(cp, cp->Error + 4);
+                return;
+            }
             snprintf(buff, sizeof(buff), "%d", NNTP_FAIL_TAKETHIS_REJECT);
             cp->Sendid.data[0] = buff[0];
             cp->Sendid.data[1] = buff[1];
