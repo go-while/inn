@@ -60,6 +60,7 @@ backends/shrinkfile.c                 Shrink file from beginning
 ci                                    Integration testing (Directory)
 ci/README.md                          Documentation for the ci directory
 ci/apt-packages                       Debian packages to install for tests
+ci/e2e-distro                         Build and run all tests on a Linux distribution
 ci/install                            Script to set up the test environment
 ci/test                               Script to run tests
 configure                             Script to configure INN

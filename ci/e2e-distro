@@ -1,0 +1,205 @@
+#!/bin/sh
+
+##  Build INN and run its test suite and the end-to-end tests on a Linux
+##  distribution.
+##
+##  Run as root from the top of the INN source tree, in a throwaway container
+##  or test machine: it installs packages, may start a syslog daemon and
+##  creates the news user when missing.
+##
+##      ci/e2e-distro [e2e.test]
+##
+##  e2e.test is the test binary of tests/e2e (CGO_ENABLED=0 go test -c), so
+##  that Go is not needed on the system under test.  Without it, the e2e tests
+##  are built with go if it is in PATH, or skipped.
+##
+##  The source tree is copied to BUILDDIR (default /var/tmp/inn-e2e-build),
+##  built and tested there as the news user, and installed into PREFIX
+##  (default /opt/inn-e2e).  The exit status is non-zero when the build, make
+##  check or the e2e tests failed.
+
+set -eu
+
+PREFIX="${PREFIX:-/opt/inn-e2e}"
+BUILDDIR="${BUILDDIR:-/var/tmp/inn-e2e-build}"
+E2EBIN="${1:-}"
+SYSLOGFILE=/var/log/inn-e2e.log
+
+. /etc/os-release
+echo "== $PRETTY_NAME"
+
+# Packages needed to build INN with Perl, OpenSSL, SQLite and zlib, and to
+# run make check and the e2e tests (pullnews needs Net::NNTP; the date tests
+# need the time zone database, which minimal images leave out).  The syslog
+# daemon is only used when journald is not running.
+install_packages() {
+    if command -v apk >/dev/null; then
+        apk add -q build-base autoconf bison flex perl perl-dev openssl-dev \
+            sqlite-dev tzdata zlib-dev
+    elif command -v apt-get >/dev/null; then
+        export DEBIAN_FRONTEND=noninteractive
+        apt-get -qq update
+        apt-get -qq install -y build-essential autoconf bison flex perl \
+            libperl-dev libssl-dev libsqlite3-dev tzdata zlib1g-dev rsyslog >/dev/null
+    elif command -v dnf >/dev/null; then
+        dnf -q -y install gcc make autoconf bison flex findutils diffutils tar \
+            perl perl-devel perl-ExtUtils-Embed perl-libnet openssl-devel \
+            sqlite-devel tzdata zlib-devel rsyslog procps-ng >/dev/null
+    elif command -v zypper >/dev/null; then
+        zypper -n -q install gcc make autoconf bison flex perl tar gzip \
+            libopenssl-devel sqlite3-devel timezone zlib-devel rsyslog procps
+    elif command -v pacman >/dev/null; then
+        # pacman 7 sandboxes downloads with Landlock, which containers may lack.
+        nosandbox=
+        pacman --help --sync 2>/dev/null | grep -q -- --disable-sandbox \
+            && nosandbox=--disable-sandbox
+        pacman -Sy --noconfirm --needed --quiet $nosandbox base-devel autoconf bison flex \
+            perl openssl sqlite tzdata zlib busybox >/dev/null
+    elif command -v emerge >/dev/null; then
+        # A stage3 has the build tools and libraries.  sysklogd is built from
+        # source without its dependencies: binary packages may pull in a
+        # newer glibc.
+        emerge --quiet --noreplace dev-build/autoconf sys-devel/bison \
+            sys-devel/flex dev-db/sqlite
+        command -v syslogd >/dev/null \
+            || FEATURES="-getbinpkg" emerge --quiet --oneshot --nodeps \
+                --usepkg=n --getbinpkg=n app-admin/sysklogd
+    else
+        echo "no supported package manager" >&2
+        exit 1
+    fi
+}
+
+# Create the news user and group when missing.
+create_news_user() {
+    id news >/dev/null 2>&1 && return
+    if command -v useradd >/dev/null; then
+        getent group news >/dev/null || groupadd -r news
+        useradd -r -g news -d /var/lib/news -s /bin/sh news
+    else
+        addgroup -S news 2>/dev/null || true
+        adduser -S -D -H -G news -h /var/lib/news -s /bin/sh news
+    fi
+}
+
+# running tells whether a process named $1 runs (BusyBox pgrep -x does not match
+# a daemon started by its full path, pidof does).
+running() {
+    pidof "$1" >/dev/null 2>&1
+}
+
+# Make the syslog messages of INN programs readable by the news user: through
+# the journal when journald runs, otherwise from a file written by the syslog
+# daemon already running, or by one started here.  Sets INN_E2E_SYSLOG.
+setup_syslog() {
+    INN_E2E_SYSLOG=
+    if [ -S /run/systemd/journal/socket ] && command -v journalctl >/dev/null; then
+        if getent group systemd-journal >/dev/null; then
+            usermod -a -G systemd-journal news 2>/dev/null \
+                || addgroup news systemd-journal
+        fi
+        echo "syslog: journald"
+        return
+    fi
+    if running syslogd && [ -f /var/log/messages ]; then
+        # BusyBox syslogd of Alpine (OpenRC): turn off its rotation at 200 KB,
+        # which would lose messages during the run.
+        if [ -f /etc/conf.d/syslog ] && command -v rc-service >/dev/null; then
+            sed -i 's/^SYSLOGD_OPTS=.*/SYSLOGD_OPTS="-t -s 0"/' /etc/conf.d/syslog
+            rc-service syslog restart >/dev/null 2>&1
+        fi
+        chmod 644 /var/log/messages
+        INN_E2E_SYSLOG=/var/log/messages
+    elif running rsyslogd || running syslog-ng || running metalog; then
+        echo "syslog: a syslog daemon runs, but where it writes is unknown;" \
+            "the e2e tests that read syslog will be skipped"
+        return
+    else
+        : >"$SYSLOGFILE"
+        chmod 644 "$SYSLOGFILE"
+        if busybox --list 2>/dev/null | grep -qx syslogd; then
+            busybox syslogd -O "$SYSLOGFILE" -s 0
+        elif command -v rsyslogd >/dev/null; then
+            printf '%s\n' 'module(load="imuxsock")' "*.* $SYSLOGFILE" \
+                >/etc/inn-e2e-rsyslog.conf
+            rsyslogd -f /etc/inn-e2e-rsyslog.conf -i /run/inn-e2e-rsyslog.pid
+        elif command -v syslogd >/dev/null; then
+            # sysklogd (Gentoo).
+            echo "*.* $SYSLOGFILE" >/etc/inn-e2e-syslog.conf
+            syslogd -f /etc/inn-e2e-syslog.conf
+        else
+            echo "syslog: no syslog daemon to start;" \
+                "the e2e tests that read syslog will be skipped"
+            return
+        fi
+        INN_E2E_SYSLOG="$SYSLOGFILE"
+    fi
+    echo "syslog: $INN_E2E_SYSLOG"
+}
+
+# Run a command as the news user, with a shell (its login shell may be
+# nologin), a writable HOME, and Arch's core_perl directory (pod2man) in PATH.
+as_news() {
+    su -s /bin/sh news -c "HOME=$BUILDDIR/home; PATH=\$PATH:/usr/bin/core_perl; \
+        export HOME PATH; $1"
+}
+
+install_packages
+create_news_user
+setup_syslog
+
+rm -rf "$BUILDDIR" "$PREFIX"
+mkdir -p "$BUILDDIR/src" "$BUILDDIR/home" "$PREFIX"
+tar cf - --exclude=.git . | (cd "$BUILDDIR/src" && tar xf -)
+chown -R news:"$(id -gn news)" "$BUILDDIR" "$PREFIX"
+jobs=$(getconf _NPROCESSORS_ONLN 2>/dev/null || echo 2)
+
+build=ok
+check=skipped
+e2e=skipped
+
+# Build and install INN as the news user: innbind is then not setuid root,
+# which the e2e tests do not need.
+if ! as_news "cd $BUILDDIR/src && ./autogen && ./configure \
+        --prefix=$PREFIX --with-sendmail=/usr/sbin/sendmail \
+        --with-perl --with-openssl --with-sqlite3 >$BUILDDIR/configure.log \
+        && make -j$jobs >$BUILDDIR/make.log 2>&1 \
+        && make install >$BUILDDIR/install.log 2>&1"; then
+    build=FAILED
+    tail -n 30 "$BUILDDIR/configure.log" "$BUILDDIR/make.log" 2>/dev/null || true
+fi
+warnings=$(grep -c 'warning:' "$BUILDDIR/make.log" 2>/dev/null || true)
+grep 'warning:' "$BUILDDIR/make.log" 2>/dev/null | sort -u | head -n 20 || true
+
+if [ "$build" = ok ]; then
+    check=ok
+    as_news "cd $BUILDDIR/src && make check" >"$BUILDDIR/check.log" 2>&1 \
+        || check=FAILED
+    grep -E '(FAILED|ABORTED|dubious)' "$BUILDDIR/check.log" | head -n 20 || true
+    tail -n 6 "$BUILDDIR/check.log"
+
+    if [ -z "$E2EBIN" ] && command -v go >/dev/null; then
+        E2EBIN="$BUILDDIR/home/e2e.test"
+        as_news "cd $BUILDDIR/src/tests/e2e && CGO_ENABLED=0 go test -c -o $E2EBIN ." \
+            || E2EBIN=
+    elif [ -n "$E2EBIN" ]; then
+        cp "$E2EBIN" "$BUILDDIR/home/e2e.test"
+        E2EBIN="$BUILDDIR/home/e2e.test"
+        chown news "$E2EBIN"
+        chmod 755 "$E2EBIN"
+    fi
+    if [ -n "$E2EBIN" ]; then
+        e2e=ok
+        as_news "cd $BUILDDIR/home && INN_PREFIX=$PREFIX \
+                INN_E2E_SYSLOG=$INN_E2E_SYSLOG $E2EBIN -test.count=1 -test.v \
+                -test.timeout=20m" >"$BUILDDIR/e2e.log" 2>&1 || e2e=FAILED
+        grep -E '^(--- (FAIL|SKIP)|FAIL|ok|PASS$)' "$BUILDDIR/e2e.log" || true
+        echo "e2e: $(grep -c '^--- PASS' "$BUILDDIR/e2e.log") passed," \
+            "$(grep -c '^--- SKIP' "$BUILDDIR/e2e.log") skipped," \
+            "$(grep -c '^--- FAIL' "$BUILDDIR/e2e.log") failed"
+    fi
+fi
+
+echo "== $PRETTY_NAME: build $build ($warnings warnings), make check $check, e2e $e2e"
+echo "   logs: $BUILDDIR/{configure,make,check,e2e}.log"
+[ "$build" = ok ] && [ "$check" = ok ] && [ "$e2e" != FAILED ]
