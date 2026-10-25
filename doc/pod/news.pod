@@ -386,6 +386,15 @@ It reports each malformed line with its line number, skips it, and builds
 the I<dbz> database from the other lines.  It also rejects hashes which are
 not made of hexadecimal digits, instead of storing a wrong key for them.
 
+=item *
+
+In the report mailed by B<news.daily>, the messages of B<expire> and the other
+problems met while expiring now come before the output of B<scanlogs>, instead
+of after the long B<innreport> statistics, so that a broken F<expire.ctl> file
+is noticed.  The headers of the sections are unchanged, but scripts parsing
+the report may need adapting if they rely on the order of its sections.
+Thanks to Paul Tomblin for the suggestion.
+
 =back
 
 =head1 Changes in 2.7.4 (2026-06-22)

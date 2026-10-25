@@ -63,6 +63,14 @@ collecting all the output and mailing it.
 
 =back
 
+The mailed report begins with the status report of B<innstat> and the output
+of the programs run before expiration.  Then come the messages of B<expire>,
+B<expireover> and the renumbering of the F<active> file, so that problems with
+them are seen first, and only then the output of B<scanlogs>: the error
+messages found in the log files and the statistics of B<innreport>.  The
+report ends with the status report after expiration and the output of the
+programs given with the B<postexec> keyword.
+
 Please note that this program should be run under the news administrator's
 account (usually C<news>), not as root.  By default, B<news.daily> performs
 all of its functions and mails the output to the news administrator, which
@@ -179,7 +187,7 @@ is used.
 
 =item B<nologs>
 
-After expiration, B<scanlogs> is invoked to process the log files.  Using this
+Before expiration, B<scanlogs> is invoked to process the log files.  Using this
 keyword disables all log processing functions.
 
 =item B<nomail>
