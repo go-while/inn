@@ -106,8 +106,11 @@ $0 =~ s@.*/@@;
 my $program = $0;
 local $| = 1;
 
+##  Print a problem.  With --fix, the output is a shell script: problems are
+##  then printed as comments.
 sub eprint {
     my ($msg) = @_;
+    $msg =~ s/^/$pfx/mg;
     print $msg if $verbose >= 0;
     $exitval++;
     return;
@@ -734,6 +737,7 @@ my %newsfeeds_flags = (
 sub newsfeeds {
     my ($next, $start, @muxes, %sites);
     my ($site, $pats, $dists, $flags, $param, $type, $k, $v);
+    my @seen;
     my ($bang, $nobang, $prog, $dir);
     my %variables;
     my $defsub = '';
@@ -793,8 +797,7 @@ sub newsfeeds {
         eprint "$file:$start: multiple slashes in exclusions for `$site'\n"
           if $site =~ m@/.*/@;
         $site =~ s@([^/]*)/.*@$1@;
-        print "$site, "
-          if $verbose > 0;
+        push(@seen, $site);
 
         if ($site eq "ME") {
             $defsub = $pats;
@@ -894,7 +897,7 @@ sub newsfeeds {
     eprint "$file:0: documentation says there must be exactly one ME entry\n"
       if !defined $sites{"ME"};
 
-    print "done.\n"
+    print $pfx, map({ "$_, " } @seen), "done.\n"
       if $verbose > 0;
     return;
 }
@@ -1092,7 +1095,7 @@ sub checkperm {
       unless (@$m);
 
     if (!-e $f) {
-        eprint "$pfx$f:0: missing\n";
+        eprint "$f:0: missing\n";
     } else {
         @sb = stat _;
         $owner = (getpwuid($sb[$ST_UID]))[0];
@@ -1104,20 +1107,20 @@ sub checkperm {
           if -d _;
 
         if ($owner ne $u) {
-            eprint "$pfx$f:0: owned by $owner, should be $u\n";
+            eprint "$f:0: owned by $owner, should be $u\n";
             print "chown $u $f\n"
               if $fix;
         }
         if ($group ne $g) {
             # rnews may be setuid news and owned by group uucp.
             if ($f !~ /\/rnews$/ or $group ne 'uucp') {
-                eprint "$pfx$f:0: in group $group, should be $g\n";
+                eprint "$f:0: in group $group, should be $g\n";
                 print "chgrp $g $f\n"
                   if $fix;
             }
         }
         if ((($mode & @$m[0]) ne @$m[0]) or (($mode | @$m[1]) ne @$m[1])) {
-            eprint sprintf "$pfx$f:0: mode %o, should be between %o and %o\n",
+            eprint sprintf "$f:0: mode %o, should be between %o and %o\n",
               $mode, @$m[0], @$m[1];
             printf "chmod %o $f\n", @$m[1]
               if $fix;
@@ -1134,7 +1137,7 @@ sub intersect {
     my (@in, %dummy, $i);
 
     if (!opendir(my $DH, $dir)) {
-        eprint "$pfx$dir:0: can't open directory\n";
+        eprint "$dir:0: can't open directory\n";
     } else {
         @in = grep({ $_ ne "." && $_ ne ".." } readdir($DH));
         closedir($DH);
@@ -1149,7 +1152,7 @@ sub intersect {
         }
         foreach (@in) {
             if (not exists $dummy{$_}) {
-                eprint "$pfx$dir:0: ERROR: illegal file `$_' in directory\n";
+                eprint "$dir:0: ERROR: illegal file `$_' in directory\n";
                 $i = 0;
             }
         }
@@ -1303,10 +1306,10 @@ foreach my $workfile (@todo) {
         eprint "$file:0: file missing\n";
         next ACTION;
     }
-    print "Looking at $file...\n"
+    print "${pfx}Looking at $file...\n"
       if $verbose > 0;
     if (!open($IN, '<', $file)) {
-        eprint "$pfx$workfile:0: can't open $!\n";
+        eprint "$workfile:0: can't open $!\n";
         next ACTION;
     }
     checkperm($file, $modes{$workfile})
