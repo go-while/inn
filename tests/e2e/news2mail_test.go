@@ -150,3 +150,39 @@ func TestNews2mailSenders(t *testing.T) {
 		}
 	}
 }
+
+// TestNews2mailNoQueue: with -n, news2mail does not give the MTA -odq, which only queues the
+// mail for a later "sendmail -q" run and which some MTAs reject; without it, it does
+// (issue #85). news2mail used to always give -odq.
+func TestNews2mailNoQueue(t *testing.T) {
+	for _, tc := range []struct {
+		name, command string
+		queue         bool
+	}{
+		{"default", "@bindir@/news2mail", true},
+		{"-n", "@bindir@/news2mail -n", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			s, dir := news2mailSite(t, tc.command,
+				"list-a:!*,e2e.a:Ap,Tm:news2mail!\n",
+				"list-a a@lists.invalid sa@senders.invalid\n")
+			id := s.Inject(t, "e2e.a", 1)[0]
+			s.Inject(t, "e2e.z", 1)
+			mails := waitMails(t, dir)
+			if len(mails) != 1 {
+				t.Fatalf("%d mails for %s, want 1", len(mails), id)
+			}
+			m := mails[0]
+			t.Logf("MTA command line: %q", m.args)
+			if q := slices.Contains(m.args, "-odq"); q != tc.queue {
+				t.Errorf("-odq given: %v, want %v: %q", q, tc.queue, m.args)
+			}
+			if m.sender != "sa@senders.invalid" || !slices.Equal(m.rcpts, []string{"a@lists.invalid"}) {
+				t.Errorf("mail from %q to %q, want from sa@senders.invalid to a@lists.invalid", m.sender, m.rcpts)
+			}
+			if !strings.Contains(m.text, "Message-ID: "+id+"\n") {
+				t.Errorf("mail is not article %s:\n%s", id, m.text)
+			}
+		})
+	}
+}
