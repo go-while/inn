@@ -75,6 +75,17 @@ hisv6_seterror(struct hisv6 *h, const char *s)
 
 
 /*
+**  the reason dbz gives for a failure to open a database: dbz sets EDOM
+**  when a file is invalid, after saying what is wrong with it
+*/
+static const char *
+hisv6_dbzerror(void)
+{
+    return errno == EDOM ? "invalid dbz file" : strerror(errno);
+}
+
+
+/*
 **  format line or offset into a string for error reporting
 */
 static void
@@ -394,13 +405,15 @@ hisv6_reopen(struct hisv6 *h)
             npairs = (h->npairs == -1) ? 0 : h->npairs;
             if (!dbzfresh(h->histpath, dbzsize(npairs))) {
                 hisv6_seterror(h, concat("can't dbzfresh ", h->histpath, " ",
-                                         strerror(errno), NULL));
+                                         hisv6_dbzerror(), NULL));
+                hisv6_dbzowner = NULL; /* nothing for dbzclose() to close */
                 hisv6_closefiles(h);
                 goto fail;
             }
         } else if (!dbzinit(h->histpath)) {
             hisv6_seterror(h, concat("can't dbzinit ", h->histpath, " ",
-                                     strerror(errno), NULL));
+                                     hisv6_dbzerror(), NULL));
+            hisv6_dbzowner = NULL; /* nothing for dbzclose() to close */
             hisv6_closefiles(h);
             goto fail;
         }
@@ -1328,9 +1341,9 @@ hisv6_expire(void *history, const char *path, const char *reason, bool writing,
 
         if (h->npairs == 0) {
             if (!dbzagain(hnew->histpath, h->histpath)) {
-                hisv6_seterror(h,
-                               concat("can't dbzagain ", hnew->histpath, ":",
-                                      h->histpath, strerror(errno), NULL));
+                hisv6_seterror(h, concat("can't dbzagain ", hnew->histpath,
+                                         ":", h->histpath, " ",
+                                         hisv6_dbzerror(), NULL));
                 r = false;
                 goto fail;
             }
@@ -1339,9 +1352,9 @@ hisv6_expire(void *history, const char *path, const char *reason, bool writing,
 
             npairs = (h->npairs == -1) ? 0 : h->npairs;
             if (!dbzfresh(hnew->histpath, dbzsize(npairs))) {
-                hisv6_seterror(h,
-                               concat("can't dbzfresh ", hnew->histpath, ":",
-                                      h->histpath, strerror(errno), NULL));
+                hisv6_seterror(h, concat("can't dbzfresh ", hnew->histpath,
+                                         ":", h->histpath, " ",
+                                         hisv6_dbzerror(), NULL));
                 r = false;
                 goto fail;
             }
