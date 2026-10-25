@@ -664,6 +664,7 @@ EXTERN NEWSGROUP *Groups;
 extern OPERATINGMODE Mode;
 EXTERN volatile sig_atomic_t GotTerminate;
 EXTERN SITE *Sites;
+EXTERN int SITEreaderrors;
 EXTERN SITE ME;
 EXTERN struct timeval TimeOut;
 EXTERN struct timeval Now; /* Reasonably accurate time */
