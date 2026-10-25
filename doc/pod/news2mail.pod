@@ -4,7 +4,7 @@ news2mail - Channel script to gateway news into e-mails
 
 =head1 SYNOPSIS
 
-B<news2mail>
+B<news2mail> [B<-n>]
 
 =head1 DESCRIPTION
 
@@ -14,11 +14,13 @@ entries pointing to it (see below); B<news2mail> expects the token of an
 article followed by a sequence of list names.
 
 B<news2mail> uses the configuration file I<pathetc>/news2mail.cf to map
-mailing-list names to e-mail addresses.  B<news2mail> causes the mail
-transport agent (usually B<sendmail>, as set in the I<mta> parameter in
+mailing-list names to e-mail addresses.  By default, B<news2mail> causes the
+mail transport agent (usually B<sendmail>, as set in the I<mta> parameter in
 F<inn.conf>) to queue the messages for later delivery (to avoid DOS attacks
-by mass postings).  You must run C<sendmail -q> periodically to get the queue
-processed.
+by mass postings), with its B<-odq> flag.  You must then run C<sendmail -q>
+periodically to get the queue processed, unless the mail transport agent
+already does it.  Use the B<-n> flag to have the messages delivered without
+waiting for a queue run.
 
 If the gatewaying is being set up with a software like Mailman which has the
 feature of pulling and posting news articles on its own, you should just rely
@@ -31,6 +33,23 @@ that is making the newsgroup a moderated newsgroup, and setting the Mailman
 list address as the moderator address of the newsgroup in the moderators(5)
 configuration file, and having everything go through Mailman.  In this setup,
 Mailman can even be used as a moderation interface.
+
+=head1 OPTIONS
+
+=over 4
+
+=item B<-n>
+
+Do not ask the mail transport agent to queue the messages: B<news2mail>
+then does not give it the B<-odq> flag, and the messages are delivered
+according to the configuration of the mail transport agent, usually right
+away.  This flag is also needed with mail transport agents which do not
+support B<-odq>.  To use it, add it to the command of the channel feed in
+F<newsfeeds>:
+
+    news2mail!:!*:Ac,Tc,Wn*:<pathbin>/news2mail -n
+
+=back
 
 =head1 CONFIGURATION FILE
 
