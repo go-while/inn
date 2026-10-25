@@ -987,6 +987,7 @@ tests/e2e/history_test.go             Tests of the history file
 tests/e2e/inject_test.go              Tests of rnews and inews
 tests/e2e/inncheck_test.go            Tests of inncheck
 tests/e2e/logs_test.go                Tests of scanlogs and innreport
+tests/e2e/news2mail_test.go           Tests of news2mail
 tests/e2e/newsfeeds_test.go           Tests of newsfeeds entries
 tests/e2e/peer_test.go                Tests of innd as a feeding peer
 tests/e2e/reader_test.go              Tests of nnrpd through innd
