@@ -194,6 +194,16 @@ malformed stored Xref records with tradspool and corrupt history records.
 The overview and storage backends also validate more structures before using
 them.  Many thanks to Kevin Bowling for the patches.
 
+=item *
+
+Fixed an illegal division by zero in B<innreport> when generating the graphs
+of the index page with HTML reports not archived.  The report has no date in
+its file name in that case; its year is now taken from the news log.  If there
+is still nothing to plot, the statistics of the graphs are shown as C<n/a>.
+Setting I<archive> or I<casesensitive> to C<false> in F<innreport.conf> was
+also ignored (only the B<-noarchive> and B<-nocasesensitive> flags worked);
+both parameters are now honoured.
+
 =back
 
 =head1 Changes in 2.7.4 (2026-06-22)
