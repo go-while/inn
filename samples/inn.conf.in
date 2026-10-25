@@ -203,6 +203,8 @@ nicekids:                    4
 nicenewnews:                 0
 nicennrpd:                   0
 pauseretrytime:              300
+peerrcvbufsize:              0
+peersndbufsize:              0
 peertimeout:                 3600
 rlimitnofile:                -1
 
