@@ -194,6 +194,13 @@ malformed stored Xref records with tradspool and corrupt history records.
 The overview and storage backends also validate more structures before using
 them.  Many thanks to Kevin Bowling for the patches.
 
+=item *
+
+The I<checkincludedtext> check of the sample F<filter_nnrpd.pl> Perl filter
+for B<nnrpd> now reads the body of the article from C<$body>.  It used
+C<$hdr{'__BODY__'}>, which B<nnrpd> does not set, so articles with too much
+quoted text were never rejected when the check was enabled.
+
 =back
 
 =head1 Changes in 2.7.4 (2026-06-22)
