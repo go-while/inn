@@ -38,6 +38,12 @@ B<inndf>.
 The overview data of received articles are flushed to disk every
 I<ovflushcount> articles, as set in F<inn.conf>.
 
+F<buffindexed.conf> cannot be reloaded with C<ctlinnd reload>: B<innd>
+only reads it at startup, so restart B<innd> with C<ctlinnd xexec innd>
+to take changes into account.  B<nnrpd> reads it each time it is spawned
+for a new connection, even when it runs as a daemon with B<-D>, and other
+programs like B<expireover> read it each time they start.
+
 In the F<buffindexed.conf> file, blank lines and lines beginning with a
 number sign (C<#>) are ignored.  All other lines must be of the format:
 
