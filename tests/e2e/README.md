@@ -32,6 +32,8 @@ needs the Go standard library:
 | `TestSIGTERMWhileIdle` | innd | an idle innd exits on SIGTERM |
 | `TestSIGTERMWhileBusy` | innd, Perl filter | a SIGTERM received while innd is busy in a slow `filter_art` takes effect once the filter returns, not at the next connection |
 | `TestSIGTERMUnderLoad` | innd | innd exits with status 0 on SIGTERM while peers and readers connect |
+| `TestFilterHeadPerl` | innd, Perl filter | `filter_art` gets the whole header in `$hdr{__HEAD__}` (#73), byte for byte, and can reject on a header field innd does not know (437, 439, syslog) |
+| `TestFilterHeadPython` | innd, Python filter | the same with `art['__HEAD__']`; skipped when innd was built without Python |
 | `TestAuthinfo` | innd, nnrpd, ckpasswd | AUTHINFO USER/PASS: 480 before, 481 for a wrong password, 281, then no AUTHINFO in CAPABILITIES and 502 for another (RFC 4643) |
 | `TestAcceptedSizeLongConnection` | innd | the "accepted size" innd logs when a feed closes equals the sum of the articles' `:bytes` after about 40 MB in one connection (#366; reads the journal, skipped without access) |
 | `TestStartTLS` | innd, nnrpd | STARTTLS: 382, TLS with the site's certificate, no STARTTLS in CAPABILITIES afterwards, reading and posting over TLS, 502 for a second STARTTLS (RFC 4642) |
