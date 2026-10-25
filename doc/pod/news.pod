@@ -194,6 +194,12 @@ malformed stored Xref records with tradspool and corrupt history records.
 The overview and storage backends also validate more structures before using
 them.  Many thanks to Kevin Bowling for the patches.
 
+=item *
+
+When the I<timer> parameter in F<inn.conf> is set, B<nnrpd> now also
+collects the idle time of readers using TLS.  It was only counted until
+the TLS negotiation.
+
 =back
 
 =head1 Changes in 2.7.4 (2026-06-22)
