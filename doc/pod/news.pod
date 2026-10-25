@@ -206,6 +206,14 @@ it does not exist; entries are kept, with an error exit status, when it
 cannot tell because of a storage error.  B<sm> has a new B<-e> flag to tell
 a missing article from a retrieval error.
 
+=item *
+
+B<makehistory> B<-O> and B<overchan> no longer skip overview data longer
+than 32 KB (such as the overview of an article with a very long References
+header field).  B<innd> stores such overview data, but rebuilding the
+overview with B<makehistory> dropped it with an "overview line is too long"
+or "input line too long, skipping" warning.
+
 =back
 
 =head1 Changes in 2.7.4 (2026-06-22)
