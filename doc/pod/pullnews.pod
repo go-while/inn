@@ -165,7 +165,14 @@ Checkpoint (save) the config file every I<checkpt> articles
 
 =item B<-l> I<logfile>
 
-Log progress/stats to I<logfile> (default is C<stdout>).
+Log progress/stats to I<logfile> (default is C<stdout>).  The log file
+is opened in append mode.
+
+When B<pullnews> runs as part of INN, the standard name of its log file is
+F<pullnews.log> in I<pathlog> (as set in F<inn.conf>), for instance
+S<C<-l /usr/local/news/log/pullnews.log>> with the default value of
+I<pathlog>.  This file is then rotated by B<scanlogs> (see newslog(5)).
+Log files with other names are not rotated by INN.
 
 =item B<-L> I<size>
 
@@ -389,6 +396,6 @@ contrib script by Kai Henningsen, adding again S<6 other> flags.
 
 =head1 SEE ALSO
 
-incoming.conf(5), rnews(1).
+incoming.conf(5), newslog(5), rnews(1), scanlogs(8).
 
 =cut
