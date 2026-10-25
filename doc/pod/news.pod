@@ -194,6 +194,14 @@ malformed stored Xref records with tradspool and corrupt history records.
 The overview and storage backends also validate more structures before using
 them.  Many thanks to Kevin Bowling for the patches.
 
+=item *
+
+B<makehistory> B<-O> and B<overchan> no longer skip overview data longer
+than 32 KB (such as the overview of an article with a very long References
+header field).  B<innd> stores such overview data, but rebuilding the
+overview with B<makehistory> dropped it with an "overview line is too long"
+or "input line too long, skipping" warning.
+
 =back
 
 =head1 Changes in 2.7.4 (2026-06-22)
