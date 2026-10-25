@@ -370,6 +370,14 @@ articles still present.  B<procbatch> now asks B<sm> about all the tokens
 of a batchfile at once, and keeps the file check for entries giving a
 pathname.
 
+=item *
+
+B<makehistory> B<-O> and B<overchan> no longer skip overview data longer
+than 32 KB (such as the overview of an article with a very long References
+header field).  B<innd> stores such overview data, but rebuilding the
+overview with B<makehistory> dropped it with an "overview line is too long"
+or "input line too long, skipping" warning.
+
 =back
 
 =head1 Changes in 2.7.4 (2026-06-22)
