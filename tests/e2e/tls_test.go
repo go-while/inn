@@ -214,9 +214,16 @@ var idleTimer = regexp.MustCompile(` time \d+ .*\bidle (\d+)\((\d+)\)`)
 func TestStartTLSIdleTimer(t *testing.T) {
 	const pause = 500 * time.Millisecond
 	s := NewSite(t, SiteOptions{TLS: true, InnConf: map[string]string{"timer": "3600"}})
-	// The timer statistics are the last message of a session.
+	// The timer statistics are the last message of a session. Other nnrpd sessions (without
+	// TLS) may have logged theirs before, so look only after the start of the TLS session.
 	lines := tlsSessionPause(t, s, pause, " idle ")
-	for _, line := range lines {
+	start := 0
+	for i, line := range lines {
+		if strings.HasPrefix(line, "starttls: ") {
+			start = i
+		}
+	}
+	for _, line := range lines[start:] {
 		m := idleTimer.FindStringSubmatch(line)
 		if m == nil {
 			continue
