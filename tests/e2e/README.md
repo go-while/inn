@@ -20,6 +20,8 @@ needs the Go standard library:
   defer or reject articles, refuse streaming, drop the connection in the middle
   of a reply, send replies slowly, or behave like specific real-world servers.
 - `proc`: starts and stops `innd`, and prints its output when a test fails.
+- `conformance`: black-box RFC 3977, 4643 and 4644 checks against any NNTP
+  address, each on its own connection with the strict client.
 
 ## What is covered
 
@@ -35,6 +37,9 @@ needs the Go standard library:
 | `TestSIGTERMUnderLoad` | innd | innd exits with status 0 on SIGTERM while peers and readers connect |
 | `TestFilterHeadPerl` | innd, Perl filter | `filter_art` gets the whole header in `$hdr{__HEAD__}` (#73), byte for byte, and can reject on a header field innd does not know (437, 439, syslog) |
 | `TestFilterHeadPython` | innd, Python filter | the same with `art['__HEAD__']`; skipped when innd was built without Python |
+| `TestConformanceReader` | innd, nnrpd | nntp-testkit's RFC 3977 checks against nnrpd with a strict client: greeting, CAPABILITIES, GROUP, LISTGROUP, NEXT/LAST, ARTICLE/HEAD/BODY/STAT, the 412/420/423/430 errors, LIST variants, OVER, DATE, HELP, QUIT, POST, and IHAVE with the `I` permission |
+| `TestConformanceReaderAuth` | innd, nnrpd, ckpasswd | the RFC 4643 AUTHINFO checks, then the reader checks after logging in |
+| `TestConformancePeer` | innd, nnrpd | the RFC 4644 and IHAVE checks against innd itself (127.0.0.1 listed as a streaming peer): MODE STREAM, pipelined CHECK, TAKETHIS, duplicates, malformed IHAVE; reader checks via MODE READER |
 | `TestAuthinfo` | innd, nnrpd, ckpasswd | AUTHINFO USER/PASS: 480 before, 481 for a wrong password, 281, then no AUTHINFO in CAPABILITIES and 502 for another (RFC 4643) |
 | `TestAuthProgramTimeout` | innd, nnrpd | an authenticator that writes nothing for `program_timeout` seconds (readers.conf, default 5) is killed and AUTHINFO gets 481; with a longer `program_timeout` a slow one succeeds (#131) |
 | `TestAcceptedSizeLongConnection` | innd | the "accepted size" innd logs when a feed closes equals the sum of the articles' `:bytes` after about 40 MB in one connection (#366; reads the journal, skipped without access) |

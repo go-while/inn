@@ -979,6 +979,7 @@ tests/e2e/article_test.go             Article and reply helpers
 tests/e2e/auth_test.go                Tests of AUTHINFO with nnrpd and ckpasswd
 tests/e2e/client_test.go              Tests of innxmit, innfeed, getlist, pullnews
 tests/e2e/compress_test.go            Tests of COMPRESS DEFLATE with nnrpd
+tests/e2e/conformance_test.go         Protocol conformance of nnrpd and innd
 tests/e2e/ctlinnd_test.go             Tests of ctlinnd commands
 tests/e2e/filterbody_test.go          Tests of __BODY__ in the innd filters
 tests/e2e/filterhead_test.go          Tests of __HEAD__ in the innd filters
