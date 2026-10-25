@@ -33,6 +33,9 @@ the client an empty response.  And if the file is missing, the server
 will also send the client an appropriate response to indicate that
 the distributions list is not maintained on the server.
 
+Nothing needs to be reloaded after modifying F<distributions>: B<nnrpd>
+reads it each time a client sends the LIST DISTRIBUTIONS command.
+
 The Distribution header field can also be automatically set by B<nnrpd>
 if distrib.pats(5) is correctly configured.
 

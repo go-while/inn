@@ -5,7 +5,10 @@ innwatch.ctl - List of supervisory actions taken by innwatch
 =head1 DESCRIPTION
 
 The file I<pathetc>/innwatch.ctl is used to determine what actions are
-taken during the periodic supervisions by B<innwatch>.
+taken during the periodic supervisions by B<innwatch>.  Nothing needs to
+be reloaded after modifying F<innwatch.ctl>: B<innwatch> reads it again at
+each supervision (every I<innwatchsleeptime> seconds by default, as set in
+F<inn.conf>).
 
 The file consists of a series of lines; blank lines and lines beginning
 with a number sign (C<#>) are ignored.  All other lines consist of

@@ -18,6 +18,14 @@ this out automatically when that article is retrieved via the storage
 API.  Note that you may also want to see the options provided in
 inn.conf(5) regarding article storage.
 
+After any changes, run C<inncheck> to perform basic syntax checks.
+F<storage.conf> cannot be reloaded with C<ctlinnd reload>: B<innd> only
+reads it at startup, so restart B<innd> with C<ctlinnd xexec innd> to take
+changes into account (this also restarts the channel feeds like innfeed(8)
+that B<innd> spawns).  B<nnrpd> reads it each time it is spawned for a new
+connection, even when it runs as a daemon with B<-D>, and other programs
+like B<expire> read it each time they start.
+
 The F<storage.conf> file consists of a series of storage method entries.
 Blank lines and lines beginning with a number sign (C<#>) are ignored.
 The maximum number of characters in each line is 255.  The order of

@@ -24,6 +24,10 @@ default {> and ends with C<};>.  Each line in the section consists of an
 option name followed with one or more spaces or tabulations, its value and
 a semi-colon C<;>.
 
+Nothing needs to be reloaded after modifying F<innreport.conf>:
+B<innreport> reads it each time it runs (normally from B<scanlogs>,
+called by B<news.daily>).
+
 The I<display_conf_file> option defines the name of the display configuration
 file to use.  This file, located in I<libpath>, has the same syntax as
 F<innreport.conf>.  If you want to use a custom display configuration, just

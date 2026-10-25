@@ -194,6 +194,13 @@ malformed stored Xref records with tradspool and corrupt history records.
 The overview and storage backends also validate more structures before using
 them.  Many thanks to Kevin Bowling for the patches.
 
+=item *
+
+The man page of each configuration file now says how changes to it take
+effect: which C<ctlinnd> command reloads it, whether B<nnrpd> picks it up
+at the next connection, or whether a restart is needed.  The C<ctlinnd
+reload> keywords are now listed one by one in ctlinnd(8).
+
 =back
 
 =head1 Changes in 2.7.4 (2026-06-22)

@@ -27,7 +27,9 @@ for which no checkgroups control messages are sent, unless
 you manually process checkgroups texts for them.  Lines beginning
 with a hash sign (C<#>) are not taken into account in this file.
 All the newsgroups and descriptions mentioned in I<pathetc>/localgroups
-are appended to the processed checkgroups.
+are appended to the processed checkgroups.  Nothing needs to be reloaded
+after modifying F<localgroups>: B<docheckgroups> reads it each time it
+runs.
 
 If I<exclude-pattern> is given, I<include-pattern> should also
 be given before (you can use an empty string ("") if you want
