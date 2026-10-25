@@ -88,7 +88,7 @@ defined:
     X-Original-Trace, X-Originating-IP, X-PGP-Key, X-PGP-Sig,
     X-Poster-Trace, X-Postfilter, X-Proxy-User, X-Submissions-To,
     X-Trace, X-Usenet-Provider, X-User-ID, Xref,
-    __BODY__, __LINES__.
+    __BODY__, __HEAD__, __LINES__.
 
 Note that all the above values are as they arrived, not modified
 by your INN (especially, the Xref header field, if present, is the one
@@ -96,14 +96,26 @@ of the remote site which sent you the article, and not yours).
 
 These values will be buffer objects (for S<Python 2.x>) or memoryview
 objects (for S<Python 3.x>) holding the contents of the same named
-article headers, except for the special C<__BODY__> and C<__LINES__>
-items.  Items not present in the article will contain C<None>.
+article headers, except for the special C<__BODY__>, C<__HEAD__> and
+C<__LINES__> items.  Items not present in the article will contain C<None>.
 
 C<art['__BODY__']> is a buffer/memoryview object containing the article's
 entire body, and C<art['__LINES__']> is a long integer holding B<innd>'s
 reckoning of the number of lines in the article.  All the other elements
 will be buffer/memoryview objects with the contents of the same-named
 article headers.
+
+C<art['__HEAD__']> is a buffer/memoryview object containing all the header
+fields of the article, including the ones not in the above list: every
+header field line in the order received, with folded and repeated header
+fields as they are, without the empty line that separates the header from
+the body.  Like C<art['__BODY__']>, it is in wire format: each line ends
+with CRLF (C<\r\n>), and a line beginning with a dot has that dot doubled.
+For instance, to reject articles carrying a header field that INN does not
+know (with Python 3.x):
+
+    if re.search(rb"^X-Spam-Foo:", art["__HEAD__"], re.M | re.I):
+        return "X-Spam-Foo header field present"
 
 The Newsgroups header field body of the article is accessible inside
 the Python filter as C<art['Newsgroups']>.

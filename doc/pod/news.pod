@@ -194,6 +194,14 @@ malformed stored Xref records with tradspool and corrupt history records.
 The overview and storage backends also validate more structures before using
 them.  Many thanks to Kevin Bowling for the patches.
 
+=item *
+
+The Perl and Python filters of B<innd> now get the whole header of the
+article in the new C<__HEAD__> key of C<%hdr> (Perl) or of the article
+dictionary (Python), so that they can also look at header fields that
+B<innd> does not know, in the order received.  Thanks to Russ Allbery for
+the suggestion.
+
 =back
 
 =head1 Changes in 2.7.4 (2026-06-22)
