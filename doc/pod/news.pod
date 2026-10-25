@@ -194,6 +194,12 @@ malformed stored Xref records with tradspool and corrupt history records.
 The overview and storage backends also validate more structures before using
 them.  Many thanks to Kevin Bowling for the patches.
 
+=item *
+
+The output of C<inncheck -f --perm> is now always valid input for a shell.
+Syntax problems found in the checked files, as well as the messages of the
+B<-v> flag, were not prefixed with a hash sign like the other messages.
+
 =back
 
 =head1 Changes in 2.7.4 (2026-06-22)
