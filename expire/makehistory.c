@@ -136,6 +136,32 @@ GetMessageID(char *p)
 }
 
 /*
+**  Read a line of any length from F into line and return it, nul-terminated
+**  and without its trailing newline, or NULL at end of file or on a read
+**  error (check ferror).  A last line without a newline is ignored, as QIO
+**  does.  QIO is not used for the sorted overview file because it skips
+**  lines longer than QIO_BUFFERSIZE, and innd stores overview data of any
+**  length.
+*/
+static char *
+ReadOverLine(FILE *F, struct buffer *line)
+{
+    char chunk[8192];
+    size_t length;
+
+    buffer_set(line, NULL, 0);
+    while (fgets(chunk, sizeof(chunk), F) != NULL) {
+        length = strlen(chunk);
+        buffer_append(line, chunk, length);
+        if (length > 0 && chunk[length - 1] == '\n') {
+            line->data[line->left - 1] = '\0';
+            return line->data;
+        }
+    }
+    return NULL;
+}
+
+/*
 **  The overview temp file is used to accumulate overview lines as articles are
 **  scanned.  The format is
 **  (1st) newsgroup name\tToken\toverview data.
@@ -156,7 +182,8 @@ FlushOverTmpFile(void)
     int i, pid, fd;
     float f;
     TOKEN token;
-    QIOSTATE *qp;
+    FILE *F;
+    struct buffer *buffer;
     int count;
     char *line, *p;
     char *q = NULL;
@@ -242,7 +269,7 @@ FlushOverTmpFile(void)
     OverTmpPath = NULL;
 
     /* Read sorted lines. */
-    if ((qp = QIOopen(SortedTmpPath)) == NULL) {
+    if ((F = fopen(SortedTmpPath, "r")) == NULL) {
         syswarn("cannot open sorted overview file %s", SortedTmpPath);
         OVclose();
         if (Fork)
@@ -251,15 +278,8 @@ FlushOverTmpFile(void)
             exit(1);
     }
 
-    for (count = 1;; ++count) {
-        line = QIOread(qp);
-        if (line == NULL) {
-            if (QIOtoolong(qp)) {
-                warn("overview line %d is too long", count);
-                continue;
-            } else
-                break;
-        }
+    buffer = buffer_new();
+    for (count = 1; (line = ReadOverLine(F, buffer)) != NULL; ++count) {
         if ((p = strchr(line, '\t')) == NULL
             || (q = strchr(p + 1, '\t')) == NULL
             || (r = strchr(q + 1, '\t')) == NULL) {
@@ -313,7 +333,7 @@ FlushOverTmpFile(void)
         }
     }
     /* Check for errors and close. */
-    if (QIOerror(qp)) {
+    if (ferror(F)) {
         syswarn("cannot read sorted overview file %s", SortedTmpPath);
         OVclose();
         if (Fork)
@@ -321,7 +341,8 @@ FlushOverTmpFile(void)
         else
             exit(1);
     }
-    QIOclose(qp);
+    fclose(F);
+    buffer_free(buffer);
     /* unlink sorted tmp file */
     unlink(SortedTmpPath);
     free(SortedTmpPath);
