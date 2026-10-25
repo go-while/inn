@@ -6,8 +6,11 @@ nnrpd.track - Specify hosts to be tracked by nnrpd
 
 This file, which is located in I<pathetc>, specifies which hosts are to
 have their activities recorded during an B<nnrpd> session.  The B<nnrpd>
-server reads it when first spawned by B<innd>, provided I<readertrack>
-in F<inn.conf> is true; otherwise this file is not used.
+server reads it at the beginning of each new connection, provided
+I<readertrack> is true (in F<inn.conf>, or in the matching access group in
+F<readers.conf>); otherwise this file is not used.  Nothing needs to be
+reloaded after modifying F<nnrpd.track>: changes take effect for all new
+connections, even when B<nnrpd> runs as a daemon with B<-D>.
 
 Entries consist of one host specification per line, each line having
 two fields, separated by a colon:

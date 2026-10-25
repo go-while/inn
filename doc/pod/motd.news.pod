@@ -24,6 +24,9 @@ If one or both of these files are missing, it is not an error.  The server
 will just send the client the appropriate response for an unmaintained
 F<motd.innd> or F<motd.nnrpd> file.
 
+Nothing needs to be reloaded after modifying these files: B<innd> and
+B<nnrpd> read them each time a client sends the LIST MOTD command.
+
 On a fresh INN install, samples for these files are installed
 in I<pathetc>; you will therefore find in F<motd.innd.sample> and
 F<motd.nnrpd.sample> a few examples of messages that can be communicated

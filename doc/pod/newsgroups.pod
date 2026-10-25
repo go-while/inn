@@ -22,6 +22,9 @@ If you use C<ctlinnd newgroup> to manually create a group, only the
 F<active> file is updated.  You should then edit the F<newsgroups>
 file in order to add a short description for the created group.  The
 same goes for manually removing or changing the status of a newsgroup.
+Nothing needs to be reloaded after editing F<newsgroups>: B<innd> and
+B<nnrpd> read it each time a client asks for newsgroup descriptions (with
+LIST NEWSGROUPS, or XGTITLE for B<nnrpd>).
 
 Each line of the F<newsgroups> file consists of two fields separated
 by at least one tabulation:
