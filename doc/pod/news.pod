@@ -328,6 +328,16 @@ envelope-from address of one of them if it was the only one set, and the
 C<news> user otherwise.  Note that a crosspost may therefore now give several
 e-mails.  Thanks to D. Stussy for the bug report.
 
+=item *
+
+B<tdx-util> B<-A> and B<-F> no longer loop forever on a F<group.index> file
+of the tradindexed overview method whose hash chains or free list contain
+a loop of more than one entry.  Such a loop is reported, and B<tdx-util>
+B<-F> now cuts it and relinks the entries.  B<innd> also refuses to reuse
+an entry of a corrupted free list that still belongs to a newsgroup, which
+could create such loops, and a malformed line in the F<active> file no
+longer makes B<tdx-util> loop forever.
+
 =back
 
 =head1 Changes in 2.7.4 (2026-06-22)
