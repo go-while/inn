@@ -310,6 +310,14 @@ F<innfeed.conf>, so that several instances of B<innfeed> running at the
 same time no longer share F<innfeed.debug> and F<innfeed.snapshot>.
 Relative pathnames start from I<pathlog>, and the defaults are unchanged.
 
+=item *
+
+A new B<-n> flag in B<news2mail> lets the mail transport agent deliver the
+messages according to its own configuration (usually right away), instead
+of always asking it to only queue them with B<-odq>, which needed a periodic
+C<sendmail -q> run and was not supported by every mail transport agent.
+Queuing remains the default.  Thanks to Russ Allbery for the bug report.
+
 =back
 
 =head1 Changes in 2.7.4 (2026-06-22)
