@@ -17,6 +17,8 @@
 # where the first token is the name fed to us from the INN's newsfeeds file.
 # The second token is the actual address sendmail ships the article to.
 # The third token is optional: it sets the envelope-from address.
+# An article fed to several lists is sent in one mail per envelope-from
+# address, to the lists which use it.
 #
 # In the INN's newsfeeds file, you need to have a channel feed:
 #     news2mail!:!*:Ac,Tc,Wn*:<pathbin>/news2mail
@@ -30,7 +32,7 @@
 #     - D. Stussy added support for the third optional token for envelope-from
 #       address.  (June 2008.)
 #     - Various other bug fixes, code and documentation improvements
-#       in 1999, 2000, 2002-2004, 2007, 2008, 2016, 2021-2024
+#       in 1999, 2000, 2002-2004, 2007, 2008, 2016, 2021-2024, 2026
 
 require 5.006;
 
@@ -94,10 +96,17 @@ while (<STDIN>) {
         syslog('info', 'skipping list(s): ', join(' ', @bad)) if ($use_syslog);
     }
 
-    my $sa = $INN::Config::newsuser;
-    my @src = grep { defined($saddr{$_}) } @good;
-    $sa = @saddr{@src} if (@src == 1);
-    mailto($token, $sa, @maddr{@good});
+    # Send one mail per envelope sender, to the lists which use it.  Lists
+    # without an envelope-from address in news2mail.cf use the news user.
+    my (@senders, %rcpts);
+    foreach my $ln (@good) {
+        my $sa = defined($saddr{$ln}) ? $saddr{$ln} : $INN::Config::newsuser;
+        push(@senders, $sa) if (!defined($rcpts{$sa}));
+        push(@{ $rcpts{$sa} }, $maddr{$ln});
+    }
+    foreach my $sa (@senders) {
+        mailto($token, $sa, @{ $rcpts{$sa} });
+    }
 }
 
 syslog("info", "end") if ($use_syslog);
