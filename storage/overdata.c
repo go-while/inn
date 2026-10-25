@@ -153,10 +153,45 @@ build_header(const char *article, size_t length, const char *header,
 
 
 /*
+**  Given an article in wire format and its length, compute the values of the
+**  :bytes and :lines metadata items as RFC 3977 defines them, which is also
+**  what innd and makehistory write in overview.  :bytes is the size of the
+**  article without the final ".\r\n" and without the dots added by
+**  dot-stuffing, counting CRLF as two octets.  :lines is the number of lines
+**  in the body.
+*/
+static void
+count_article(const char *article, size_t length, unsigned long *bytes,
+              unsigned long *lines)
+{
+    const char *p, *body, *end;
+    unsigned long dots = 0;
+
+    *lines = 0;
+    if (length >= 5 && memcmp(article + length - 5, "\r\n.\r\n", 5) == 0)
+        length -= 3;
+    end = article + length;
+    body = wire_findbody(article, length);
+    for (p = article; p != NULL && p < end;) {
+        if (*p == '.')
+            dots++;
+        if (body != NULL && p >= body)
+            (*lines)++;
+        p = memchr(p, '\n', end - p);
+        if (p != NULL)
+            p++;
+    }
+    *bytes = (unsigned long) length - dots;
+}
+
+
+/*
 **  Given an article number, an article, and a vector of additional header
 **  fields, generate overview data into the provided buffer.  If the buffer
 **  parameter is NULL, a new buffer is allocated.  The article should be in
-**  wire format.
+**  wire format, including the final ".\r\n".  The Bytes and Lines fields are
+**  computed from the article (see count_article), not taken from header
+**  fields.
 **  Returns the buffer containing the overview data.
 */
 struct buffer *
@@ -164,16 +199,19 @@ overview_build(ARTNUM number, const char *article, size_t length,
                const struct vector *extra, struct buffer *overview)
 {
     unsigned int field;
+    unsigned long bytes, lines;
     char buffer[32];
 
+    count_article(article, length, &bytes, &lines);
     snprintf(buffer, sizeof(buffer), "%lu", number);
     if (overview == NULL)
         overview = buffer_new();
     buffer_set(overview, buffer, strlen(buffer));
     for (field = 0; field < ARRAY_SIZE(fields); field++) {
         buffer_append(overview, "\t", 1);
-        if (field == 5) {
-            snprintf(buffer, sizeof(buffer), "%lu", (unsigned long) length);
+        if (field == 5 || field == 6) {
+            snprintf(buffer, sizeof(buffer), "%lu",
+                     field == 5 ? bytes : lines);
             buffer_append(overview, buffer, strlen(buffer));
         } else
             build_header(article, length, fields[field], overview);

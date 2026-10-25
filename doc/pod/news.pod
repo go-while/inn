@@ -395,6 +395,21 @@ is noticed.  The headers of the sections are unchanged, but scripts parsing
 the report may need adapting if they rely on the order of its sections.
 Thanks to Paul Tomblin for the suggestion.
 
+=item *
+
+B<tdx-util> B<-R> now writes the same C<:bytes> and C<:lines> values in
+overview as B<innd> and B<makehistory>.  C<:bytes> no longer counts the
+final C<.\r\n> and the dots added by dot-stuffing, and C<:lines> is now
+the number of lines in the body instead of the value of a Lines header
+field (left empty when the article had none).
+
+=item *
+
+The C<:bytes> metadata item now leaves out the dots of all dot-stuffed lines.
+B<innd> counted the size of the article one too high when its first header
+line or the first line of its body began with a dot, and B<makehistory>
+when a header field name began with a dot.
+
 =back
 
 =head1 Changes in 2.7.4 (2026-06-22)
