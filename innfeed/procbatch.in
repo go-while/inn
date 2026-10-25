@@ -89,7 +89,7 @@ sub missing_articles {
     if ($pid == 0) {
         # Send the messages of sm to the parent and discard the headers of
         # the articles it retrieves.
-        open(STDERR, '>&', \*STDOUT) or die "$0: cannot dup stdout: $!\n";
+        open(STDERR, '>&STDOUT') or die "$0: cannot dup stdout: $!\n";
         open(STDOUT, '>', '/dev/null')
           or die "$0: cannot open /dev/null: $!\n";
         open(my $TOKENS, '|-', "$INN::Config::newsbin/sm", '-H')
