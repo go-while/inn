@@ -105,9 +105,22 @@ the remote site which sent you the article, and not yours).
 
 For example, the Newsgroups header field body of the article is accessible
 inside the Perl filter as C<$hdr{'Newsgroups'}>.  In addition,
-C<$hdr{'__BODY__'}> will contain the full body of the article and
+C<$hdr{'__BODY__'}> will contain the full body of the article,
 C<$hdr{'__LINES__'}> will contain the number of lines in the body of the
-article.
+article, and C<$hdr{'__HEAD__'}> will contain all the header fields of the
+article, including the ones not in the above list.
+
+C<$hdr{'__HEAD__'}> is the header of the article as it arrived: every header
+field line in the order received, with folded and repeated header fields
+as they are, without the empty line that separates the header from the
+body.  Like C<$hdr{'__BODY__'}>, it is in wire format: each line ends with
+CRLF (C<\r\n>), and a line beginning with a dot has that dot doubled.  For
+instance, to reject articles carrying a header field that INN does not
+know:
+
+    if ($hdr{'__HEAD__'} =~ /^X-Spam-Foo:/mi) {
+        return "X-Spam-Foo header field present";
+    }
 
 The contents of the %hdr hash for a typical article may therefore look
 something like this:
@@ -124,6 +137,10 @@ something like this:
         'Message-ID' => '<6.20232.842369548@example.com>',
         __BODY__     => 'Send five dollars to ISC, c/o ...',
         __LINES__    => 5,
+        __HEAD__     => "Path: news.example.com!not-for-mail\r\n"
+                        . "From: Joe Spamer <him\@example.com>\r\n"
+                        . "...\r\n"
+                        . "X-Spam-Foo: yes\r\n",
     );
 
 Note that the value of C<$hdr{Lines}> is the body of the (obsolescent and
