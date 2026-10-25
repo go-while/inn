@@ -194,6 +194,14 @@ malformed stored Xref records with tradspool and corrupt history records.
 The overview and storage backends also validate more structures before using
 them.  Many thanks to Kevin Bowling for the patches.
 
+=item *
+
+The names of the debug and snapshot files of B<innfeed> can now be set
+with the new I<debug-file> and I<snapshot-file> parameters in
+F<innfeed.conf>, so that several instances of B<innfeed> running at the
+same time no longer share F<innfeed.debug> and F<innfeed.snapshot>.
+Relative pathnames start from I<pathlog>, and the defaults are unchanged.
+
 =back
 
 =head1 Changes in 2.7.4 (2026-06-22)
