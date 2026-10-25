@@ -240,6 +240,12 @@ expanded by B<innd>.  They were previously kept as is, so a pattern like
 C<@$LOCALGROUPS> in a variable did not exclude the groups of
 C<$LOCALGROUPS> from the feeds using that variable.
 
+=item *
+
+The output of C<inncheck -f --perm> is now always valid input for a shell.
+Syntax problems found in the checked files, as well as the messages of the
+B<-v> flag, were not prefixed with a hash sign like the other messages.
+
 =back
 
 =head1 Changes in 2.7.4 (2026-06-22)
