@@ -269,6 +269,11 @@ Setting I<archive> or I<casesensitive> to C<false> in F<innreport.conf> was
 also ignored (only the B<-noarchive> and B<-nocasesensitive> flags worked);
 both parameters are now honoured.
 
+=item *
+
+B<scanlogs> now rotates F<pullnews.log> in I<pathlog>, which is the standard
+name of the log file of B<pullnews> when called with the B<-l> flag.
+
 =back
 
 =head1 Changes in 2.7.4 (2026-06-22)
