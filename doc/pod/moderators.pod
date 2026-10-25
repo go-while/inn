@@ -51,6 +51,11 @@ If this file doesn't exist, or if a post is made to a moderated group that
 has no matching entry in this file, B<nnrpd> falls back on the value of
 I<moderatormailer> set in F<inn.conf> and, failing that, rejects the post.
 
+Nothing needs to be reloaded after modifying F<moderators>: B<nnrpd> reads
+it each time an unapproved article is posted to a moderated newsgroup, and
+each time a client sends the LIST MODERATORS command.  After any changes,
+you can run C<inncheck> to perform basic syntax checks.
+
 =head1 EXAMPLES
 
 Here is a sample file:

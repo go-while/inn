@@ -10,6 +10,11 @@ purposes: it defines how long history entries for expired or rejected
 articles are remembered, and it determines how long articles stored on the
 server are retained.
 
+Nothing needs to be reloaded after modifying F<expire.ctl>: changes take
+effect the next time B<expire> and B<expireover> run (normally from
+B<news.daily>).  After any changes, you can run C<inncheck> to perform
+basic syntax checks.
+
 Normally, if all of the storage methods used by the server are
 self-expiring (such as CNFS), all lines except the C</remember/> setting
 (described below) are ignored.  This can be changed with the B<-N> option

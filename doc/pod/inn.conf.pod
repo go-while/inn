@@ -15,7 +15,15 @@ generally not affect any running programs until they restart.  Unlike
 nearly every other configuration file, F<inn.conf> cannot be reloaded
 dynamically using ctlinnd(8); innd(8) must be stopped and restarted for
 relevant changes to F<inn.conf> to take effect (C<ctlinnd xexec innd> is
-the fastest way to do this.)
+the fastest way to do this; it also restarts the channel feeds like
+innfeed(8) that B<innd> spawns.)  B<nnrpd> reads F<inn.conf> each time it
+is spawned for a new connection, except when it runs as a daemon with
+B<-D>, in which case it has to be restarted.  Programs run from cron or
+by B<news.daily> read it each time they start.  Other daemons started by
+B<rc.news>, like B<innwatch>, B<ovdb_server> or B<ovsqlite-server>, are not
+restarted by C<ctlinnd xexec innd>; stop and start INN with B<rc.news>
+to restart all of them.  After any changes, you can run C<inncheck> to
+perform basic syntax checks.
 
 Blank lines and lines starting with a number sign (C<#>) are ignored.  All
 other lines specify parameters, and should be of the following form:

@@ -41,6 +41,10 @@ B<actsync>, B<getlist>, B<inews>, B<innxbatch>, B<innxmit>, B<nnrpd>,
 B<nntpget> and B<rnews> make use of F<passwd.nntp> when needing to connect
 to a remote server.
 
+Nothing needs to be reloaded after modifying F<passwd.nntp>: these
+programs read it each time they authenticate to a remote server.  After any
+changes, you can run C<inncheck> to perform basic syntax checks.
+
 =head1 HISTORY
 
 Written by Rich $alz <rsalz@uunet.uu.net> for InterNetNews.
