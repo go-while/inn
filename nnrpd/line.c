@@ -38,6 +38,13 @@ line_free(struct line *line)
 }
 
 #ifdef HAVE_OPENSSL
+/* LibreSSL has no SSL_has_pending().  Without read-ahead, which is off by
+ * default, all data OpenSSL holds is in decrypted records, which
+ * SSL_pending() counts. */
+#    if defined(LIBRESSL_VERSION_NUMBER)
+#        define SSL_has_pending(s) (SSL_pending(s) > 0)
+#    endif
+
 /*
 **  Alarm signal handler for client timeout.
 */
@@ -76,6 +83,38 @@ line_reset(struct line *line)
     assert(line);
     line->where = line->start;
     line->remaining = 0;
+}
+
+/*
+**  Wait at most timeout seconds for data on stdin, updating the IDLE timer
+**  statistics.  Returns true if there is data to read, false on timeout or
+**  error.
+*/
+static bool
+line_wait(int timeout)
+{
+    fd_set rmask;
+    int i;
+
+    do {
+        struct timeval t;
+
+        FD_ZERO(&rmask);
+        FD_SET(STDIN_FILENO, &rmask);
+        t.tv_sec = timeout;
+        t.tv_usec = 0;
+        TMRstart(TMR_IDLE);
+        i = select(STDIN_FILENO + 1, &rmask, NULL, NULL, &t);
+        TMRstop(TMR_IDLE);
+        if (i == -1 && errno != EINTR) {
+            syswarn("%s can't select", Client.host);
+            break;
+        }
+    } while (i == -1);
+
+    /* If stdin didn't select, we must have timed out.  select() failure
+     * from above is treated the same way. */
+    return i > 0 && FD_ISSET(STDIN_FILENO, &rmask);
 }
 
 /*
@@ -121,25 +160,21 @@ line_doread(void *p, size_t len, int timeout)
         }
 #endif /* HAVE_ZLIB */
 
-        /* It seems that the SSL_read cannot be mixed with select()
-         * as in the current code.  TLS communicates in its own data
-         * blocks and handshaking.  The line_doread using SSL_read
-         * could return, but still with a partial line in the SSL_read
-         * buffer.  Then the server TLS routine would sit there waiting
-         * for completion of that data block while nnrpd sat at the
-         * select() routine waiting for more data from the server.
-         *
-         * Here, we decide to just bypass the select() wait.  Unlike
-         * innd with multiple threads, the select on nnrpd is just
-         * waiting on a single file descriptor, so it is not really
-         * essential with blocked read like SSL_read.  Using an alarm
-         * signal around SSL_read for non active timeout, TLS works
-         * without dead locks.  However, without the select() wait,
-         * the IDLE timer stat won't be collected...
-         */
 #ifdef HAVE_OPENSSL
         if (tls_conn) {
             int err;
+
+            /* select() only sees data on the socket, not data OpenSSL
+             * has already read from it, and waiting for more while
+             * OpenSSL holds a complete line would deadlock.  So wait
+             * with select(), which also collects the IDLE timer
+             * statistics, only when OpenSSL holds no data.  SSL_read()
+             * may still block for the rest of a TLS record, so it runs
+             * under an alarm for the client timeout. */
+            if (!SSL_has_pending(tls_conn) && !line_wait(timeout)) {
+                n = -2; /* timeout */
+                break;
+            }
             xsignal(SIGALRM, alarmHandler);
             do {
                 alarm(timeout);
@@ -168,29 +203,7 @@ line_doread(void *p, size_t len, int timeout)
         } else
 #endif /* HAVE_OPENSSL */
         {
-            fd_set rmask;
-            int i;
-
-            /* Wait for activity on stdin, updating timer stats as we go. */
-            do {
-                struct timeval t;
-
-                FD_ZERO(&rmask);
-                FD_SET(STDIN_FILENO, &rmask);
-                t.tv_sec = timeout;
-                t.tv_usec = 0;
-                TMRstart(TMR_IDLE);
-                i = select(STDIN_FILENO + 1, &rmask, NULL, NULL, &t);
-                TMRstop(TMR_IDLE);
-                if (i == -1 && errno != EINTR) {
-                    syswarn("%s can't select", Client.host);
-                    break;
-                }
-            } while (i == -1);
-
-            /* If stdin didn't select, we must have timed out.  select()
-             * failure from above is treated the same way. */
-            if (i <= 0 || !FD_ISSET(STDIN_FILENO, &rmask)) {
+            if (!line_wait(timeout)) {
                 n = -2; /* timeout */
                 break;
             }
