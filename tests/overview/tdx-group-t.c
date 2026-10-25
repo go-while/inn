@@ -55,6 +55,9 @@ fake_innconf(void)
 /*
 **  Message handler recording the warnings of an audit.
 */
+static void audit_warning(size_t, const char *, va_list, int)
+    __attribute__((__format__(printf, 2, 0)));
+
 static void
 audit_warning(size_t len UNUSED, const char *fmt, va_list args, int err)
 {
