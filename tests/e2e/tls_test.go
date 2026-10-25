@@ -158,8 +158,16 @@ func TestStartTLSWithoutCertificate(t *testing.T) {
 // the test when no nnrpd message is readable.
 func tlsSession(tb testing.TB, s *Site) []string {
 	tb.Helper()
+	return tlsSessionPause(tb, s, 0, " times user ")
+}
+
+// tlsSessionPause is tlsSession, waiting for pause between the TLS negotiation and the GROUP
+// command, and for a session message containing end before it returns.
+func tlsSessionPause(tb testing.TB, s *Site, pause time.Duration, end string) []string {
+	tb.Helper()
 	cursor := s.JournalCursor(tb)
 	tc, _ := startTLS(tb, s, s.Reader(tb))
+	time.Sleep(pause)
 	expect(tb, tc, 211, "GROUP e2e.test")
 	expect(tb, tc, 205, "QUIT")
 
@@ -174,7 +182,7 @@ func tlsSession(tb testing.TB, s *Site) []string {
 				break
 			}
 		}
-		if slices.ContainsFunc(session, func(l string) bool { return strings.Contains(l, " times user ") }) {
+		if slices.ContainsFunc(session, func(l string) bool { return strings.Contains(l, end) }) {
 			return lines
 		}
 		if time.Now().After(limit) {
@@ -195,6 +203,32 @@ func TestStartTLSLogLevel(t *testing.T) {
 	if !slices.Contains(lines, "setting up TLS connection") {
 		t.Errorf("tlsloglevel 1: nnrpd did not log \"setting up TLS connection\":\n%s", strings.Join(lines, "\n"))
 	}
+}
+
+// idleTimer matches the idle timer in the timer statistics nnrpd logs at exit: the total in
+// milliseconds and the number of waits.
+var idleTimer = regexp.MustCompile(` time \d+ .*\bidle (\d+)\((\d+)\)`)
+
+// TestStartTLSIdleTimer: with the timer parameter in inn.conf, nnrpd counts the time it waits
+// for a TLS reader in its idle timer (issue #90; it skipped the timed wait for TLS readers).
+func TestStartTLSIdleTimer(t *testing.T) {
+	const pause = 500 * time.Millisecond
+	s := NewSite(t, SiteOptions{TLS: true, InnConf: map[string]string{"timer": "3600"}})
+	// The timer statistics are the last message of a session.
+	lines := tlsSessionPause(t, s, pause, " idle ")
+	for _, line := range lines {
+		m := idleTimer.FindStringSubmatch(line)
+		if m == nil {
+			continue
+		}
+		total, _ := strconv.Atoi(m[1])
+		t.Logf("timer statistics: %q", line)
+		if want := int(pause/time.Millisecond) * 4 / 5; total < want {
+			t.Errorf("idle timer %d ms after a pause of %v over TLS, want at least %d ms", total, pause, want)
+		}
+		return
+	}
+	t.Fatalf("nnrpd logged no idle timer statistics:\n%s", strings.Join(lines, "\n"))
 }
 
 // dumpRow matches the offset that starts a line of nnrpd's hexadecimal dump of TLS data. The
