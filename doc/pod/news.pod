@@ -361,6 +361,15 @@ effect: which C<ctlinnd> command reloads it, whether B<nnrpd> picks it up
 at the next connection, or whether a restart is needed.  The C<ctlinnd
 reload> keywords are now listed one by one in ctlinnd(8).
 
+=item *
+
+The B<-c> flag of B<procbatch> now checks the existence of articles with
+any storage method.  It used to look only for files in a tradspool article
+spool, so it dropped every entry given as a storage API token, even of
+articles still present.  B<procbatch> now asks B<sm> about all the tokens
+of a batchfile at once, and keeps the file check for entries giving a
+pathname.
+
 =back
 
 =head1 Changes in 2.7.4 (2026-06-22)
