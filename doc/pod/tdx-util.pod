@@ -47,8 +47,11 @@ To rebuild the database for a particular newsgroup, use B<-R>.  The B<-R>
 option takes a path to a directory which contains all of the articles for
 that newsgroup, one per file.  The names of the files must be the numbers
 of the articles in that group.  (In other words, this directory must be a
-traditional spool directory for that group.)  The B<-n> option must also
-be given to specify the newsgroup for which the overview is being rebuilt.
+traditional spool directory for that group.)  If the articles are stored
+with the tradspool storage method, C<-> can be given instead of the path,
+and B<tdx-util> will use the directory of that newsgroup in the article
+spool.  The B<-n> option must also be given to specify the newsgroup for
+which the overview is being rebuilt.
 
 For all operations performed by B<tdx-util>, a different overview database
 than the one specified in F<inn.conf> may be specified using the B<-p>
@@ -187,6 +190,18 @@ I<path>.  The articles must be in the form of a traditional spool
 directory; in other words, each article must be in a separate file and the
 name of the file must match the article number of the article.
 
+If I<path> is C<->, the articles are read from the directory where the
+tradspool storage method stores the articles of that group: the newsgroup
+name with all periods changed to slashes, under I<patharticles> as set in
+F<inn.conf>.  For instance, the articles of C<example.test> are read from
+F<I<patharticles>/example/test>.  This is only useful if the articles are
+stored with tradspool.
+
+The articles must be in the history database, from which the storage API
+token, the arrival time and the expiration time of each article are taken.
+The directory is read before the overview is changed, so if it cannot be
+read, the overview of the group is left untouched.
+
 If this option is given, the B<-n> option must also be given to specify
 the newsgroup on which to act.
 
@@ -223,11 +238,21 @@ Audit the entire overview database for any problems:
 Rebuild the overview information for example.test from a traditional spool
 directory:
 
-    tdx-util -R <patharticles in inn.conf>/example/test -n example.test
+    tdx-util -R /path/to/example/test -n example.test
 
-The last command may be useful for recovering from a bad crash or
-corrupted overview information for a particular group, if you are also
-using the tradspool article storage method.
+Rebuild the overview information for example.test from its directory in
+the article spool, if you are also using the tradspool article storage
+method:
+
+    tdx-util -R - -n example.test
+
+Do the same for every newsgroup whose name starts with C<example.>:
+
+    grep '^example\.' <pathdb in inn.conf>/active | cut -d' ' -f1 \
+        | xargs -n 1 tdx-util -R - -n
+
+The last two commands may be useful for recovering from a bad crash or
+corrupted overview information for some groups.
 
 =head1 HISTORY
 
