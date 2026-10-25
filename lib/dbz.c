@@ -288,9 +288,9 @@ static erec empty_rec; /* empty rec to compare against
                           initialized in dbzinit */
 
 /* misc. forwards */
-static bool getcore(hash_table *tab);
+static bool getcore(hash_table *tab, const char *name);
 static bool putcore(hash_table *tab);
-static bool getconf(FILE *df, dbzconfig *cp);
+static bool getconf(FILE *df, dbzconfig *cp, const char *name);
 static int putconf(FILE *f, dbzconfig *cp);
 static void start(searcher *sp, const HASH hash, searcher *osp);
 #ifdef DO_TAGGED_HASH
@@ -380,12 +380,13 @@ create_truncate(const char *name, const char *pag1)
 
     fn = concat(name, pag1, (char *) 0);
     f = Fopen(fn, "w", TEMPORARYOPEN);
-    free(fn);
     if (f == NULL) {
-        syswarn("unable to create/truncate %s", pag1);
+        syswarn("dbz: unable to create/truncate %s", fn);
+        free(fn);
         return false;
-    } else
-        Fclose(f);
+    }
+    Fclose(f);
+    free(fn);
     return true;
 }
 
@@ -415,7 +416,7 @@ dbzfresh(const char *name, off_t size)
     }
 
     /* get default configuration */
-    if (!getconf(NULL, &c))
+    if (!getconf(NULL, &c, NULL))
         return false; /* "can't happen" */
 
 #ifdef DO_TAGGED_HASH
@@ -446,19 +447,22 @@ dbzfresh(const char *name, off_t size)
     /* write it out */
     fn = concat(name, dir, (char *) 0);
     f = Fopen(fn, "w", TEMPORARYOPEN);
-    free(fn);
     if (f == NULL) {
-        syswarn("dbzfresh: unable to write config");
+        syswarn("dbzfresh: unable to write config to %s", fn);
+        free(fn);
         return false;
     }
     if (putconf(f, &c) < 0) {
         Fclose(f);
+        free(fn);
         return false;
     }
     if (Fclose(f) == EOF) {
-        syswarn("dbzfresh: fclose failure");
+        syswarn("dbzfresh: fclose failure on %s", fn);
+        free(fn);
         return false;
     }
+    free(fn);
 
     /* create and truncate .pag, or .index/.hash files */
 #ifdef DO_TAGGED_HASH
@@ -572,15 +576,16 @@ dbzagain(const char *name, const char *oldname)
     /* pick up the old configuration */
     fn = concat(oldname, dir, (char *) 0);
     f = Fopen(fn, "r", TEMPORARYOPEN);
-    free(fn);
     if (f == NULL) {
-        syswarn("dbzagain: cannot open old .dir file");
+        syswarn("dbzagain: cannot open old .dir file %s", fn);
+        free(fn);
         return false;
     }
-    result = getconf(f, &c);
+    result = getconf(f, &c, fn);
     Fclose(f);
+    free(fn);
     if (!result) {
-        syswarn("dbzagain: getconf failed");
+        errno = EDOM; /* as in dbzinit */
         return false;
     }
 
@@ -630,11 +635,12 @@ dbzagain(const char *name, const char *oldname)
     /* write it out */
     fn = concat(name, dir, (char *) 0);
     f = Fopen(fn, "w", TEMPORARYOPEN);
-    free(fn);
     if (f == NULL) {
-        syswarn("dbzagain: unable to write new .dir");
+        syswarn("dbzagain: unable to write new .dir file %s", fn);
+        free(fn);
         return false;
     }
+    free(fn);
     i = putconf(f, &c);
     Fclose(f);
     if (i < 0) {
@@ -666,13 +672,12 @@ openhashtable(const char *base, const char *ext, hash_table *tab,
 
     name = concat(base, ext, (char *) 0);
     if ((tab->fd = open(name, readonly ? O_RDONLY : O_RDWR)) < 0) {
-        syswarn("openhashtable: could not open raw");
         oerrno = errno;
+        syswarn("dbz: can't open %s", name);
         free(name);
         errno = oerrno;
         return false;
     }
-    free(name);
 
     tab->reclen = reclen;
     fdflag_close_exec(tab->fd, true);
@@ -681,22 +686,24 @@ openhashtable(const char *base, const char *ext, hash_table *tab,
     /* get first table into core, if it looks desirable and feasible */
     tab->incore = incore;
     if (tab->incore != INCORE_NO) {
-        if (!getcore(tab)) {
-            syswarn("openhashtable: getcore failure");
+        if (!getcore(tab, name)) {
             oerrno = errno;
             close(tab->fd);
+            free(name);
             errno = oerrno;
             return false;
         }
     }
 
     if (options.nonblock && !fdflag_nonblocking(tab->fd, true)) {
-        syswarn("fcntl: could not set nonblock");
         oerrno = errno;
+        syswarn("dbz: can't make %s nonblocking", name);
         close(tab->fd);
+        free(name);
         errno = oerrno;
         return false;
     }
+    free(name);
     return true;
 }
 
@@ -760,20 +767,24 @@ dbzinit(const char *name)
         readonly = true;
     } else
         readonly = false;
-    free(fname);
     if (dirf == NULL) {
-        syswarn("dbzinit: can't open .dir file");
+        int oerrno = errno;
+
+        syswarn("dbzinit: can't open %s", fname);
+        free(fname);
+        errno = oerrno;
         return false;
     }
     fdflag_close_exec(fileno(dirf), true);
 
-    /* pick up configuration */
-    if (!getconf(dirf, &conf)) {
-        warn("dbzinit: getconf failure");
+    /* pick up configuration; getconf() says what is wrong */
+    if (!getconf(dirf, &conf, fname)) {
+        free(fname);
         Fclose(dirf);
         errno = EDOM; /* kind of a kludge, but very portable */
         return false;
     }
+    free(fname);
 
     /* open pag or idx/exists file */
 #ifdef DO_TAGGED_HASH
@@ -1131,7 +1142,7 @@ dbzstore(const HASH key, off_t data)
  *   returns true for success, false for failure
  */
 static bool
-getconf(FILE *df, dbzconfig *cp)
+getconf(FILE *df, dbzconfig *cp, const char *name)
 {
     int i;
 
@@ -1160,12 +1171,13 @@ getconf(FILE *df, dbzconfig *cp)
                &cp->valuesize, &cp->fillpercent, &cp->tagenb, &cp->tagmask,
                &cp->tagshift, &cp->dropbits);
     if (i != 7) {
-        warn("dbz: bad first line in .dir history file");
+        warn("dbz: bad first line in .dir history file %s", name);
         warn("dbz: you should consider running makedbz manually");
         return false;
     }
     if (cp->valuesize != sizeof(of_t)) {
-        warn("dbz: wrong of_t size (%d)", cp->valuesize);
+        warn("dbz: wrong of_t size (%d, expected %d) in %s", cp->valuesize,
+             (int) sizeof(of_t), name);
         return false;
     }
     cp->lenfuzzy = (int) (1 << cp->dropbits) - 1;
@@ -1183,11 +1195,12 @@ getconf(FILE *df, dbzconfig *cp)
     i = fscanf(df, "dbz 6 %ld %d %d\n", &cp->tsize, &cp->valuesize,
                &cp->fillpercent);
     if (i != 3) {
-        warn("dbz: bad first line in .dir history file");
+        warn("dbz: bad first line in .dir history file %s", name);
         return false;
     }
     if (cp->valuesize != (sizeof(of_t) + sizeof(erec))) {
-        warn("dbz: wrong of_t size (%d)", cp->valuesize);
+        warn("dbz: wrong of_t size (%d, expected %d) in %s", cp->valuesize,
+             (int) (sizeof(of_t) + sizeof(erec)), name);
         return false;
     }
 #endif /* DO_TAGGED_HASH */
@@ -1195,8 +1208,8 @@ getconf(FILE *df, dbzconfig *cp)
 
     /* second line, the usages */
     for (i = 0; i < NUSEDS; i++)
-        if (!fscanf(df, "%ld", &cp->used[i])) {
-            warn("dbz: bad usage value in .dir history file");
+        if (fscanf(df, "%ld", &cp->used[i]) != 1) {
+            warn("dbz: bad usage value in .dir history file %s", name);
             return false;
         }
     debug("used %ld %ld %ld...", cp->used[0], cp->used[1], cp->used[2]);
@@ -1204,8 +1217,8 @@ getconf(FILE *df, dbzconfig *cp)
 #ifdef DO_TAGGED_HASH
     /* third line, the text usages */
     for (i = 0; i < NUSEDS; i++)
-        if (!fscanf(df, "%ld", &cp->vused[i])) {
-            warn("dbz: bad text usage value in .dir history file");
+        if (fscanf(df, "%ld", &cp->vused[i]) != 1) {
+            warn("dbz: bad text usage value in .dir history file %s", name);
             return false;
         }
     debug("vused %ld %ld %ld...", cp->vused[0], cp->vused[1], cp->vused[2]);
@@ -1258,7 +1271,7 @@ putconf(FILE *f, dbzconfig *cp)
  * Returns: pointer to copy of file or NULL on error
  */
 static bool
-getcore(hash_table *tab)
+getcore(hash_table *tab, const char *name)
 {
     char *it;
     ssize_t nread;
@@ -1271,20 +1284,27 @@ getcore(hash_table *tab)
     if (tab->incore == INCORE_MMAP) {
 #if defined(HAVE_MMAP)
         if (fstat(tab->fd, &st) == -1) {
-            syswarn("dbz: getcore: fstat failed");
+            syswarn("dbz: getcore: fstat of %s failed", name);
             return false;
         }
         if ((off_t) length > st.st_size) {
-            /* file too small; extend it */
+            /* file too small; extend it, unless it is open read-only */
+            if (readonly) {
+                warn("dbz: getcore: %s has %ld bytes, less than the %lu"
+                     " of the table size in the .dir file",
+                     name, (long) st.st_size, (unsigned long) length);
+                errno = EDOM;
+                return false;
+            }
             if (ftruncate(tab->fd, length) == -1) {
-                syswarn("dbz: getcore: ftruncate failed");
+                syswarn("dbz: getcore: ftruncate of %s failed", name);
                 return false;
             }
         }
         it = mmap(NULL, length, readonly ? PROT_READ : PROT_WRITE | PROT_READ,
                   MAP_SHARED, tab->fd, 0);
         if (it == (char *) -1) {
-            syswarn("dbz: getcore: mmap failed");
+            syswarn("dbz: getcore: mmap of %s failed", name);
             return false;
         }
 #    ifdef MADV_RANDOM
@@ -1292,7 +1312,7 @@ getcore(hash_table *tab)
         madvise(it, length, MADV_RANDOM);
 #    endif
 #else
-        warn("dbz: getcore: can't mmap files");
+        warn("dbz: getcore: can't mmap %s", name);
         return false;
 #endif
     } else {
@@ -1300,7 +1320,7 @@ getcore(hash_table *tab)
 
         nread = read(tab->fd, it, length);
         if (nread < 0) {
-            syswarn("dbz: getcore: read failed");
+            syswarn("dbz: getcore: read of %s failed", name);
             free(it);
             return false;
         }
