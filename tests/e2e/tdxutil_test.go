@@ -3,11 +3,13 @@ package e2e
 // tdx-util, the administration tool of the tradindexed overview.
 
 import (
+	"fmt"
 	"io/fs"
 	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
+	"time"
 )
 
 // overviewLines returns the overview of group as OVER sends it (no lines for an empty
@@ -22,22 +24,6 @@ func overviewLines(tb testing.TB, s *Site, group string) []string {
 	}
 	expect(tb, c, 205, "QUIT")
 	return lines
-}
-
-// overviewFields drops the :bytes and :lines fields (the 7th and 8th) of OVER lines: the
-// overview that tdx-util -R builds has the size of the stored article, terminating "." line
-// included, in :bytes and only a Lines header field in :lines, which differ from what innd
-// computes when the article arrives.
-func overviewFields(lines []string) []string {
-	out := make([]string, len(lines))
-	for i, l := range lines {
-		f := strings.Split(l, "\t")
-		if len(f) > 7 {
-			f = slices.Delete(f, 6, 8)
-		}
-		out[i] = strings.Join(f, "\t")
-	}
-	return out
 }
 
 // newFiles returns the leftovers of an unfinished rebuild (*-NEW files) in the overview.
@@ -90,12 +76,8 @@ func TestTdxUtilRebuildFromSpool(t *testing.T) {
 		if err != nil {
 			t.Fatalf("tdx-util -R - -n %s: %v\n%s", g, err, out)
 		}
-		got := overviewLines(t, s, g)
-		if !slices.Equal(overviewFields(got), overviewFields(want)) {
+		if got := overviewLines(t, s, g); !slices.Equal(got, want) {
 			t.Errorf("OVER of %s after tdx-util -R -:\n%s\nwant:\n%s", g,
-				strings.Join(got, "\n"), strings.Join(want, "\n"))
-		} else if !slices.Equal(got, want) {
-			t.Logf("OVER of %s differs only in :bytes or :lines after the rebuild:\n%s\nbefore:\n%s", g,
 				strings.Join(got, "\n"), strings.Join(want, "\n"))
 		}
 	}
@@ -117,5 +99,113 @@ func TestTdxUtilRebuildFromSpool(t *testing.T) {
 	}
 	if got := overviewLines(t, s, "e2e.test"); len(got) != len(before["e2e.test"]) {
 		t.Errorf("OVER of e2e.test after a failed rebuild: %q", got)
+	}
+}
+
+// TestTdxUtilRebuildBytesLines: the overview that tdx-util -R builds from the spool has the
+// :bytes and :lines that innd wrote when the articles arrived, and so has the overview that
+// makehistory -O -S prints: the values RFC 3977 defines. :bytes is the size of the article
+// without the dots added by dot-stuffing (in header field names too) and without the
+// terminating "." line, :lines the number of lines in the body, whatever a Lines header
+// field says. tdx-util used to write the size of the stored article (terminating line and
+// stuffing dots included) and the Lines header field (nothing when there was none); innd
+// counted a stuffing dot on the first body line or the first header line, and makehistory
+// one in a header field name. Checked with the spool in wire format and in native format.
+func TestTdxUtilRebuildBytesLines(t *testing.T) {
+	cases := []struct {
+		name  string
+		first string   // a header line put before Path, or ""
+		extra []string // header lines added after Date
+		body  []string
+	}{
+		{"plain", "", nil, []string{"one", "two", "three"}},
+		{"wrong Lines header", "", []string{"Lines: 99"}, []string{"one", "two"}},
+		{"dot-stuffed lines", "", nil, []string{"first", ".hidden", "..two dots", ".", "last"}},
+		{"dot-stuffed first line", "", nil, []string{".first", "second"}},
+		{"dot-stuffed header", "", []string{".X-Dot: yes"}, []string{"body"}},
+		{"dot-stuffed first header", ".X-Dot: first", nil, []string{"body"}},
+		{"blank body", "", nil, []string{""}},
+	}
+	for _, wf := range []string{"true", "false"} {
+		t.Run("wireformat "+wf, func(t *testing.T) {
+			s := NewSite(t, SiteOptions{InnConf: map[string]string{"wireformat": wf}})
+			p := s.Peer(t)
+			names := map[string]string{} // message-id: case name
+			for _, tc := range cases {
+				id := msgID(t)
+				names[id] = tc.name
+				art := newArticle(id, "e2e.test", tc.name, tc.body...)
+				art = slices.Insert(art, 6, tc.extra...)
+				if tc.first != "" {
+					art = slices.Insert(art, 0, tc.first)
+				}
+				expect(t, p, 335, "IHAVE %s", id)
+				send(t, p, wire(art))
+				status(t, p, 235, "IHAVE "+id)
+			}
+			expect(t, p, 205, "QUIT")
+
+			// :bytes and :lines by the definition, from the articles as the server sends them.
+			want := map[string][2]string{}
+			c := s.Reader(t)
+			for id := range names {
+				expect(t, c, 220, "ARTICLE %s", id)
+				size, lines, body := 0, 0, false
+				for _, l := range c.ReadDotLines() {
+					size += len(l) + 2
+					if body {
+						lines++
+					}
+					body = body || l == ""
+				}
+				want[id] = [2]string{fmt.Sprint(size), fmt.Sprint(lines)}
+			}
+			expect(t, c, 205, "QUIT")
+
+			// counts finds :bytes and :lines after the Message-ID field, in OVER lines or in
+			// makehistory -S lines (token, arrival and expiry, then overview without the number).
+			counts := func(over []string) map[string][2]string {
+				got := map[string][2]string{}
+				for _, l := range over {
+					f := strings.Split(l, "\t")
+					for i := 0; i+3 < len(f); i++ {
+						if _, ok := names[f[i]]; ok {
+							got[f[i]] = [2]string{f[i+2], f[i+3]}
+							break
+						}
+					}
+				}
+				return got
+			}
+			check := func(who string, over []string) {
+				t.Helper()
+				got := counts(over)
+				for id, w := range want {
+					if got[id] != w {
+						t.Errorf("%s: %s wrote :bytes %q :lines %q, want %q %q",
+							names[id], who, got[id][0], got[id][1], w[0], w[1])
+					}
+				}
+			}
+			before := overviewLines(t, s, "e2e.test")
+			check("innd", before)
+
+			out, err := runFor(s, 30*time.Second, "makehistory", "-O", "-x", "-S")
+			if err != nil {
+				t.Fatalf("makehistory -O -x -S: %v\n%s", err, out)
+			}
+			check("makehistory -O -S", strings.Split(out, "\n"))
+
+			dir := filepath.Join(s.Dir, "spool", "articles", "e2e", "test")
+			if out, err := runFor(s, 30*time.Second, "tdx-util", "-R", dir, "-n", "e2e.test"); err != nil {
+				t.Fatalf("tdx-util -R %s -n e2e.test: %v\n%s", dir, err, out)
+			}
+			after := overviewLines(t, s, "e2e.test")
+			check("tdx-util -R", after)
+			if !slices.Equal(after, before) {
+				t.Errorf("OVER after tdx-util -R:\n%s\nwant (from innd):\n%s",
+					strings.Join(after, "\n"), strings.Join(before, "\n"))
+			}
+		})
 	}
 }
