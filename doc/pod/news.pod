@@ -194,6 +194,15 @@ malformed stored Xref records with tradspool and corrupt history records.
 The overview and storage backends also validate more structures before using
 them.  Many thanks to Kevin Bowling for the patches.
 
+=item *
+
+The B<-c> flag of B<procbatch> now checks the existence of articles with
+any storage method.  It used to look only for files in a tradspool article
+spool, so it dropped every entry given as a storage API token, even of
+articles still present.  B<procbatch> now asks B<sm> about all the tokens
+of a batchfile at once, and keeps the file check for entries giving a
+pathname.
+
 =back
 
 =head1 Changes in 2.7.4 (2026-06-22)
