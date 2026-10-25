@@ -12,6 +12,14 @@ B<makedbz> rebuilds I<dbz> database (also known as the F<history> file).
 The default name of the text file is I<pathdb>/history; to specify a different
 name, use the B<-f> flag.
 
+Malformed lines of the text F<history> file (a missing field separator, an
+invalid hash, a line too long to be read) are reported with their line number
+on standard error and skipped, and the database is built from the other lines.
+The articles of the skipped lines cannot be found by their message-ID.
+B<expire> discards malformed lines when it rewrites the text F<history> file.
+Duplicate message-IDs are reported too; only the first line of a duplicate is
+indexed.
+
 =head1 OPTIONS
 
 =over 4
