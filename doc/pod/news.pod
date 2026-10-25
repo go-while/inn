@@ -420,6 +420,13 @@ as it arrived (with CRLF line endings and dot-stuffing), up to the CRLF of
 its last line.  Filters that hash the body (like the EMP checks of
 Cleanfeed) or look at its end get different values than before.
 
+=item *
+
+The I<checkincludedtext> check of the sample F<filter_nnrpd.pl> Perl filter
+for B<nnrpd> now reads the body of the article from C<$body>.  It used
+C<$hdr{'__BODY__'}>, which B<nnrpd> does not set, so articles with too much
+quoted text were never rejected when the check was enabled.
+
 =back
 
 =head1 Changes in 2.7.4 (2026-06-22)
