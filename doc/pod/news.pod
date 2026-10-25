@@ -338,6 +338,13 @@ an entry of a corrupted free list that still belongs to a newsgroup, which
 could create such loops, and a malformed line in the F<active> file no
 longer makes B<tdx-util> loop forever.
 
+=item *
+
+The time B<nnrpd> waits for output from the external programs given in the
+I<res> and I<auth> parameters of auth groups in F<readers.conf> before
+killing them, so far hard-coded to five seconds, can now be set with the new
+I<program_timeout> parameter of auth groups.
+
 =back
 
 =head1 Changes in 2.7.4 (2026-06-22)

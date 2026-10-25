@@ -74,6 +74,7 @@ typedef struct _AUTHGROUP {
     int access_type; /* Type of access (Perl or Python). */
     char *dynamic_script;
     int dynamic_type; /* Type of dynamic authorization (Python only). */
+    unsigned long program_timeout; /* Seconds to wait for res/auth output. */
 } AUTHGROUP;
 
 typedef struct _GROUP {
@@ -186,11 +187,12 @@ static int ConfigBitsize;
 #define PERMpython_access              61
 #define PERMpython_dynamic             62
 #define PERMgroupexactcount            63
+#define PERMprogram_timeout            64
 #if defined(HAVE_OPENSSL) || defined(HAVE_SASL)
-#    define PERMrequire_encryption 64
-#    define PERMMAX                65
+#    define PERMrequire_encryption 65
+#    define PERMMAX                66
 #else
-#    define PERMMAX 64
+#    define PERMMAX 65
 #endif
 
 #define TEST_CONFIG(a, b)                                            \
@@ -278,6 +280,7 @@ static CONFTOKEN PERMtoks[] = {
     {PERMpython_access,              (char *) "python_access:"             },
     {PERMpython_dynamic,             (char *) "python_dynamic:"            },
     {PERMgroupexactcount,            (char *) "groupexactcount:"           },
+    {PERMprogram_timeout,            (char *) "program_timeout:"           },
 #if defined(HAVE_OPENSSL) || defined(HAVE_SASL)
     {PERMrequire_encryption,         (char *) "require_encryption:"        },
 #endif
@@ -429,6 +432,8 @@ copy_authgroup(AUTHGROUP *orig)
     else
         ret->dynamic_type = 0;
 
+    ret->program_timeout = orig->program_timeout;
+
     return (ret);
 }
 
@@ -480,8 +485,9 @@ copy_accessgroup(ACCESSGROUP *orig)
 }
 
 static void
-SetDefaultAuth(AUTHGROUP *curauth UNUSED)
+SetDefaultAuth(AUTHGROUP *curauth)
 {
+    curauth->program_timeout = 5;
 #if defined(HAVE_OPENSSL) || defined(HAVE_SASL)
     curauth->require_encryption = false;
 #endif
@@ -676,6 +682,7 @@ authdecl_parse(AUTHGROUP *curauth, CONFFILE *f, CONFTOKEN *tok)
     METHOD *m;
     bool bit;
     char buff[SMBUF], *oldname, *p;
+    unsigned long timeout;
 
     oldtype = tok->type;
     oldname = tok->name;
@@ -848,6 +855,20 @@ authdecl_parse(AUTHGROUP *curauth, CONFFILE *f, CONFTOKEN *tok)
         curauth->localaddress = xstrdup(tok->name);
         CompressList(curauth->localaddress);
         SET_CONFIG(PERMlocaladdress);
+        break;
+    case PERMprogram_timeout:
+        errno = 0;
+        timeout = strtoul(tok->name, &p, 10);
+        if (!isdigit((unsigned char) tok->name[0]) || *p != '\0'
+            || errno == ERANGE || timeout == 0) {
+            snprintf(buff, sizeof(buff),
+                     "Invalid program_timeout value '%s', expected a "
+                     "positive number of seconds.",
+                     tok->name);
+            ReportError(f, buff);
+        }
+        curauth->program_timeout = timeout;
+        SET_CONFIG(PERMprogram_timeout);
         break;
     default:
         snprintf(buff, sizeof(buff), "Unexpected token '%s'.", tok->name);
@@ -1348,6 +1369,7 @@ PERMreadfile(char *filename)
             case PERMresprog:
             case PERMdefuser:
             case PERMdefdomain:
+            case PERMprogram_timeout:
                 if (curgroup == NULL) {
                     curgroup = xcalloc(1, sizeof(GROUP));
                     memset(ConfigBit, '\0', ConfigBitsize);
@@ -2125,7 +2147,8 @@ ResolveUser(AUTHGROUP *auth)
                 syslog(L_NOTICE, "%s res also-log: %s", Client.host,
                        auth->res_methods[i]->extra_logs[j]);
         }
-        user = auth_external(&Client, command, resdir, NULL, NULL);
+        user = auth_external(&Client, command, resdir, NULL, NULL,
+                             auth->program_timeout);
         if (user == NULL)
             syslog(L_TRACE, "%s res resolver failed", Client.host);
         else {
@@ -2256,7 +2279,8 @@ AuthenticateUser(AUTHGROUP *auth, char *username, char *password,
                     syslog(L_NOTICE, "%s auth also-log: %s", Client.host,
                            auth->auth_methods[i]->extra_logs[j]);
             }
-            user = auth_external(&Client, command, resdir, username, password);
+            user = auth_external(&Client, command, resdir, username, password,
+                                 auth->program_timeout);
             if (user == NULL)
                 syslog(L_TRACE, "%s auth authenticator failed", Client.host);
             else {

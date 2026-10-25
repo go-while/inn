@@ -210,11 +210,13 @@ output(struct client *client, int fd, struct buffer *buffer,
 **  an error, check and report on the exit status.  Returns the username in
 **  newly allocated memory, or NULL if none was found.
 **
-**  Currently, use a hard-coded five-second timeout for all programs.  This
-**  might need to be configurable later.
+**  The program is killed if it produces no output for timeout seconds.  The
+**  timeout applies to each wait for output, not to the total run time of the
+**  program.
 */
 static char *
-handle_output(struct client *client, struct process *process)
+handle_output(struct client *client, struct process *process,
+              unsigned long timeout)
 {
     fd_set fds, rfds;
     struct timeval tv;
@@ -242,7 +244,7 @@ handle_output(struct client *client, struct process *process)
 
     /* Loop until we get an error or end of file. */
     while (1) {
-        tv.tv_sec = 5;
+        tv.tv_sec = timeout;
         tv.tv_usec = 0;
         rfds = fds;
         start = TMRnow_double();
@@ -253,7 +255,8 @@ handle_output(struct client *client, struct process *process)
         /* Check for select timeout or errors. */
         if (status <= 0) {
             if (status == 0)
-                syswarn("%s auth: program timeout", client->host);
+                warn("%s auth: program timeout (no output for %lu s)",
+                     client->host, timeout);
             else {
                 if (errno == EINTR)
                     continue;
@@ -351,15 +354,16 @@ append_client_info(struct client *client, struct buffer *data)
 
 /*
 **  Execute a program to get the remote username.  Takes the client info, the
-**  command to run, the subdirectory in which to look for programs, and
-**  optional username and password information to pass to the program.
+**  command to run, the subdirectory in which to look for programs, optional
+**  username and password information to pass to the program, and the number
+**  of seconds to wait for output from the program before killing it.
 **  Returns the username in newly allocated memory if successful, NULL
 **  otherwise.
 */
 char *
 auth_external(struct client *client, const char *command,
               const char *directory, const char *username,
-              const char *password)
+              const char *password, unsigned long timeout)
 {
     char *user;
     struct process *process;
@@ -383,7 +387,7 @@ auth_external(struct client *client, const char *command,
     buffer_free(input);
 
     /* Get the results. */
-    user = handle_output(client, process);
+    user = handle_output(client, process, timeout);
     close(process->read_fd);
     close(process->error_fd);
     free(process);
