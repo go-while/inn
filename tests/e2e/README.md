@@ -29,6 +29,7 @@ needs the Go standard library:
 | `TestPostAndRead` | innd, nnrpd | POST, then GROUP, ARTICLE, HEAD, BODY, STAT, OVER, LISTGROUP, HDR and NEWNEWS on the result, with lines that need dot-stuffing |
 | `TestPeerIHAVE` | innd | IHAVE from a peer (127.0.0.2), duplicate offer gets 435 |
 | `TestPeerStreaming` | innd | MODE STREAM, pipelined CHECK and TAKETHIS, 438 and 439 for held articles |
+| `TestPeerSocketBuffers` | innd | innd's end of a peer connection keeps the kernel's socket buffers by default and gets `peerrcvbufsize` and `peersndbufsize` when set (#65; reads them with `ss -tm`, Linux only) |
 | `TestSIGTERMWhileIdle` | innd | an idle innd exits on SIGTERM |
 | `TestSIGTERMWhileBusy` | innd, Perl filter | a SIGTERM received while innd is busy in a slow `filter_art` takes effect once the filter returns, not at the next connection |
 | `TestSIGTERMUnderLoad` | innd | innd exits with status 0 on SIGTERM while peers and readers connect |
