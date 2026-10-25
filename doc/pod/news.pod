@@ -233,6 +233,13 @@ B<innd> now warns, in its reply to C<ctlinnd reload all> and in syslog,
 when F<inn.conf> has been modified since it started: changes to that file
 are not taken into account by a reload and require restarting B<innd>.
 
+=item *
+
+Variables used in the value of another variable in F<newsfeeds> are now
+expanded by B<innd>.  They were previously kept as is, so a pattern like
+C<@$LOCALGROUPS> in a variable did not exclude the groups of
+C<$LOCALGROUPS> from the feeds using that variable.
+
 =back
 
 =head1 Changes in 2.7.4 (2026-06-22)
