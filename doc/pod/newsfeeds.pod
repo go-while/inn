@@ -284,6 +284,18 @@ is therefore equivalent to:
 which (as explained below) excludes all of the groups in $LOCALGROUPS
 and unwanted control articles from the feed to that site.
 
+A variable can also be used in the value of another variable.  It is then
+replaced by its value at that point of the file, so it has to be set first.
+For instance, after:
+
+    $NOFEEDGROUPS=@$LOCALGROUPS,!$CONTROLGROUPS
+
+the line:
+
+    news.example.net:*,$NOFEEDGROUPS:Tf,Wnm:
+
+is equivalent to the previous one.
+
 =head1 FLAG VALUES
 
 The I<flags> parameter specifies miscellaneous parameters, including the
