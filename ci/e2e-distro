@@ -49,8 +49,8 @@ install_packages() {
             shadow-utils >/dev/null
     elif command -v zypper >/dev/null; then
         zypper -n -q install gcc make autoconf bison flex perl tar gzip \
-            libopenssl-devel sqlite3-devel timezone zlib-devel rsyslog procps \
-            util-linux shadow
+            diffutils libopenssl-devel sqlite3-devel timezone zlib-devel \
+            rsyslog procps util-linux shadow
     elif command -v pacman >/dev/null; then
         # pacman 7 sandboxes downloads with Landlock, which containers may lack.
         nosandbox=
