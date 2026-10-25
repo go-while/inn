@@ -89,6 +89,11 @@ access to it. The messages are then read from that file instead of the journal.
 The file should not be rotated during the run: BusyBox `syslogd` rotates it at
 200 KB unless started with `-s 0`.
 
+`ci/e2e-distro` builds INN as the news user on a Linux distribution, sets up
+syslog this way when there is no journal, and runs `make check` and these tests.
+The workflow `.github/workflows/e2e-distro.yaml` runs it in containers of about
+twenty distribution images, weekly and on demand.
+
 ## Writing a test
 
 ```go

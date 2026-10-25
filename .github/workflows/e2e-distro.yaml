@@ -1,0 +1,109 @@
+##  Workflow building INN and running make check and tests/e2e on several
+##  Linux distributions, each in a container of its image (see ci/e2e-distro).
+##
+##  It takes a while, so it runs weekly, on demand, and when ci/e2e-distro or
+##  this file changes.  The e2e test binary is built once and shared, so that
+##  Go is not needed in the containers.  The containers are started with
+##  docker run rather than as job containers, in which JavaScript actions do
+##  not run on musl (Alpine).
+
+name: e2e-distro
+
+"on":
+  workflow_dispatch:
+  schedule:
+    - cron: "17 3 * * 1"
+  push:
+    paths:
+      - ci/e2e-distro
+      - .github/workflows/e2e-distro.yaml
+  pull_request:
+    paths:
+      - ci/e2e-distro
+      - .github/workflows/e2e-distro.yaml
+
+jobs:
+  e2e-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: checkout
+        uses: actions/checkout@v6
+      - name: setup go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: tests/e2e/go.mod
+          cache-dependency-path: tests/e2e/go.sum
+      - name: build
+        working-directory: tests/e2e
+        run: CGO_ENABLED=0 go test -c -o "$RUNNER_TEMP/e2e.test" .
+      - name: upload
+        uses: actions/upload-artifact@v7
+        with:
+          name: e2e.test
+          path: ${{ runner.temp }}/e2e.test
+          retention-days: 1
+
+  distro:
+    needs: e2e-test
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+
+    strategy:
+      fail-fast: false
+      matrix:
+        image:
+          - almalinux:9
+          - almalinux:10
+          - alpine:3.22
+          - alpine:3.23
+          - alpine:3.24
+          - archlinux:latest
+          - quay.io/centos/centos:stream9
+          - quay.io/centos/centos:stream10
+          - debian:12
+          - debian:13
+          - fedora:latest
+          - gentoo/stage3:latest
+          - openeuler/openeuler:25.03
+          - opensuse/leap:15.6
+          - opensuse/leap:16.0
+          - rockylinux/rockylinux:9
+          - rockylinux/rockylinux:10
+          - ubuntu:24.04
+          - ubuntu:25.10
+          - ubuntu:26.04
+
+    name: ${{ matrix.image }}
+
+    steps:
+      - name: checkout
+        uses: actions/checkout@v6
+      - name: download
+        uses: actions/download-artifact@v8
+        with:
+          name: e2e.test
+          path: ${{ runner.temp }}/e2e
+      - name: test
+        env:
+          IMAGE: ${{ matrix.image }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/work"
+          set -- --rm -v "$PWD:/src:ro" -v "$RUNNER_TEMP/e2e:/e2e:ro" \
+              -v "$RUNNER_TEMP/work:/work" -w /src \
+              -e BUILDDIR=/work/build -e PREFIX=/opt/inn-e2e
+          case "$IMAGE" in
+          gentoo/*)
+              # The stage3 image has no ebuild repository.
+              docker create --name portage gentoo/portage:latest /bin/true
+              set -- "$@" --volumes-from portage
+              ;;
+          esac
+          docker run "$@" "$IMAGE" sh ci/e2e-distro /e2e/e2e.test
+      - name: logs
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: logs-${{ strategy.job-index }}
+          path: ${{ runner.temp }}/work/build/*.log
+          if-no-files-found: ignore

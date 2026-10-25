@@ -30,7 +30,8 @@ echo "== $PRETTY_NAME"
 
 # Packages needed to build INN with Perl, OpenSSL, SQLite and zlib, and to
 # run make check and the e2e tests (pullnews needs Net::NNTP; the date tests
-# need the time zone database, which minimal images leave out).  The syslog
+# need the time zone database, which minimal images leave out, as some leave
+# out su and useradd).  The syslog
 # daemon is only used when journald is not running.
 install_packages() {
     if command -v apk >/dev/null; then
@@ -44,10 +45,12 @@ install_packages() {
     elif command -v dnf >/dev/null; then
         dnf -q -y install gcc make autoconf bison flex findutils diffutils tar \
             perl perl-devel perl-ExtUtils-Embed perl-libnet openssl-devel \
-            sqlite-devel tzdata zlib-devel rsyslog procps-ng >/dev/null
+            sqlite-devel tzdata zlib-devel rsyslog procps-ng util-linux \
+            shadow-utils >/dev/null
     elif command -v zypper >/dev/null; then
         zypper -n -q install gcc make autoconf bison flex perl tar gzip \
-            libopenssl-devel sqlite3-devel timezone zlib-devel rsyslog procps
+            libopenssl-devel sqlite3-devel timezone zlib-devel rsyslog procps \
+            util-linux shadow
     elif command -v pacman >/dev/null; then
         # pacman 7 sandboxes downloads with Landlock, which containers may lack.
         nosandbox=

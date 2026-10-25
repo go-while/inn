@@ -7,6 +7,7 @@ File Name                             Description
 .github/dependabot.yml                Configuration for GitHub dependabot
 .github/workflows                     GitHub Actions workflows (Directory)
 .github/workflows/build.yaml          Default GitHub Actions testing workflow
+.github/workflows/e2e-distro.yaml     GitHub Actions workflow for ci/e2e-distro
 .github/workflows/e2e.yaml            GitHub Actions workflow for tests/e2e
 .perlcriticrc                         Configuration for perlcritic
 .perltidyrc                           Configuration for perltidy
