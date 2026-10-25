@@ -62,14 +62,25 @@ if (!defined($opt{'s'})) {
     $opt{'s'} =~ s/\n+\Z//;
 }
 
-# Fix up any addresses.
+# Check the addresses.  They are given as arguments to the MTA (without
+# using a shell) and written in the To header field, so only the characters
+# of an unquoted local part (atext in RFC 5322), "." and "@" are accepted.
+# An address is never rewritten: one with other characters (whitespace,
+# quotes, angle brackets, control characters...) is ignored with a warning,
+# and so is one beginning with "-", which the MTA would take as an option.
+my $addrchar = qr{[a-zA-Z0-9!#\$%&'*+/=?^_`\{|\}~.\@-]};
 foreach (@ARGV) {
-    s![^-a-zA-Z0-9+_.@%]!!g;
-
-    push(@addrs, $_) if ($_ ne "");
+    next if ($_ eq "");
+    if (/^-/) {
+        warn "$0: Ignoring address beginning with '-': $_\n";
+    } elsif (!/^$addrchar+\z/) {
+        warn "$0: Ignoring address with unsupported characters: $_\n";
+    } else {
+        push(@addrs, $_);
+    }
 }
 
-die "$0: No addresses specified\n\n$usage" unless @addrs;
+die "$0: No valid addresses specified\n\n$usage" unless @addrs;
 
 if ($sm =~ m!%s!) {
     $sm = sprintf $sm, join(' ', @addrs);

@@ -345,6 +345,15 @@ I<res> and I<auth> parameters of auth groups in F<readers.conf> before
 killing them, so far hard-coded to five seconds, can now be set with the new
 I<program_timeout> parameter of auth groups.
 
+=item *
+
+B<innmail> no longer silently rewrites the addresses it is given by removing
+the characters it does not know, which could send the mail to another
+address.  It now accepts all the characters allowed in an unquoted local
+part of an e-mail address (like C<=>, C</> or C<'>), and ignores with a
+warning an address containing other characters or beginning with C<->,
+which the MTA would have taken as an option.
+
 =back
 
 =head1 Changes in 2.7.4 (2026-06-22)
