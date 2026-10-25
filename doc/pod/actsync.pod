@@ -156,6 +156,9 @@ ignore file used by B<actsync> (the B<-i> option).
 Note that one should not include B<-i> or B<-o> options in the C<flags=> line;
 they are automatically taken care of by B<actsyncd>.
 
+Nothing needs to be reloaded after modifying F<actsync.cfg> or the ignore
+file: B<actsyncd> and B<actsync> read them each time they run.
+
 One may produce a trial B<actsyncd> run without changing anything on
 the server by supplying the I<debug-level> argument:
 

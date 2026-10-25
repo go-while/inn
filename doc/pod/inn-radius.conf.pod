@@ -20,6 +20,10 @@ section of configuration for a particular server should be enclosed in:
 
 where <name> is just some convenient label for that server.
 
+Nothing needs to be reloaded after modifying F<inn-radius.conf>: B<nnrpd>
+runs B<radius> for each authentication attempt, and B<radius> reads this
+file each time it starts.
+
 =head1 SERVER GROUP PARAMETERS
 
 The available parameters are:

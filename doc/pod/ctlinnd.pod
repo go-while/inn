@@ -345,7 +345,57 @@ connections are not closed.
 
 Update the in-memory copy of server configuration files.  I<what>
 identifies what should be reloaded, and I<reason> is reported to syslog in
-the message noting the reload.
+the message noting the reload.  I<what> is one of the following words
+(any other word is rejected with "Unknown reload type"):
+
+=over 2
+
+=item C<active> or C<newsfeeds>
+
+Both the F<active> and F<newsfeeds> files are reloaded, which will also
+cause all outgoing feeds to be flushed and restarted.  The syntax of
+F<newsfeeds> is checked first; if it contains errors, they are reported
+to syslog and nothing is reloaded.
+
+=item C<all> (or the empty string)
+
+Everything in this list is reloaded: the F<active> and F<newsfeeds> files
+(with the same syntax check, which also prevents anything else from being
+reloaded if it fails), the history database (only if the server is
+running), F<incoming.conf>, and the Perl and Python filters if INN was
+built with support for them.
+
+=item C<filter.perl>
+
+The F<filter_innd.pl> file is reloaded.  (This file is however not
+available for reloading unless INN was compiled with Perl filtering
+support.)  If the Perl filter defined a function C<filter_before_reload>,
+it will be called prior to re-reading F<filter_innd.pl>.  If the Perl
+function C<filter_after_reload> is defined, it will be called after
+F<filter_innd.pl> has been reloaded.  Reloading the Perl filter does not
+enable filtering if it has been disabled; use C<perl y> to do this instead.
+F<startup_innd.pl> cannot be reloaded.
+
+=item C<filter.python>
+
+The F<filter_innd.py> file is reloaded.  (This file is however not
+available for reloading unless INN was compiled with Python filtering
+support.)  If a Python method named C<filter_before_reload> exists, it
+will be called prior to re-reading F<filter_innd.py>.  If a Python method
+named C<__init__> exists, it will be called after F<filter_innd.py> has
+been reloaded.  Reloading the Python filter does not enable filtering if
+it has been disabled; use C<python y> to do this.
+
+=item C<history>
+
+The history database is closed and re-opened.  This is only possible
+when the server is running (not paused or throttled).
+
+=item C<incoming.conf>
+
+The F<incoming.conf> file is reloaded.
+
+=back
 
 There is no way to reload F<inn.conf>, F<storage.conf>, or other
 configuration files for the storage or overview backends.  To pick up
@@ -353,29 +403,11 @@ changes to those files, use C<ctlinnd xexec innd> to restart B<innd>.
 When everything is reloaded and F<inn.conf> has been modified since B<innd>
 started, B<innd> says so in its reply and in syslog.
 
-If I<what> is the empty string or the word C<all>, everything is
-reloaded.  If it is the word C<history>, the history database is closed
-and re-opened.  If it is the word C<incoming.conf>, the
-corresponding file is reloaded.  If it is the word C<active> or
-C<newsfeeds>, both the F<active> and F<newsfeeds> files are reloaded,
-which will also cause all outgoing feeds to be flushed and restarted.
-
-If I<what> is the word C<filter.perl>, the F<filter_innd.pl> file is
-reloaded.  (This file is however not available for reloading unless INN
-was compiled with Perl filtering support.)  If the Perl filter defined a
-function C<filter_before_reload>, it will be called prior to re-reading
-F<filter_innd.pl>.  If the Perl function C<filter_after_reload> is defined,
-it will be called after F<filter_innd.pl> has been reloaded.  Reloading the
-Perl filter does not enable filtering if it has been disabled; use C<perl y>
-to do this instead.  F<startup_innd.pl> cannot be reloaded.
-
-If I<what> is the word C<filter.python>, the F<filter_innd.py> file is
-reloaded.  (This file is however not available for reloading unless INN
-was compiled with Python filtering support.)  If a Python method named
-C<filter_before_reload> exists, it will be called prior to re-reading
-F<filter_innd.py>.  If a Python method named C<__init__> exists, it will be
-called after F<filter_innd.py> has been reloaded.  Reloading the Python filter
-does not enable filtering if it has been disabled; use C<python y> to do this.
+Other configuration files need no C<reload> command: for instance,
+B<nnrpd> reads F<readers.conf> each time it is spawned for a new
+connection, and F<innfeed.conf> is reloaded with C<< ctlinnd flush
+I<feed> >> (see innfeed.conf(5)).  The man page of each configuration file
+says how changes to it take effect.
 
 =item renumber I<group>
 

@@ -942,6 +942,11 @@ keys installed at the previous step are not included, so as to leave you the
 choice of whom to trust, and download the most recent ones, in case they have
 changed.)
 
+B<perl-nocem> only reads F<nocem.ctl> when it starts (a SIGHUP only makes
+it reopen its log file).  After any changes, make B<innd> spawn a new
+B<perl-nocem> process with C<ctlinnd flush nocem!>, where C<nocem!> is the
+name of its channel feed in F<newsfeeds> (see the next step).
+
 =item 4.
 
 Add to the F<newsfeeds> file in I<pathetc> an entry like this one in

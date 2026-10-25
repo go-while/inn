@@ -354,6 +354,13 @@ part of an e-mail address (like C<=>, C</> or C<'>), and ignores with a
 warning an address containing other characters or beginning with C<->,
 which the MTA would have taken as an option.
 
+=item *
+
+The man page of each configuration file now says how changes to it take
+effect: which C<ctlinnd> command reloads it, whether B<nnrpd> picks it up
+at the next connection, or whether a restart is needed.  The C<ctlinnd
+reload> keywords are now listed one by one in ctlinnd(8).
+
 =back
 
 =head1 Changes in 2.7.4 (2026-06-22)

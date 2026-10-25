@@ -22,6 +22,9 @@ Be aware that use of the LIST SUBSCRIPTIONS command is not widespread
 (though documented in S<RFC 6048>) and most news clients will never ask
 for this file.
 
+Nothing needs to be reloaded after modifying F<subscriptions>: B<nnrpd>
+reads it each time a client sends the LIST SUBSCRIPTIONS command.
+
 =head1 EXAMPLE
 
 A typical F<subscriptions> file may look like:
