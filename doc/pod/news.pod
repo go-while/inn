@@ -274,6 +274,15 @@ both parameters are now honoured.
 B<scanlogs> now rotates F<pullnews.log> in I<pathlog>, which is the standard
 name of the log file of B<pullnews> when called with the B<-l> flag.
 
+=item *
+
+The path given to the B<-R> option of B<tdx-util> can now be C<->, in which
+case the overview of the newsgroup is rebuilt from its directory in a
+tradspool article spool, found from I<patharticles> in F<inn.conf> and the
+newsgroup name.  Rebuilding the overview of many newsgroups is therefore
+easier, for instance with B<xargs>.  B<tdx-util> also no longer changes the
+overview when the directory given to B<-R> cannot be read.
+
 =back
 
 =head1 Changes in 2.7.4 (2026-06-22)

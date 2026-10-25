@@ -264,6 +264,27 @@ article_list(const char *directory)
 
 
 /*
+**  Return the directory of a newsgroup in a tradspool article spool: the
+**  newsgroup name with all periods changed to slashes, under patharticles.
+**  This is the mapping that tradspool uses when storing articles.  The
+**  caller is responsible for freeing the result.
+*/
+static char *
+spool_path(const char *group)
+{
+    char *dir, *path, *p;
+
+    dir = xstrdup(group);
+    for (p = dir; *p != '\0'; p++)
+        if (*p == '.')
+            *p = '/';
+    path = concat(innconf->patharticles, "/", dir, (char *) 0);
+    free(dir);
+    return path;
+}
+
+
+/*
 **  Create a new newsgroup in the overview database.  Takes the group flag and
 **  the high and low water marks.
 */
@@ -287,7 +308,8 @@ group_create(const char *group, ARTNUM low, ARTNUM high, char flag)
 **  Rebuild the overview data for a particular group.  Takes a path to a
 **  directory containing all the articles, as individual files, that should be
 **  in that group.  The names of the files should be the article numbers in
-**  the group.
+**  the group.  The directory is read before anything is changed in the
+**  overview, so that a wrong path or group name leaves it alone.
 */
 static void
 group_rebuild(const char *group, const char *path)
@@ -303,6 +325,8 @@ group_rebuild(const char *group, const char *path)
     struct group_entry *entry, info;
     struct article artdata;
     struct stat st;
+
+    files = article_list(path);
 
     index = tdx_index_open(OV_READ);
     if (index == NULL)
@@ -330,7 +354,6 @@ group_rebuild(const char *group, const char *path)
     free(histpath);
 
     extra = overview_extra_fields(true);
-    files = article_list(path);
 
     info.count = 0;
     info.high = 0;
@@ -456,6 +479,7 @@ main(int argc, char *argv[])
     char mode = '\0';
     const char *newsgroup = NULL;
     const char *path = NULL;
+    char *spool = NULL;
     ARTNUM artlow = 0;
     ARTNUM arthigh = 0;
 
@@ -532,6 +556,12 @@ main(int argc, char *argv[])
     if (strchr("cgoOR", mode) != NULL && newsgroup == NULL)
         die("group must be specified for -%c", mode);
 
+    /* For -R -, rebuild from the tradspool directory of the group. */
+    if (mode == 'R' && strcmp(path, "-") == 0) {
+        spool = spool_path(newsgroup);
+        path = spool;
+    }
+
     /* Run the specified function. */
     switch (mode) {
     case 'A':
@@ -546,6 +576,7 @@ main(int argc, char *argv[])
         if (getenv(INN_ENV_TESTSUITE) == NULL)
             ensure_news_user_grp(true, true);
         group_rebuild(newsgroup, path);
+        free(spool);
         break;
     case 'c':
         if (getenv(INN_ENV_TESTSUITE) == NULL)
