@@ -194,6 +194,16 @@ malformed stored Xref records with tradspool and corrupt history records.
 The overview and storage backends also validate more structures before using
 them.  Many thanks to Kevin Bowling for the patches.
 
+=item *
+
+B<tdx-util> B<-A> and B<-F> no longer loop forever on a F<group.index> file
+of the tradindexed overview method whose hash chains or free list contain
+a loop of more than one entry.  Such a loop is reported, and B<tdx-util>
+B<-F> now cuts it and relinks the entries.  B<innd> also refuses to reuse
+an entry of a corrupted free list that still belongs to a newsgroup, which
+could create such loops, and a malformed line in the F<active> file no
+longer makes B<tdx-util> loop forever.
+
 =back
 
 =head1 Changes in 2.7.4 (2026-06-22)
