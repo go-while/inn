@@ -246,6 +246,12 @@ The output of C<inncheck -f --perm> is now always valid input for a shell.
 Syntax problems found in the checked files, as well as the messages of the
 B<-v> flag, were not prefixed with a hash sign like the other messages.
 
+=item *
+
+When the I<timer> parameter in F<inn.conf> is set, B<nnrpd> now also
+collects the idle time of readers using TLS.  It was only counted until
+the TLS negotiation.
+
 =back
 
 =head1 Changes in 2.7.4 (2026-06-22)
