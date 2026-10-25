@@ -6,8 +6,9 @@
 ##  This file is loaded when nnrpd starts up.  If it defines a sub named
 ##  "filter_post", then that function will be called during processing of a
 ##  posting.  It has access to the headers of the article via the associative
-##  array %hdr, and to useful information about the connection via the
-##  associative array %attributes.
+##  array %hdr, to the body of the article via the variable $body, and to
+##  useful information about the connection via the associative array
+##  %attributes.
 ##  If it returns a null string, then the article is accepted for posting.
 ##  A non-null string rejects it, and the value returned is used in the
 ##  rejection message (make sure that such a message is properly encoded
@@ -19,7 +20,6 @@
 #
 # Do any initialization steps.
 #
-my @unique_hash_keys_unused = qw(__BODY__);    # perltidy -wuk
 my %config = (
     checkincludedtext => 0,
     includedcutoff    => 40,
@@ -61,7 +61,7 @@ sub filter_post {
 ### config hash directs it to.
 
     if ($config{checkincludedtext}) {
-        my ($lines, $quoted, $antiquoted) = analyze($hdr{'__BODY__'});
+        my ($lines, $quoted, $antiquoted) = analyze($body);
         if ($lines > $config{includedcutoff}
             && $quoted - $antiquoted > $lines * $config{includedratio})
         {
