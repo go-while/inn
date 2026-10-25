@@ -105,6 +105,12 @@ reckoning of the number of lines in the article.  All the other elements
 will be buffer/memoryview objects with the contents of the same-named
 article headers.
 
+The body is in wire format, as it arrived: each line ends with CRLF, and
+a line beginning with a period has that period doubled (dot-stuffing).
+The line with a single period that ends the article is not part of it,
+so the body ends with the CRLF of its last line, and is empty for an
+article without body.
+
 C<art['__HEAD__']> is a buffer/memoryview object containing all the header
 fields of the article, including the ones not in the above list: every
 header field line in the order received, with folded and repeated header

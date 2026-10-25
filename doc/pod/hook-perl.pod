@@ -107,8 +107,13 @@ For example, the Newsgroups header field body of the article is accessible
 inside the Perl filter as C<$hdr{'Newsgroups'}>.  In addition,
 C<$hdr{'__BODY__'}> will contain the full body of the article,
 C<$hdr{'__LINES__'}> will contain the number of lines in the body of the
-article, and C<$hdr{'__HEAD__'}> will contain all the header fields of the
-article, including the ones not in the above list.
+article.  The body is in wire format, as it arrived: each line ends with
+CRLF, and a line beginning with a period has that period doubled
+(dot-stuffing).  The line with a single period that ends the article is
+not part of it, so the body ends with the CRLF of its last line, and is
+empty for an article without body.
+C<$hdr{'__HEAD__'}> will contain all the header fields of the article,
+including the ones not in the above list.
 
 C<$hdr{'__HEAD__'}> is the header of the article as it arrived: every header
 field line in the order received, with folded and repeated header fields

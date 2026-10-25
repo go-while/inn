@@ -410,6 +410,16 @@ B<innd> counted the size of the article one too high when its first header
 line or the first line of its body began with a dot, and B<makehistory>
 when a header field name began with a dot.
 
+=item *
+
+The article body given to the Perl and Python filters of B<innd> in
+C<__BODY__> no longer ends with a part of the article terminator.  Perl
+filters got the final line with a single period and its CRLF, and Python
+filters got that period followed by CR only.  Both now get the same body,
+as it arrived (with CRLF line endings and dot-stuffing), up to the CRLF of
+its last line.  Filters that hash the body (like the EMP checks of
+Cleanfeed) or look at its end get different values than before.
+
 =back
 
 =head1 Changes in 2.7.4 (2026-06-22)
