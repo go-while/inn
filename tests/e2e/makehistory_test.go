@@ -144,3 +144,18 @@ func TestMakehistoryLongOverview(t *testing.T) {
 		compareOverview(t, s, group, longID, before)
 	})
 }
+
+// overviewFields drops the :bytes and :lines fields (the 7th and 8th) of OVER lines, so that
+// overview rebuilt by a tool can be compared with innd's on the other fields alone, also on a
+// build without the fix that makes tdx-util and makehistory compute them like innd.
+func overviewFields(lines []string) []string {
+	out := make([]string, len(lines))
+	for i, l := range lines {
+		f := strings.Split(l, "\t")
+		if len(f) > 7 {
+			f = slices.Delete(f, 6, 8)
+		}
+		out[i] = strings.Join(f, "\t")
+	}
+	return out
+}
