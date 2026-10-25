@@ -33,6 +33,7 @@ needs the Go standard library:
 | `TestSIGTERMWhileBusy` | innd, Perl filter | a SIGTERM received while innd is busy in a slow `filter_art` takes effect once the filter returns, not at the next connection |
 | `TestSIGTERMUnderLoad` | innd | innd exits with status 0 on SIGTERM while peers and readers connect |
 | `TestAuthinfo` | innd, nnrpd, ckpasswd | AUTHINFO USER/PASS: 480 before, 481 for a wrong password, 281, then no AUTHINFO in CAPABILITIES and 502 for another (RFC 4643) |
+| `TestAuthProgramTimeout` | innd, nnrpd | an authenticator that writes nothing for `program_timeout` seconds (readers.conf, default 5) is killed and AUTHINFO gets 481; with a longer `program_timeout` a slow one succeeds (#131) |
 | `TestAcceptedSizeLongConnection` | innd | the "accepted size" innd logs when a feed closes equals the sum of the articles' `:bytes` after about 40 MB in one connection (#366; reads the journal, skipped without access) |
 | `TestStartTLS` | innd, nnrpd | STARTTLS: 382, TLS with the site's certificate, no STARTTLS in CAPABILITIES afterwards, reading and posting over TLS, 502 for a second STARTTLS (RFC 4642) |
 | `TestAuthinfoRequiresTLS` | innd, nnrpd, ckpasswd | with `require_encryption`, AUTHINFO gets 483 before STARTTLS and works after it |
