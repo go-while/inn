@@ -48,6 +48,11 @@
 #             X-Postfilter, X-Proxy-User, X-Submissions-To, X-Trace,
 #             X-Usenet-Provider, X-User-ID, Xref.
 #
+#         The special keys __BODY__, __HEAD__ and __LINES__ hold the body
+#         of the article, its whole header (all the header fields as
+#         received, also those not listed above, with CRLF line endings)
+#         and the number of lines of its body.
+#
 #     sub filter_mode { ... }
 #
 #         This routine is called every time "go", "pause", or

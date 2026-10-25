@@ -725,6 +725,8 @@ extern void ARTprepare(CHANNEL *cp);
 extern void ARTparse(CHANNEL *cp);
 extern void ARTlogreject(CHANNEL *cp, const char *text);
 extern void ARTreject(Reject_type, CHANNEL *);
+extern void ARTrestoreheader(const ARTDATA *data, const char *head, char *copy,
+                             size_t len);
 
 extern bool CHANsleeping(CHANNEL *cp);
 extern bool CHANsystemdsa(CHANNEL *cp);
@@ -795,8 +797,8 @@ extern void NCwritereply(CHANNEL *cp, const char *text);
 extern void NCwriteshutdown(CHANNEL *cp, const char *text);
 
 /* perl.c */
-extern char *PLartfilter(const ARTDATA *Data, char *artBody, long artLen,
-                         int lines);
+extern char *PLartfilter(const ARTDATA *Data, char *artHead, long headLen,
+                         char *artBody, long artLen, int lines);
 extern char *PLmidfilter(char *messageID);
 extern void PLmode(OPERATINGMODE mode, OPERATINGMODE NewMode, char *reason);
 extern char *PLstats(void);
@@ -860,8 +862,8 @@ extern bool PythonFilterActive;
 void PYfilter(bool value);
 extern const char *PYcontrol(char **av);
 extern int PYreadfilter(void);
-extern char *PYartfilter(const ARTDATA *Data, char *artBody, long artLen,
-                         int lines);
+extern char *PYartfilter(const ARTDATA *Data, char *artHead, long headLen,
+                         char *artBody, long artLen, int lines);
 extern char *PYmidfilter(char *messageID, int msglen);
 extern void PYmode(OPERATINGMODE mode, OPERATINGMODE newmode, char *reason);
 extern void PYsetup(void);

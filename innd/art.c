@@ -1116,6 +1116,28 @@ ARTclean(ARTDATA *data, char *buff, bool ihave)
 }
 
 /*
+**  Undo, in copy (a copy of the len bytes of the header block that start at
+**  head in the channel buffer), what ARTclean() did in place: the character
+**  that follows each system header field body, usually the '\r' of its line
+**  end, was replaced with '\0'.  Used for the __HEAD__ key of the filters.
+*/
+void
+ARTrestoreheader(const ARTDATA *data, const char *head, char *copy, size_t len)
+{
+    const HDRCONTENT *hc = data->HdrContent;
+    size_t off;
+    int i;
+
+    for (i = 0; i < MAX_ARTHEADER; i++) {
+        if (!HDR_FOUND(i) || HDR(i) < head)
+            continue;
+        off = HDR(i) + HDR_LEN(i) - head;
+        if (off < len)
+            copy[off] = hc[i].LastChar;
+    }
+}
+
+/*
 **  We are going to reject an article, record the reason and the article.
 */
 void
@@ -2007,6 +2029,7 @@ ARTpost(CHANNEL *cp)
 #if defined(DO_PERL) || defined(DO_PYTHON)
     struct buffer *article;
     char *filterrc;
+    long headlen;
 #endif
     OVADDRESULT result;
 
@@ -2015,6 +2038,9 @@ ARTpost(CHANNEL *cp)
 
 #if defined(DO_PERL) || defined(DO_PYTHON)
     article = &cp->In;
+    /* The header block given to the filters: all the header field lines with
+     * their CRLF, without the empty line that ends the headers. */
+    headlen = (data->Body >= cp->Start + 2) ? data->Body - 2 - cp->Start : 0;
 #endif
 
     /* Preliminary clean-ups. */
@@ -2123,8 +2149,9 @@ ARTpost(CHANNEL *cp)
 
 #if defined(DO_PYTHON)
     TMRstart(TMR_PYTHON);
-    filterrc = PYartfilter(data, article->data + data->Body,
-                           cp->Next - data->Body, data->Lines);
+    filterrc = PYartfilter(data, article->data + cp->Start, headlen,
+                           article->data + data->Body, cp->Next - data->Body,
+                           data->Lines);
     TMRstop(TMR_PYTHON);
     if (filterrc != NULL) {
         if (innconf->dontrejectfiltered) {
@@ -2155,8 +2182,9 @@ ARTpost(CHANNEL *cp)
 
 #if defined(DO_PERL)
     TMRstart(TMR_PERL);
-    filterrc = PLartfilter(data, article->data + data->Body,
-                           cp->Next - data->Body, data->Lines);
+    filterrc = PLartfilter(data, article->data + cp->Start, headlen,
+                           article->data + data->Body, cp->Next - data->Body,
+                           data->Lines);
     TMRstop(TMR_PERL);
     if (filterrc) {
         if (innconf->dontrejectfiltered) {

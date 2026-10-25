@@ -59,12 +59,14 @@ XS(XS_INN_newsgroup);
 **  accept the article or a rejection message to reject it.
 */
 char *
-PLartfilter(const ARTDATA *data, char *artBody, long artLen, int lines)
+PLartfilter(const ARTDATA *data, char *artHead, long headLen, char *artBody,
+            long artLen, int lines)
 {
     dSP;
     const ARTHEADER *hp;
     const HDRCONTENT *hc = data->HdrContent;
     HV *hdr;
+    SV *head;
     CV *filter;
     int i, rc;
     char *p;
@@ -86,6 +88,16 @@ PLartfilter(const ARTDATA *data, char *artBody, long artLen, int lines)
             (void) hv_store(hdr, (char *) hp->Name, hp->Size,
                             newSVpv(HDR(i), 0), 0);
         }
+    }
+
+    /* Store the whole header block, with every header field (also those not
+       in the list above) in the order received, as a copy: the header block
+       in the channel buffer has a nul instead of the '\r' after each known
+       header field body (see ARTclean()), which the copy undoes. */
+    if (artHead != NULL && headLen > 0) {
+        head = newSVpvn(artHead, headLen);
+        ARTrestoreheader(data, artHead, SvPVX(head), headLen);
+        (void) hv_store(hdr, "__HEAD__", 8, head, 0);
     }
 
     /* Store the article body.  We don't want to make another copy of it,
