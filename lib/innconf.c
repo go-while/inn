@@ -85,6 +85,8 @@ static const struct config config_table[] = {
     {K(nicekids),                   NUMBER(4)         },
     {K(ovmethod),                   STRING(NULL)      },
     {K(pathhost),                   STRING(NULL)      },
+    {K(peerrcvbufsize),             UNUMBER(0)        },
+    {K(peersndbufsize),             UNUMBER(0)        },
     {K(rlimitnofile),               NUMBER(-1)        },
     {K(server),                     STRING(NULL)      },
     {K(sourceaddress),              STRING(NULL)      },
@@ -496,6 +498,18 @@ innconf_validate(struct config_group *group)
         config_error_param(group, "datamovethreshold",
                            "maximum value for datamovethreshold is 1MB");
         innconf->datamovethreshold = 1024 * 1024;
+    }
+
+    /* The socket buffer sizes are given to setsockopt() as an int. */
+    if (innconf->peerrcvbufsize > INT_MAX) {
+        config_error_param(group, "peerrcvbufsize",
+                           "maximum value for peerrcvbufsize is %d", INT_MAX);
+        innconf->peerrcvbufsize = INT_MAX;
+    }
+    if (innconf->peersndbufsize > INT_MAX) {
+        config_error_param(group, "peersndbufsize",
+                           "maximum value for peersndbufsize is %d", INT_MAX);
+        innconf->peersndbufsize = INT_MAX;
     }
 
     /* hissqlitepagesize must be a power of two between 512 and 65536, as

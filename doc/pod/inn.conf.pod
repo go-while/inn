@@ -1852,6 +1852,33 @@ Wait for this many seconds before innd processes articles when it's paused
 or the number of channel write failures exceeds I<badiocount>.  The
 default value is C<300>.
 
+=item I<peerrcvbufsize>
+
+The size (in bytes) of the kernel receive buffer that innd(8) requests
+with the SO_RCVBUF socket option for the connections of its incoming peers,
+and that innxbatch(8) requests for its connection to the remote server.
+If set to C<0>, INN leaves the receive buffer alone and the operating
+system default is used.  On Linux and other systems which tune socket
+buffers automatically, the buffer then grows with the bandwidth and the
+latency of the connection; setting a value disables this automatic tuning
+on Linux.  The operating system may round the value or cap it with a system
+limit (Linux, for instance, doubles it to make room for its bookkeeping
+and caps it at the C<net.core.rmem_max> sysctl).  The default value is C<0>.
+
+Before this parameter was added, INN always used S<24 KB> for both buffers.
+Set I<peerrcvbufsize> and I<peersndbufsize> to C<24576> to keep this
+behaviour, for instance to limit the kernel memory used by many incoming
+feeds.  Connections from local programs (like rnews(1)) through the Unix
+domain socket of innd(8) are not affected.
+
+=item I<peersndbufsize>
+
+The size (in bytes) of the kernel send buffer that innd(8) requests with
+the SO_SNDBUF socket option for the connections of its incoming peers, and
+that innxbatch(8) requests for its connection to the remote server.  If set
+to C<0>, the operating system default is used; see I<peerrcvbufsize> for
+more details.  The default value is C<0>.
+
 =item I<peertimeout>
 
 How long (in seconds) an innd(8) incoming channel may be inactive before
