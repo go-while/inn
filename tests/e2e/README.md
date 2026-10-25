@@ -56,6 +56,7 @@ needs the Go standard library:
 | `TestNews2mailSenders` | innd, news2mail | a crosspost to groups gatewayed to several mailing-lists is mailed once per envelope-from address of `news2mail.cf`, to the lists using it (#116, #188) |
 | `TestNews2mailNoQueue` | innd, news2mail | `news2mail -n` does not give the MTA `-odq` (only queue the mail), `news2mail` alone does (#85) |
 | `TestPullnews` | innd, pullnews | articles pulled from an upstream are fed to innd, and the mark is recorded |
+| `TestProcbatchCheck` | innd, procbatch, sm | `procbatch -c` keeps the storage tokens of articles still in the spool and drops a cancelled one, with tradspool and timehash, and still checks pathname entries for a file (#189) |
 
 ## Running
 

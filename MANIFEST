@@ -991,6 +991,7 @@ tests/e2e/makehistory_test.go         Tests of makehistory and overchan
 tests/e2e/news2mail_test.go           Tests of news2mail
 tests/e2e/newsfeeds_test.go           Tests of newsfeeds entries
 tests/e2e/peer_test.go                Tests of innd as a feeding peer
+tests/e2e/procbatch_test.go           Tests of procbatch
 tests/e2e/reader_test.go              Tests of nnrpd through innd
 tests/e2e/signal_test.go              Tests of innd signal handling
 tests/e2e/site_test.go                Throwaway INN site for each test
