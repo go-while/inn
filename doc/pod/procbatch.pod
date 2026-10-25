@@ -59,9 +59,12 @@ may need fixing.
 =item B<-c>
 
 Check for the existence of an article before writing references to it to
-the tape files.  Currently, this option can only be used with a tradspool
-article store.  Using it with any other spool format will lead to all
-articles being dropped.
+the tape files.  Entries whose article no longer exists are dropped.
+Storage API tokens are checked with the storage manager, whatever the
+storage method: B<procbatch> runs B<sm> once for all the tokens of
+I<batchfile> and drops those whose article B<sm> cannot retrieve.
+Entries giving a pathname are checked for a file of that name in the
+article spool (see B<-s>).
 
 =item B<-d> I<outdir>
 
@@ -89,7 +92,7 @@ Quiet mode: only display error messages.
 
 Use I<spooldir> as the location of the article spool (defaults to
 I<patharticles> as set in F<inn.conf>).  This option has an effect only
-on a tradspool storage system when also specifying B<-c>.
+on entries giving a pathname when also specifying B<-c>.
 
 =item B<-t> I<backlogdir>
 
@@ -118,14 +121,9 @@ Be verbose while doing so:
 
 Go through F<innfeed-dropped.B012345> saving entries for C<peer1>
 in F</tmp/peer1.tmp>, but only if the articles are still available
-in the local tradspool:
+in the local spool:
 
     procbatch -e peer1 -d /tmp -c innfeed-dropped.B012345
-
-=head1 BUGS
-
-B<procbatch> should be able to check for the existence of articles
-with any kind of article store, possibly using B<grephistory>.
 
 =head1 HISTORY
 
@@ -137,6 +135,6 @@ memo by Russ Allbery.
 
 =head1 SEE ALSO
 
-innfeed(8), innxmit(8), news.daily(8).
+innfeed(8), innxmit(8), news.daily(8), sm(1).
 
 =cut

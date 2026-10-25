@@ -42,7 +42,7 @@ my $usage = "Usage:
   $0 [-hquv] [-c [-s dir]] [-d dir] [-e host] [-m [-t dir]] inn-batchfile
 
 Options:
-  -c         to check pathnames of articles before storing them
+  -c         to check that the articles still exist before storing them
   -d dir     to put the output file(s) in that directory ($destDir)
   -e host    to process on entries for only that host
   -h         display a short help screen
@@ -76,6 +76,50 @@ sub HELP_MESSAGE {
     exit(0);
 }
 
+# Return a reference to a hash whose keys are the given storage tokens of
+# articles the storage manager cannot retrieve.  A single sm process checks
+# all the tokens and reports every article it cannot retrieve on its
+# standard error, which is the only output read here.
+sub missing_articles {
+    my @tokens = @_;
+    my (%missing, @errors);
+
+    my $pid = open(my $SM, '-|');
+    die "$0: cannot fork: $!\n" unless defined $pid;
+    if ($pid == 0) {
+        # Send the messages of sm to the parent and discard the headers of
+        # the articles it retrieves.
+        open(STDERR, '>&STDOUT') or die "$0: cannot dup stdout: $!\n";
+        open(STDOUT, '>', '/dev/null')
+          or die "$0: cannot open /dev/null: $!\n";
+        open(my $TOKENS, '|-', "$INN::Config::newsbin/sm", '-H')
+          or die "$0: cannot exec sm: $!\n";
+        print {$TOKENS} "$_\n" foreach @tokens;
+        close $TOKENS;
+        exit($? == 0 ? 0 : 1);
+    }
+    while (my $line = <$SM>) {
+        chomp $line;
+        if (
+            $line =~ /could not retrieve (\S+)$/
+            || $line =~ /(\S+) is not a storage token$/
+        ) {
+            $missing{$1} = 1;
+        } else {
+            push @errors, $line;
+        }
+    }
+    close $SM;
+
+    # sm exits with an error status as soon as an article is missing; it is
+    # a failure only when no article was reported missing.
+    die "$0: cannot check the articles with sm:\n"
+      . join("\n", @errors) . "\n"
+      if ($? != 0 && !%missing);
+    warn "$_\n" foreach @errors;
+    return \%missing;
+}
+
 my (%opt, %hosts);
 my $missing = 0;
 getopts("cd:e:hmqs:t:uv", \%opt) || die $usage;
@@ -101,6 +145,20 @@ warn "Specifying -s without -c has no effect!" if $opt{'s'} and not $opt{'c'};
 warn "Specifying -t without -m has no effect!" if $opt{'t'} and not $opt{'m'};
 
 print "Using $inputFile\n" if $opt{'v'};
+
+# With -c, first collect the storage tokens of the batchfile and ask the
+# storage manager about all of them at once.
+my $missingArticles = {};
+if ($opt{'c'}) {
+    my %tokens;
+    open(my $TOKENS, '<', $inputFile) || die "$0: open ($inputFile): $!\n";
+    while (<$TOKENS>) {
+        $tokens{$1} = 1 if m!^(\@[0-9A-F]+\@) <.+@.+> \S+!;
+    }
+    close $TOKENS;
+    $missingArticles = missing_articles(keys %tokens) if %tokens;
+}
+
 open(my $INPUT, '<', $inputFile) || die "$0: open ($inputFile): $!\n";
 
 while (<$INPUT>) {
@@ -111,7 +169,13 @@ while (<$INPUT>) {
     next unless (m!^\S+/\d+ <.+@.+> \S+! || m!^@[0-9A-F]+@ <.+@.+> \S+!);
 
     if ($opt{'c'}) {
-        if (!-f "$spoolArts/$F[0]") {
+        if ($F[0] =~ /^\@/) {
+            if ($missingArticles->{ $F[0] }) {
+                $missing++;
+                print "Dropping article: $F[0]\n" if $opt{'v'};
+                next;
+            }
+        } elsif (!-f "$spoolArts/$F[0]") {
             $missing++;
             print "Dropping file: $spoolArts/$F[0]\n" if $opt{'v'};
             next;
