@@ -2007,6 +2007,7 @@ ARTpost(CHANNEL *cp)
 #if defined(DO_PERL) || defined(DO_PYTHON)
     struct buffer *article;
     char *filterrc;
+    long bodylen;
 #endif
     OVADDRESULT result;
 
@@ -2015,6 +2016,12 @@ ARTpost(CHANNEL *cp)
 
 #if defined(DO_PERL) || defined(DO_PYTHON)
     article = &cp->In;
+    /* The body given to the filters: in wire format (CRLF line endings,
+     * dot-stuffing kept) but without the ".\r\n" line that ends the
+     * article. */
+    bodylen = cp->Next - data->Body;
+    if (bodylen >= 3 && memcmp(article->data + cp->Next - 3, ".\r\n", 3) == 0)
+        bodylen -= 3;
 #endif
 
     /* Preliminary clean-ups. */
@@ -2123,8 +2130,8 @@ ARTpost(CHANNEL *cp)
 
 #if defined(DO_PYTHON)
     TMRstart(TMR_PYTHON);
-    filterrc = PYartfilter(data, article->data + data->Body,
-                           cp->Next - data->Body, data->Lines);
+    filterrc =
+        PYartfilter(data, article->data + data->Body, bodylen, data->Lines);
     TMRstop(TMR_PYTHON);
     if (filterrc != NULL) {
         if (innconf->dontrejectfiltered) {
@@ -2155,8 +2162,8 @@ ARTpost(CHANNEL *cp)
 
 #if defined(DO_PERL)
     TMRstart(TMR_PERL);
-    filterrc = PLartfilter(data, article->data + data->Body,
-                           cp->Next - data->Body, data->Lines);
+    filterrc =
+        PLartfilter(data, article->data + data->Body, bodylen, data->Lines);
     TMRstop(TMR_PERL);
     if (filterrc) {
         if (innconf->dontrejectfiltered) {
