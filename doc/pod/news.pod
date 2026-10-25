@@ -194,6 +194,16 @@ malformed stored Xref records with tradspool and corrupt history records.
 The overview and storage backends also validate more structures before using
 them.  Many thanks to Kevin Bowling for the patches.
 
+=item *
+
+B<news2mail> now handles articles fed to several mailing-lists with
+different envelope-from addresses, for instance crossposts: it sends one
+e-mail per envelope-from address set in F<news2mail.cf>, to the lists using
+it.  Previously, a single e-mail was sent to all the lists, with the
+envelope-from address of one of them if it was the only one set, and the
+C<news> user otherwise.  Note that a crosspost may therefore now give several
+e-mails.  Thanks to D. Stussy for the bug report.
+
 =back
 
 =head1 Changes in 2.7.4 (2026-06-22)
