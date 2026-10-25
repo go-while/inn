@@ -238,12 +238,16 @@ test -n "${LOWMARKFILE}" && {
 }
 
 if ${DOMAIL}; then
-    ##  Try to get a temporary file.
+    ##  Try to get temporary files: one for the report, one for the output
+    ##  of scanlogs which is added to the report after the expire messages.
     TEMP=${TMPDIR}/doex$$
-    test -f ${TEMP} && {
-        echo "Temporary file ${TEMP} exists" | eval ${MAIL}
-        exit 1
-    }
+    TEMPLOGS=${TEMP}.logs
+    for F in ${TEMP} ${TEMPLOGS}; do
+        test -f ${F} && {
+            echo "Temporary file ${F} exists" | eval ${MAIL}
+            exit 1
+        }
+    done
     touch ${TEMP}
     chmod 0660 ${TEMP}
     exec 3>&1 >${TEMP} 2>&1
@@ -304,11 +308,15 @@ if [ -n "${PROGRAMS}" ]; then
     done
 fi
 
+##  When mailing the report, keep the output of scanlogs (log file errors
+##  and the long innreport statistics) for later, so that problems with
+##  expire are not buried below it.
 ${DOLOGS} && {
     if ${DOMAIL}; then
-        echo ''
+        scanlogs ${SCANARG} >${TEMPLOGS} 2>&1
+    else
+        scanlogs ${SCANARG}
     fi
-    scanlogs ${SCANARG}
 }
 
 ##  Group-based expiry (delete expired overview first).
@@ -564,6 +572,12 @@ if ${DOMAIL}; then
         echo '---------'
         echo ''
     fi
+
+    ##  Display the output of scanlogs.
+    if [ -s ${TEMPLOGS} ]; then
+        cat ${TEMPLOGS}
+    fi
+    rm -f ${TEMPLOGS}
 fi
 
 ##  Show the status of the news system after expiration.
