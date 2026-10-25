@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"testing"
 	"time"
 
@@ -208,6 +209,47 @@ func TestInnfeedIHAVEFallback(t *testing.T) {
 	waitFor(t, 30*time.Second, "innfeed to deliver 3 articles", func() bool { return got.has(ids...) })
 	if n := peer.Count("IHAVE"); n < 3 {
 		t.Errorf("IHAVE sent %d times, want 3 (counts %v)", n, peer.Counts())
+	}
+}
+
+// TestInnfeedDebugSnapshotFiles: the debug-file and snapshot-file keys of innfeed.conf name
+// the file whose presence turns on debugging and the file SIGINT writes a snapshot to, so
+// that several innfeed instances do not share innfeed.debug and innfeed.snapshot (issue
+// #315). An absolute debug-file and a relative snapshot-file (under pathlog) are tested.
+func TestInnfeedDebugSnapshotFiles(t *testing.T) {
+	peer, got := newPeer(t, &fakeserver.PeerOptions{})
+	conf := fmt.Sprintf("debug-file: \"@etcdir@/e2e.debug\"\nsnapshot-file: e2e.snapshot\n"+
+		"peer fake {\n    ip-name: \"127.0.0.1\"\n    port-number: %d\n}\n", peer.Port())
+	s := NewSite(t, SiteOptions{
+		Newsfeeds: "ME:*::\ninnfeed!:!*:Tc,Wnm*:@bindir@/innfeed\nfake:*:Tm:innfeed!\n",
+		Etc:       map[string]string{"innfeed.conf": conf, "e2e.debug": ""},
+	})
+	if out, err := s.TryRun("inncheck", "--noperm", "innfeed.conf="+filepath.Join(s.Dir, "etc", "innfeed.conf")); err != nil {
+		t.Errorf("inncheck rejects debug-file or snapshot-file: %v\n%s", err, out)
+	}
+
+	ids := s.Inject(t, "e2e.test", 1)
+	waitFor(t, 30*time.Second, "innfeed to deliver the article", func() bool { return got.has(ids...) })
+	logFile := filepath.Join(s.Dir, "log", "innfeed.log")
+	waitFor(t, 5*time.Second, "debug messages in innfeed.log", func() bool {
+		b, _ := os.ReadFile(logFile)
+		return strings.Contains(string(b), "Giving article to peer: fake")
+	})
+
+	pid, err := strconv.Atoi(strings.TrimSpace(s.ReadFile(t, "run/innfeed.pid")))
+	if err != nil {
+		t.Fatalf("run/innfeed.pid: %v", err)
+	}
+	if err := syscall.Kill(pid, syscall.SIGINT); err != nil {
+		t.Fatalf("SIGINT to innfeed (pid %d): %v", pid, err)
+	}
+	snapshot := filepath.Join(s.Dir, "log", "e2e.snapshot")
+	waitFor(t, 10*time.Second, "the snapshot in log/e2e.snapshot", func() bool {
+		b, _ := os.ReadFile(snapshot)
+		return strings.Contains(string(b), "System snapshot taken at")
+	})
+	if _, err := os.Stat(filepath.Join(s.Dir, "log", "innfeed.snapshot")); err == nil {
+		t.Errorf("log/innfeed.snapshot written although snapshot-file is e2e.snapshot")
 	}
 }
 

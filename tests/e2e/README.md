@@ -50,6 +50,7 @@ needs the Go standard library:
 | `TestInnxmitDeferred` | innd, innxmit | a 436 requeues the rest of the batch, the next run sends it |
 | `TestInnfeedStreaming` | innd, innfeed | new articles reach the peer through innfeed |
 | `TestInnfeedIHAVEFallback` | innd, innfeed | innfeed falls back to IHAVE |
+| `TestInnfeedDebugSnapshotFiles` | innd, innfeed, inncheck | innfeed.conf's debug-file turns on debugging and SIGINT writes the snapshot to snapshot-file (issue #315) |
 | `TestGetlist` | getlist | LIST ACTIVE and LIST NEWSGROUPS of a remote server, with patterns |
 | `TestPullnews` | innd, pullnews | articles pulled from an upstream are fed to innd, and the mark is recorded |
 
