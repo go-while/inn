@@ -101,3 +101,27 @@ func TestPostAndRead(t *testing.T) {
 	}
 	expect(t, c, 205, "QUIT")
 }
+
+// TestPostRejected: when innd rejects an article posted through nnrpd, nnrpd answers 441
+// with the first line of the reply of innd. The reply innd sends ends with CRLF; nnrpd
+// must not pass that on, which would put an empty line after its 441.
+func TestPostRejected(t *testing.T) {
+	s := NewSite(t, SiteOptions{})
+	c := s.Reader(t)
+	id := msgID(t)
+	art := newArticle(id, "e2e.test", "posted twice", "body")
+
+	expect(t, c, 340, "POST")
+	send(t, c, wire(art))
+	status(t, c, 240, "first POST")
+
+	expect(t, c, 340, "POST")
+	send(t, c, wire(art))
+	if got := status(t, c, 441, "second POST"); !strings.HasPrefix(got, "441 435 ") {
+		t.Errorf("second POST: %q, want 441 with the 435 of innd", got)
+	}
+	if err := c.ExpectNoPending(200 * time.Millisecond); err != nil {
+		t.Errorf("after the 441: %v", err)
+	}
+	expect(t, c, 205, "QUIT")
+}
