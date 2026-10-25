@@ -252,6 +252,13 @@ When the I<timer> parameter in F<inn.conf> is set, B<nnrpd> now also
 collects the idle time of readers using TLS.  It was only counted until
 the TLS negotiation.
 
+=item *
+
+Improved the error messages about the dbz index of the history file.  They
+now name the file in error, and an invalid F<.dir> file no longer results in
+a misleading C<Numerical argument out of domain> error.  A truncated F<.dir>
+file is now also detected.
+
 =back
 
 =head1 Changes in 2.7.4 (2026-06-22)
