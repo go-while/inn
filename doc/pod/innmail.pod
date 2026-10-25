@@ -16,9 +16,15 @@ it to the specified addresses by invoking the value of I<mta> in
 F<inn.conf>.
 
 At least one address (formatted for the MTA specified in F<inn.conf>, if it
-matters) is required.  B<innmail> will sanitize the addresses so that they
-contain only alphanumerics and the symbols C<@>, C<.>, C<->, C<+>, C<_>,
-and C<%>.
+matters) is required.  The addresses are given as arguments to the MTA and
+written in the To header field of the message as is, so B<innmail> only
+accepts addresses made of alphanumerics and the symbols
+C<!#$%&'*+-/=?^_`{|}~.@> (the characters allowed in an unquoted local part
+of an e-mail address, plus C<.> and C<@>).  An address containing any other
+character, like a quoted local part (C<"John Doe"@example.com>), an address
+between angle brackets, or a domain literal (C<joe@[192.0.2.1]>), is
+ignored with a warning, and so is an address beginning with C<->, which the
+MTA would take as an option.  B<innmail> fails if no valid address remains.
 
 B<innmail> was written to be suitable for the I<mailcmd> setting in
 F<inn.conf>.
@@ -60,15 +66,6 @@ This sends a one-line message to the local user C<joe>:
 
 B<innmail> by default is used by INN for sending nightly reports to the news
 administrator, as well as errors during the execution of a few programs.
-
-=head1 BUGS
-
-B<innmail> fails on addresses that begin with C<->, although one might
-hope that the news server will not need to contact any such addresses.
-
-There are many "correct" addresses that will be silently modified by the
-sanitization process.  A news administrator should be careful to use
-particularly sane addresses if they may be passed to B<innmail>.
 
 =head1 HISTORY
 
