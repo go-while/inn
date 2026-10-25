@@ -302,6 +302,14 @@ dictionary (Python), so that they can also look at header fields that
 B<innd> does not know, in the order received.  Thanks to Russ Allbery for
 the suggestion.
 
+=item *
+
+The names of the debug and snapshot files of B<innfeed> can now be set
+with the new I<debug-file> and I<snapshot-file> parameters in
+F<innfeed.conf>, so that several instances of B<innfeed> running at the
+same time no longer share F<innfeed.debug> and F<innfeed.snapshot>.
+Relative pathnames start from I<pathlog>, and the defaults are unchanged.
+
 =back
 
 =head1 Changes in 2.7.4 (2026-06-22)
