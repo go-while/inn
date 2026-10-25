@@ -158,12 +158,15 @@ func TestStartTLSWithoutCertificate(t *testing.T) {
 // the test when no nnrpd message is readable.
 func tlsSession(tb testing.TB, s *Site) []string {
 	tb.Helper()
-	return tlsSessionPause(tb, s, 0, " times user ")
+	return tlsSessionPause(tb, s, 0, sessionTimes)
 }
 
+// sessionTimes matches the resource usage nnrpd logs at the end of a session.
+var sessionTimes = regexp.MustCompile(` times user `)
+
 // tlsSessionPause is tlsSession, waiting for pause between the TLS negotiation and the GROUP
-// command, and for a session message containing end before it returns.
-func tlsSessionPause(tb testing.TB, s *Site, pause time.Duration, end string) []string {
+// command, and for a session message matching end before it returns.
+func tlsSessionPause(tb testing.TB, s *Site, pause time.Duration, end *regexp.Regexp) []string {
 	tb.Helper()
 	cursor := s.JournalCursor(tb)
 	tc, _ := startTLS(tb, s, s.Reader(tb))
@@ -182,7 +185,7 @@ func tlsSessionPause(tb testing.TB, s *Site, pause time.Duration, end string) []
 				break
 			}
 		}
-		if slices.ContainsFunc(session, func(l string) bool { return strings.Contains(l, end) }) {
+		if slices.ContainsFunc(session, func(l string) bool { return end.MatchString(l) }) {
 			return lines
 		}
 		if time.Now().After(limit) {
@@ -216,7 +219,7 @@ func TestStartTLSIdleTimer(t *testing.T) {
 	s := NewSite(t, SiteOptions{TLS: true, InnConf: map[string]string{"timer": "3600"}})
 	// The timer statistics are the last message of a session. Other nnrpd sessions (without
 	// TLS) may have logged theirs before, so look only after the start of the TLS session.
-	lines := tlsSessionPause(t, s, pause, " idle ")
+	lines := tlsSessionPause(t, s, pause, idleTimer)
 	start := 0
 	for i, line := range lines {
 		if strings.HasPrefix(line, "starttls: ") {
