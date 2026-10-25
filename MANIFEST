@@ -983,6 +983,7 @@ tests/e2e/conformance_test.go         Protocol conformance of nnrpd and innd
 tests/e2e/ctlinnd_test.go             Tests of ctlinnd commands
 tests/e2e/filterbody_test.go          Tests of __BODY__ in the innd filters
 tests/e2e/filterhead_test.go          Tests of __HEAD__ in the innd filters
+tests/e2e/filternnrpd_test.go         Tests of the sample filter_nnrpd.pl
 tests/e2e/go.mod                      Go module definition
 tests/e2e/go.sum                      Go module checksums
 tests/e2e/history_test.go             Tests of the history file
