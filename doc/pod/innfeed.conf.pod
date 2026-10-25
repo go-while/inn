@@ -175,10 +175,21 @@ A non-zero number generates a lot of messages to stderr, or to the
 config-defined I<log-file>.  This corresponds to the B<-d> command-line
 option.
 
-If a file named F<innfeed.debug> exists in the I<pathlog> directory (as
-set in F<inn.conf>), then I<debug-level> is automatically set to C<1>.
-This is a cheap way of avoiding continual reloading of the F<newsfeeds>
-file when debugging.  Note that debug messages still go to I<log-file>.
+If the file named by I<debug-file> exists when B<innfeed> starts, then
+I<debug-level> is automatically set to C<1>.  This is a cheap way of
+avoiding continual reloading of the F<newsfeeds> file when debugging.
+Note that debug messages still go to I<log-file>.
+
+=item I<debug-file>
+
+This key requires a pathname value and defaults to F<innfeed.debug>.
+If this file exists when B<innfeed> starts, a I<debug-level> of C<0> is
+raised to C<1> (see I<debug-level> above).  B<innfeed> only checks
+whether the file exists; it does not write to it.
+
+This pathname is relative to I<pathlog> in F<inn.conf>, unless it is an
+absolute pathname.  When several instances of B<innfeed> run on the same
+system, give each of them its own I<debug-file>.
 
 =item I<debug-shrinking>
 
@@ -218,6 +229,16 @@ should go (such as those generated when a positive value for I<debug-level>
 is used).  This corresponds to the B<-l> command-line option.
 
 This pathname is relative to I<pathlog> in F<inn.conf>.
+
+=item I<snapshot-file>
+
+This key requires a pathname value and defaults to F<innfeed.snapshot>.
+It specifies where B<innfeed> appends a snapshot of its internal state
+when it receives a SIGINT signal.
+
+This pathname is relative to I<pathlog> in F<inn.conf>, unless it is an
+absolute pathname.  When several instances of B<innfeed> run on the same
+system, give each of them its own I<snapshot-file>.
 
 =item I<log-time-format>
 
