@@ -158,16 +158,19 @@ auth_pam(const char *username, char *password)
 **  username for the key and the encrypted password as the value.  The
 **  encrypted password, if found, is returned as a newly allocated string;
 **  otherwise, NULL is returned.
+**
+**  file is not const because some dbm_open() implementations, like the one
+**  of GDBM, take a char *.
 */
 #if !(defined(HAVE_DBM) || defined(HAVE_BDB_NDBM))
 static char *
-password_dbm(char *user UNUSED, const char *file UNUSED)
+password_dbm(char *user UNUSED, char *file UNUSED)
 {
     return NULL;
 }
 #else
 static char *
-password_dbm(char *name, const char *file)
+password_dbm(char *name, char *file)
 {
     datum key, value;
     DBM *database;
@@ -325,7 +328,7 @@ main(int argc, char *argv[])
     const char *hash;
     enum authtype type = AUTH_NONE;
     bool wantgroup = false;
-    const char *filename = NULL;
+    char *filename = NULL;
     struct auth_info *authinfo = NULL;
     char *password = NULL;
 
