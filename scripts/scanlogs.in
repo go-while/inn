@@ -56,10 +56,11 @@ for F in ${INNFEEDCONF}; do
 done
 NNTPSEND=${MOST_LOGS}/nntpsend.log
 PERLNOCEM=${MOST_LOGS}/perl-nocem.log
+PULLNEWS=${MOST_LOGS}/pullnews.log
 SENDIHAVE=${MOST_LOGS}/send-ihave.log
 SENDUUCP=${MOST_LOGS}/send-uucp.log
 LIVEFILES="${CONTROLBATCH} ${INNFEED} ${NNTPSEND} ${PERLNOCEM} \
-    ${SENDIHAVE} ${SENDUUCP}"
+    ${PULLNEWS} ${SENDIHAVE} ${SENDUUCP}"
 
 ##  Where news.daily places expire output, unless noexplog was used.
 EXPLOG=${MOST_LOGS}/expire.log
