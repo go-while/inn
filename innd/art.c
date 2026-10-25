@@ -587,6 +587,15 @@ ARTstore(CHANNEL *cp, bool filtered)
         }
         data->BytesValue += iov[i].iov_len;
     }
+    /* ARTparseheader() and ARTparsebody() count the lines beginning with a
+     * dot that follow a line ending, which leaves out the first line of
+     * the headers and the first line of the body.  A body that begins with
+     * ".\r\n" is empty and that dot is the terminator. */
+    if (Article->data[cp->Start] == '.')
+        data->DotStuffedLines++;
+    if (Article->data[data->Body] == '.'
+        && memcmp(Article->data + data->Body, ".\r\n", 3) != 0)
+        data->DotStuffedLines++;
     /* Subtract the trailing 3 octets ".\r\n" and the "." characters
      * used for dot-stuffing.  Note that we count a CRLF pair as
      * two octets.  We also count the empty line between headers and body.
