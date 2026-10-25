@@ -72,13 +72,14 @@ validate_input(bool auth)
 }
 
 /* Run the test authenticator, checking its input and output.  Takes the fake
-   client struct, the argument to pass to the authenticator, the expected
-   username, and the expected error output.  Tries it both as a resolver and
-   an authenticator to be sure there are no surprises.  Returns the next test
-   number. */
+   client struct, the argument to pass to the authenticator, the timeout in
+   seconds, the expected username, and the expected error output.  Tries it
+   both as a resolver and an authenticator to be sure there are no surprises.
+   Returns the next test number. */
 static void
-test_external(struct client *client, const char *arg, const char *user,
-              const char *error)
+test_external_timeout(struct client *client, const char *arg,
+                      unsigned long timeout, const char *user,
+                      const char *error)
 {
     char *auth_test_path, *result, *command;
 
@@ -90,7 +91,7 @@ test_external(struct client *client, const char *arg, const char *user,
 
     basprintf(&command, "%s %s", auth_test_path, arg);
     errors_capture();
-    result = auth_external(client, command, ".", NULL, NULL);
+    result = auth_external(client, command, ".", NULL, NULL, timeout);
     errors_uncapture();
     validate_input(false);
     is_string(user, result, "user");
@@ -101,7 +102,8 @@ test_external(struct client *client, const char *arg, const char *user,
     errors = NULL;
 
     errors_capture();
-    result = auth_external(client, command, ".", "tester", "s0pers3cret");
+    result =
+        auth_external(client, command, ".", "tester", "s0pers3cret", timeout);
     errors_uncapture();
     validate_input(true);
     is_string(user, result, "user with username and password");
@@ -114,13 +116,21 @@ test_external(struct client *client, const char *arg, const char *user,
     test_file_path_free(auth_test_path);
 }
 
+/* The same with the default timeout of five seconds. */
+static void
+test_external(struct client *client, const char *arg, const char *user,
+              const char *error)
+{
+    test_external_timeout(client, arg, 5, user, error);
+}
+
 int
 main(void)
 {
     struct client *client;
     char *result;
 
-    plan(12 * 6 + 2);
+    plan(14 * 6 + 2);
 
     client = client_new();
 
@@ -143,8 +153,15 @@ main(void)
     test_external(client, "partial-error", NULL,
                   "example.com auth: program error: This is an error\n");
 
+    /* The program answers after two seconds: too late for a timeout of one
+       second, in time for the default timeout. */
+    test_external_timeout(
+        client, "slow", 1, NULL,
+        "example.com auth: program timeout (no output for 1 s)\n");
+    test_external(client, "slow", "tester", NULL);
+
     errors_capture();
-    result = auth_external(client, "", ".", NULL, NULL);
+    result = auth_external(client, "", ".", NULL, NULL, 5);
     errors_uncapture();
     is_string(NULL, result, "empty external command returns no user");
     is_string("example.com auth: empty external command\n", errors,
