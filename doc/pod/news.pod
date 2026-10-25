@@ -194,6 +194,13 @@ malformed stored Xref records with tradspool and corrupt history records.
 The overview and storage backends also validate more structures before using
 them.  Many thanks to Kevin Bowling for the patches.
 
+=item *
+
+Variables used in the value of another variable in F<newsfeeds> are now
+expanded by B<innd>.  They were previously kept as is, so a pattern like
+C<@$LOCALGROUPS> in a variable did not exclude the groups of
+C<$LOCALGROUPS> from the feeds using that variable.
+
 =back
 
 =head1 Changes in 2.7.4 (2026-06-22)
