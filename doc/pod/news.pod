@@ -194,6 +194,13 @@ malformed stored Xref records with tradspool and corrupt history records.
 The overview and storage backends also validate more structures before using
 them.  Many thanks to Kevin Bowling for the patches.
 
+=item *
+
+The time B<nnrpd> waits for output from the external programs given in the
+I<res> and I<auth> parameters of auth groups in F<readers.conf> before
+killing them, so far hard-coded to five seconds, can now be set with the new
+I<program_timeout> parameter of auth groups.
+
 =back
 
 =head1 Changes in 2.7.4 (2026-06-22)

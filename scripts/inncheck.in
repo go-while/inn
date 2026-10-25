@@ -974,6 +974,7 @@ sub readers_conf {
                 'default-domain' => 'string',
                 'key'            => 'string',
                 'require_encryption' => 'boolean',
+                'program_timeout'    => 'number',
                 'perl_access'        => 'path',
                 'python_access'      => 'path',
                 'python_dynamic'     => 'path',

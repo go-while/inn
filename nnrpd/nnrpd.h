@@ -295,11 +295,12 @@ extern bool CMDgetrange(int ac, char *av[], ARTRANGE *rp, bool *DidReply);
 /*
 **  Run a resolver or authenticator.  The directory is where to look for the
 **  command if not fully qualified.  username and password may be NULL to run
-**  resolvers.
+**  resolvers.  The program is killed if it produces no output for timeout
+**  seconds.
 */
 char *auth_external(struct client *, const char *command,
                     const char *directory, const char *username,
-                    const char *password);
+                    const char *password, unsigned long timeout);
 
 void write_buffer(const char *buff, ssize_t len);
 
