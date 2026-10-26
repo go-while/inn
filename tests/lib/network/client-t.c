@@ -157,8 +157,9 @@ test_server_connection(socket_type client)
     if (fgets(buffer, sizeof(buffer), out) == NULL) {
         sysdiag("cannot read from socket");
         ok(0, "...socket read");
+    } else {
+        is_string("socket test\r\n", buffer, "...socket read");
     }
-    is_string("socket test\r\n", buffer, "...socket read");
     fclose(out);
 }
 
