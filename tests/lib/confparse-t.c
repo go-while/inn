@@ -108,8 +108,6 @@ test_errors(int n)
     char *expected;
     struct config_group *group;
 
-    if (symlink(".", "config/link") < 0)
-        sysdie("Cannot create config/link symlink");
     errfile = fopen("config/errors", "r");
     if (errfile == NULL)
         sysdie("Cannot open config/errors");
@@ -124,7 +122,6 @@ test_errors(int n)
             config_free(group);
     }
     fclose(errfile);
-    unlink("config/link");
     return n;
 }
 

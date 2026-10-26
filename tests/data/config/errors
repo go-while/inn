@@ -133,9 +133,9 @@ group <null>
 ===
 config/null: invalid NUL character found in file
 ===
-group <link/symlink>
+group <deep>
 ===
-config/link/link/link/link/link/link/link/link/link/link/link/link/link/link/link/link/link/link/link/symlink:1: file inclusions limited to 20 deep
+config/../config/../config/../config/../config/../config/../config/../config/../config/../config/../config/../config/../config/../config/../config/../config/../config/../config/../config/deep:1: file inclusions limited to 20 deep
 ===
 parameter: value>
 ===
