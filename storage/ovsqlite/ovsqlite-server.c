@@ -707,12 +707,30 @@ open_db(void)
         }
     }
     if (use_wal) {
-        status = sqlite3_exec(connection,
-                              "pragma journal_mode = 'WAL';"
-                              "pragma synchronous = 'NORMAL';",
-                              0, NULL, &errmsg);
+        sqlite3_stmt *stmt;
+
+        /* Where SQLite cannot use WAL mode (no shared memory, as on some
+           network filesystems or GNU/Hurd), the pragma succeeds but keeps
+           the previous journal mode and returns its name. */
+        status = sqlite3_prepare_v2(connection, "pragma journal_mode = 'WAL';",
+                                    -1, &stmt, NULL);
         if (status != SQLITE_OK) {
-            warn("cannot enable WAL mode: %s", errmsg);
+            warn("cannot enable WAL mode: %s", sqlite3_errmsg(connection));
+        } else {
+            const char *mode = NULL;
+
+            if (sqlite3_step(stmt) == SQLITE_ROW)
+                mode = (const char *) sqlite3_column_text(stmt, 0);
+            if (mode == NULL || strcmp(mode, "wal") != 0)
+                warn("cannot enable WAL mode: journal mode is %s; readers"
+                     " will use the server instead of the database",
+                     mode != NULL ? mode : "unknown");
+            sqlite3_finalize(stmt);
+        }
+        status = sqlite3_exec(connection, "pragma synchronous = 'NORMAL';", 0,
+                              NULL, &errmsg);
+        if (status != SQLITE_OK) {
+            warn("cannot set synchronous mode: %s", errmsg);
             sqlite3_free(errmsg);
         }
         sqlite3_wal_hook(connection, wal_hook, NULL);
