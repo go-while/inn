@@ -64,19 +64,32 @@ for dir in ../data data tests/data; do
 done
 ckpasswd=../../authprogs/ckpasswd
 
+# Some crypt implementations, notably OpenBSD's, no longer support DES.
+# Keep the old fixture for systems without bcrypt, but use the bcrypt
+# equivalent when crypt(3) cannot make DES hashes.  The probe calls crypt(3)
+# through Perl rather than through ckpasswd, so that a ckpasswd bug cannot
+# select the other fixture.  Without Perl, DES is assumed, as before.  All
+# tests still run.
+passwd=etc/passwd
+des_probe='my $h = crypt("foopass", "ab");
+exit(defined($h) && length($h) == 13 ? 0 : 1);'
+if command -v perl >/dev/null 2>&1 && ! perl -e "$des_probe" 2>/dev/null; then
+    passwd=etc/passwd-bcrypt
+fi
+
 # Print the test count.
 echo 7
 
 # First, run the tests that we expect to succeed.
-runsuccess "foo" "foopass" "-f etc/passwd" "User:foo"
-runsuccess "bar" "barpass" "-f etc/passwd" "User:bar"
-runsuccess "baz" "" "-f etc/passwd" "User:baz"
-runpipe "foo" "foopass" "-f etc/passwd" "User:foo"
+runsuccess "foo" "foopass" "-f $passwd" "User:foo"
+runsuccess "bar" "barpass" "-f $passwd" "User:bar"
+runsuccess "baz" "" "-f $passwd" "User:baz"
+runpipe "foo" "foopass" "-f $passwd" "User:foo"
 
 # Now, run the tests that we expect to fail.
-runfailure "foo" "barpass" "-f etc/passwd" \
+runfailure "foo" "barpass" "-f $passwd" \
     "ckpasswd: invalid password for user foo"
-runfailure "who" "foopass" "-f etc/passwd" \
+runfailure "who" "foopass" "-f $passwd" \
     "ckpasswd: user who unknown"
-runfailure "" "foopass" "-f etc/passwd" \
+runfailure "" "foopass" "-f $passwd" \
     "ckpasswd: null username"

@@ -1,0 +1,10 @@
+# The same accounts and passwords as passwd, using bcrypt rather than DES.
+foo:$2a$04$abcdefghijklmnopqrstuu8gLpt12CFBki7Qi5dgE/7vmyxBgzO3u:5:5:Foo Bar:/home/foo:/bin/sh
+
+# This is another comment.
+
+This is just some random text that someone put in this file for no good
+reason.
+
+bar:$2a$04$abcdefghijklmnopqrstuuH0H.2uetuU6mVKFJF9n4Y6nwxQ2uKQ.
+baz:$2a$04$abcdefghijklmnopqrstuubyCG3zY1GIXMyxfivm.ClDiInHzxjiq::::::::::::::::::::::
