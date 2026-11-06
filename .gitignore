@@ -248,6 +248,7 @@
 /tests/nnrpd/auth-test
 /tests/overview/api.t
 /tests/overview/buffindexed.t
+/tests/overview/build.t
 /tests/overview/ovsqlite.t
 /tests/overview/ovsqlite-read.t
 /tests/overview/ovsqlite-write.t
