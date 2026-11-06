@@ -176,8 +176,13 @@ if ${ROTATE}; then
         if [ -f ${F} ]; then
             rm -f ${F}.old ${F}.new
             if [ "${F}" = "${PULLNEWS}" ]; then
-                cp ${F} ${F}.old
-                cat /dev/null >${F}
+                ##  Only empty it once it is safely copied.
+                if cp ${F} ${F}.old; then
+                    cat /dev/null >${F}
+                else
+                    rm -f ${F}.old
+                    echo "Cannot copy ${F}; not rotated" 1>&2
+                fi
             else
                 ln ${F} ${F}.old
                 touch ${F}.new
@@ -221,6 +226,13 @@ if ${ROTATE}; then
             ;;
         ${ACTIVEFILE})
             mv ${BASE}.old ${OLD}/${BASE}
+            ;;
+        ${PULLNEWS})
+            ##  Copied and truncated above; without a copy, leave the file
+            ##  where it is rather than move it away from a running pullnews.
+            if [ -f ${F}.old ]; then
+                mv ${F}.old ${OLD}/${BASE}
+            fi
             ;;
         ${UNWANTED_LOG})
             ##  innreport assumes where unwanted.log exists, so leave it.
