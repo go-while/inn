@@ -11,6 +11,7 @@ yet, and builds and tests each on:
 | Ubuntu | latest (26.04) gcc and clang, 24.04 gcc, 24.04 ARM64 gcc | upstream `ci/install` + `ci/test` (`make warnings`, three configurations) |
 | Sanitizers | Ubuntu latest, ASan + UBSan | build, `make check` |
 | Linux distributions | 20 container images (`e2e-distro`) | build, `make check` |
+| e2e tests of the fork (informational) | Ubuntu 26.04 container | the Go e2e tests from the fork's `e2e` branch against plain upstream: the failures list which fork fixes upstream lacks; never fails the run |
 | BSD, illumos | FreeBSD, OpenBSD, NetBSD, DragonFly BSD, OmniOS (VMs) | build, `make check` |
 | macOS | only when started by hand with "macos" | build, `make check` |
 

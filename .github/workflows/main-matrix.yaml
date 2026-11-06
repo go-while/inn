@@ -10,6 +10,8 @@
 ##  - Sanitizers: AddressSanitizer and UndefinedBehaviorSanitizer, make check.
 ##  - Linux distributions: 20 container images, through e2e-distro (build,
 ##    make check).
+##  - The fork's e2e tests (branch e2e) against plain upstream, for
+##    information only: which fork fixes upstream still lacks.
 ##  - FreeBSD, OpenBSD, NetBSD, DragonFly BSD and OmniOS (illumos) in VMs.
 ##  - macOS only when started by hand with "macos" ticked.
 ##
@@ -240,6 +242,71 @@ jobs:
           name: logs-${{ strategy.job-index }}
           path: ${{ runner.temp }}/work/build/*.log
           if-no-files-found: ignore
+
+  # The e2e tests of the fork's e2e branch (tests/e2e, Go) against plain
+  # upstream.  They also check bugs that only fork PRs fix, so failures are
+  # expected: the list in the job summary shows which fork fixes upstream
+  # lacks, and shrinks as they are merged.  It never fails the run.
+  e2e-upstream:
+    name: ${{ matrix.ref }} e2e tests of the fork (informational)
+    needs: source
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    continue-on-error: true
+    strategy:
+      fail-fast: false
+      matrix:
+        ref: ${{ fromJSON(needs.source.outputs.refs) }}
+    env:
+      REF: ${{ matrix.ref }}
+    steps:
+      - name: Checkout the fork's e2e branch
+        uses: actions/checkout@v7
+        with:
+          ref: e2e
+          path: e2e
+          persist-credentials: false
+      - name: Setup Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: e2e/tests/e2e/go.mod
+          cache-dependency-path: e2e/tests/e2e/go.sum
+      - name: Build the e2e test binary
+        working-directory: e2e/tests/e2e
+        run: |
+          mkdir -p "$RUNNER_TEMP/e2e"
+          CGO_ENABLED=0 go test -c -o "$RUNNER_TEMP/e2e/e2e.test" .
+          echo "e2e tests from go-while/inn e2e $(git rev-parse --short=9 HEAD)"
+      - name: Download
+        uses: actions/download-artifact@v8
+        with:
+          name: inn-src
+      - name: Build, make check, e2e tests
+        run: |
+          mkdir -p "$RUNNER_TEMP/work"
+          tar xzf "inn-src-$(printf '%s' "$REF" | tr '/' '_').tar.gz"
+          docker run --rm -v "$PWD/inn:/src:ro" -v "$PWD/e2e-distro:/e2e-distro:ro" \
+              -v "$RUNNER_TEMP/e2e:/e2e:ro" -v "$RUNNER_TEMP/work:/work" -w /src \
+              -e BUILDDIR=/work/build -e PREFIX=/opt/inn-e2e \
+              ubuntu:26.04 sh /e2e-distro /e2e/e2e.test
+      - name: Summary
+        if: always()
+        run: |
+          log="$RUNNER_TEMP/work/build/e2e.log"
+          {
+            echo "### e2e tests of the fork against upstream $REF"
+            echo "(e2e branch $(git -C e2e rev-parse --short=9 HEAD))"
+            echo
+            if [ -f "$log" ]; then
+              echo "$(grep -c '^--- PASS' "$log") passed," \
+                  "$(grep -c '^--- SKIP' "$log") skipped," \
+                  "$(grep -c '^--- FAIL' "$log") failed"
+              echo
+              grep '^--- FAIL' "$log" | sed 's/^--- FAIL: \([^ ]*\).*/- \1/' || true
+            else
+              echo "no e2e log: the build or make check failed"
+            fi
+          } >>"$GITHUB_STEP_SUMMARY"
 
   # The BSD and illumos jobs build as root in a VM.  The build and test
   # script is the same for all of them (keep the copies in step); the jobs
@@ -490,8 +557,10 @@ jobs:
             fi
             tail -n 6 ../check.log
 
+  # No name: GitHub never expands the matrix of a skipped job, so a name
+  # with ${{ matrix.ref }} would show up unexpanded.  Without one, it shows
+  # "macos" when skipped and "macos (main)" when it runs.
   macos:
-    name: ${{ matrix.ref }} macOS
     needs: source
     if: github.event_name == 'workflow_dispatch' && inputs.macos
     runs-on: macos-latest
