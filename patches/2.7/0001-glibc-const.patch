@@ -1,4 +1,4 @@
-From def01ae2ecb3b9897b9c44c91f6da453201eee08 Mon Sep 17 00:00:00 2001
+From 6203d5016ccc1c0056d96580dfbc2e0d4df1ac3a Mon Sep 17 00:00:00 2001
 From: go-while <go-while@users.noreply.github.com>
 Date: Sun, 25 Oct 2026 02:10:23 +0000
 Subject: [PATCH] Fix const qualifiers discarded with C23 string functions
@@ -6,9 +6,9 @@ Subject: [PATCH] Fix const qualifiers discarded with C23 string functions
 glibc 2.43 implements the C23 qualifier-preserving strchr, strrchr,
 strstr, strpbrk, memchr and bsearch: called with a pointer to const,
 they return a pointer to const.  gcc then warns for each assignment of
-the result to a plain pointer (16 warnings on Ubuntu 26.04 with gcc 15
-and glibc 2.43, 19 on Arch Linux with gcc 16 and glibc 2.44, which also
-covers strstr).
+the result to a plain pointer (16 warnings on Ubuntu 26.04 with glibc
+2.43, 19 when SASL support is compiled in, which adds three strstr()
+calls in nnrpd).
 
 Most pointers are only read and are now declared const.  Elsewhere:
 

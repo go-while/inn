@@ -1,23 +1,27 @@
-From 7cf01bf1f7ba353b866b4c953b82eec4b39ce460 Mon Sep 17 00:00:00 2001
+From b4459f4a896aa966cd726435bab187167976d3b1 Mon Sep 17 00:00:00 2001
 From: go-while <go-while@users.noreply.github.com>
 Date: Fri, 6 Nov 2026 14:05:39 +0000
 Subject: [PATCH 4/7] tests/authprogs: Fall back to bcrypt when DES is
  unavailable
 
 OpenBSD crypt only supports bcrypt, so all successful authentications
-using the DES-only password fixture fail. Add an equivalent bcrypt
-fixture and use it when the legacy DES fixture cannot authenticate.
+using the DES-only password fixture fail.  Add an equivalent bcrypt
+fixture and use it when crypt(3) cannot make DES hashes.  The probe
+calls crypt(3) through Perl rather than through ckpasswd, so that a
+ckpasswd bug cannot select the other fixture; without Perl, DES is
+assumed as before.
 
-Keep DES for older crypt implementations without bcrypt. The same seven
+Keep DES for older crypt implementations without bcrypt.  The same seven
 authentication and rejection assertions run with either fixture; none
-are skipped. No production authentication behavior changes.
+are skipped.  No production authentication behavior changes.
 
 Co-Authored-By: GPT-6.1 Sol <noreply@openai.com>
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 ---
  MANIFEST                     |  1 +
- tests/authprogs/ckpasswd.t   | 22 +++++++++++++++-------
+ tests/authprogs/ckpasswd.t   | 27 ++++++++++++++++++++-------
  tests/data/etc/passwd-bcrypt | 10 ++++++++++
- 3 files changed, 26 insertions(+), 7 deletions(-)
+ 3 files changed, 31 insertions(+), 7 deletions(-)
  create mode 100644 tests/data/etc/passwd-bcrypt
 
 diff --git a/MANIFEST b/MANIFEST
@@ -33,18 +37,23 @@ index 491795f54..523a2c174 100644
  tests/data/overview                   Test overview data (Directory)
  tests/data/overview/1-4               Overview info for test articles 1-4
 diff --git a/tests/authprogs/ckpasswd.t b/tests/authprogs/ckpasswd.t
-index d8c82ca5d..4a35f327b 100755
+index d8c82ca5d..d0cd01548 100755
 --- a/tests/authprogs/ckpasswd.t
 +++ b/tests/authprogs/ckpasswd.t
-@@ -64,19 +64,27 @@ for dir in ../data data tests/data; do
+@@ -64,19 +64,32 @@ for dir in ../data data tests/data; do
  done
  ckpasswd=../../authprogs/ckpasswd
  
 +# Some crypt implementations, notably OpenBSD's, no longer support DES.
 +# Keep the old fixture for systems without bcrypt, but use the bcrypt
-+# equivalent when DES authentication is unavailable.  All tests still run.
++# equivalent when crypt(3) cannot make DES hashes.  The probe calls crypt(3)
++# through Perl rather than through ckpasswd, so that a ckpasswd bug cannot
++# select the other fixture.  Without Perl, DES is assumed, as before.  All
++# tests still run.
 +passwd=etc/passwd
-+if ! $ckpasswd -u foo -p foopass -f "$passwd" >/dev/null 2>&1; then
++des_probe='my $h = crypt("foopass", "ab");
++exit(defined($h) && length($h) == 13 ? 0 : 1);'
++if command -v perl >/dev/null 2>&1 && ! perl -e "$des_probe" 2>/dev/null; then
 +    passwd=etc/passwd-bcrypt
 +fi
 +

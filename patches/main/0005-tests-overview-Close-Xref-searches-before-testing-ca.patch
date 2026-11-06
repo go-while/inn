@@ -1,33 +1,35 @@
-From ffddb3fc6e316e0b290aafcc9ed2e87273d05625 Mon Sep 17 00:00:00 2001
+From 8a57d7479bf21793e88a36bd3116ce1287ada1d5 Mon Sep 17 00:00:00 2001
 From: go-while <go-while@users.noreply.github.com>
 Date: Fri, 6 Nov 2026 14:06:17 +0000
 Subject: [PATCH 5/7] tests/overview: Close Xref searches before testing
  cancellation
 
-Release every search handle after checking its article. Otherwise the
-test retains references to the mapped group data throughout the later
-cancellation checks.
+The test kept every search handle open after checking its article, and
+with it a reference to the mapped group data, through the later
+cancellation checks.  On OpenBSD those checks then still saw the
+cancelled entries; with the handles closed, they pass.
 
-tradindexed_cancel reopens its cached data files so cancelled entries
-are no longer visible on OpenBSD, but leaked search references keep the
-old mappings alive. Close those references rather than changing the
-production cancellation path to accommodate a leaking test.
+Why the reopened data does not show the cancellation while the old
+mappings are alive is not established here, nor whether a search that
+a reader holds open has the same effect.  This change only stops the
+test from leaking the handles.
 
 Co-Authored-By: GPT-6.1 Sol <noreply@openai.com>
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 ---
  tests/overview/xref-t.c | 4 ++++
  1 file changed, 4 insertions(+)
 
 diff --git a/tests/overview/xref-t.c b/tests/overview/xref-t.c
-index 169792f8c..328f40e51 100644
+index 169792f8c..cb05c9e46 100644
 --- a/tests/overview/xref-t.c
 +++ b/tests/overview/xref-t.c
 @@ -158,6 +158,10 @@ overview_load(int n, const char *data, struct overview *overview)
                  ok_int(n++, strlen(start) + (result - article.overview) + 2,
                         article.overlen);
              }
-+            /* Release the search's reference to the mapped data so a later
-+             * cancellation can close and reopen it, as OpenBSD requires. */
++            /* Release the search's reference to the mapped data before the
++             * cancellation checks; with it held, they failed on OpenBSD. */
 +            if (search != NULL)
 +                overview_search_close(overview, search);
          }

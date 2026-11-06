@@ -1,4 +1,4 @@
-From 084376d9123fe96d8a9ce22f756576e0d9a13aba Mon Sep 17 00:00:00 2001
+From 8e1b4af9858dd62f7dd49a11cf3d67555ad97a25 Mon Sep 17 00:00:00 2001
 From: go-while <go-while@users.noreply.github.com>
 Date: Fri, 6 Nov 2026 14:27:58 +0000
 Subject: [PATCH 7/7] tests/nnrpd: Ignore the generated auth helper in source

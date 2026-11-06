@@ -1,18 +1,19 @@
-From 56f03069f27eefcdc9898de8d33f9793cdbc9f68 Mon Sep 17 00:00:00 2001
+From 634e18e14690582766f77695392df366f301e064 Mon Sep 17 00:00:00 2001
 From: go-while <go-while@users.noreply.github.com>
 Date: Fri, 6 Nov 2026 13:48:32 +0000
 Subject: [PATCH] configure: Don't warn about C11 constructs with Clang
 
-glibc 2.43 implements strchr, strrchr, strstr, memchr and a few other
-string functions as macros using _Generic, so that they return a
-const pointer for a const argument.  Clang's -Wpre-c11-compat, part of
--Weverything, flags every call that expands such a macro, and make
-warnings fails on the first one (lib/artnumber.c with Clang 21 on
-Ubuntu 26.04).
+With its C23 interfaces enabled, glibc 2.43 implements strchr, strrchr,
+strstr, memchr and a few other string functions as macros using
+_Generic, so that they return a const pointer for a const argument.
+Clang's -Wpre-c11-compat, part of -Weverything, flags every call that
+expands such a macro, and make warnings fails on the first one
+(lib/artnumber.c on Ubuntu 26.04).
 
-Disable that warning for Clang.  GCC's -Wc99-c11-compat stays, so
-INN's own code is still checked for C99 compatibility; GCC does not
-warn about the macros, which come from a system header.
+Disable that warning for Clang.  This turns it off for all code built
+with Clang, not only for these macros.  GCC's -Wc99-c11-compat stays,
+so GCC builds still check INN's own code for C11 constructs; GCC does
+not warn about the macros, which come from a system header.
 
 Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 ---
