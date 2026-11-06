@@ -1437,6 +1437,8 @@ index_audit_header(struct group_index *index, bool fix)
                 break;
             entry = &index->entries[current];
             next = &entry->next.recno;
+            index_audit_deleted(entry, current, fix);
+            index_audit_loc(index, next, current, entry, fix);
             if (entry->deleted == 0 && bucket != index_bucket(entry->hash)) {
                 warn("tradindexed: entry %ld is in bucket %ld instead of its"
                      " correct bucket %ld",
@@ -1448,8 +1450,6 @@ index_audit_header(struct group_index *index, bool fix)
             } else {
                 reachable[current] = true;
             }
-            index_audit_deleted(entry, current, fix);
-            index_audit_loc(index, &entry->next.recno, current, entry, fix);
             if (entry->deleted != 0) {
                 warn("tradindexed: entry %ld is deleted but not in the free"
                      " list",
@@ -1477,15 +1477,21 @@ index_audit_header(struct group_index *index, bool fix)
             break;
         entry = &index->entries[current];
         index_audit_deleted(entry, current, fix);
+        index_audit_loc(index, &entry->next.recno, current, entry, fix);
         reachable[current] = true;
         if (!HashEmpty(entry->hash) && entry->deleted == 0) {
             warn("tradindexed: undeleted entry %ld in free list", current);
             if (fix) {
+                /* The entry is reattached to its hash chain later.  Splicing
+                   it out leaves the rest of the free list linked to the
+                   parent, so keep the parent and continue with the entry
+                   that now follows it. */
                 entry_splice(entry, parent);
                 reachable[current] = false;
+                current = *parent;
+                continue;
             }
         }
-        index_audit_loc(index, &entry->next.recno, current, entry, fix);
         if (entry->next.recno == current)
             break;
         parent = &entry->next.recno;
