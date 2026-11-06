@@ -41,7 +41,10 @@ install_packages() {
         export DEBIAN_FRONTEND=noninteractive
         apt-get -qq update
         apt-get -qq install -y build-essential autoconf bison flex perl \
-            libperl-dev libssl-dev libsqlite3-dev tzdata zlib1g-dev rsyslog >/dev/null
+            libperl-dev libssl-dev libsqlite3-dev tzdata zlib1g-dev >/dev/null
+        # Debian GNU/Hurd (debian-ports) has no rsyslog.
+        apt-get -qq install -y rsyslog >/dev/null 2>&1 \
+            || echo "rsyslog is not available"
     elif command -v dnf >/dev/null; then
         dnf -q -y install gcc make autoconf bison flex findutils diffutils tar \
             perl perl-devel perl-ExtUtils-Embed perl-libnet openssl-devel \
