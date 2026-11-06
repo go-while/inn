@@ -136,6 +136,35 @@ quiet() {
     fi
 }
 
+# Check the messages of a retrieval that fails.  Takes the token and the
+# message expected without -e, which is the historical one, and with -e.
+failure() {
+    output=$($sm "$1" 2>&1 >/dev/null)
+    status=$?
+    if [ $status = 1 ] && [ "$output" = "sm: could not retrieve $1" ]; then
+        printcount "ok"
+    else
+        echo "Have: $status $output"
+        printcount "not ok"
+    fi
+    output=$($sm -e "$1" 2>&1 >/dev/null)
+    status=$?
+    case "$output" in
+    $2)
+        if [ $status = 1 ]; then
+            printcount "ok"
+        else
+            echo "Have: $status $output"
+            printcount "not ok"
+        fi
+        ;;
+    *)
+        echo "Have: $status $output"
+        printcount "not ok"
+        ;;
+    esac
+}
+
 # Find the right directory.
 sm="../../frontends/sm"
 dirs='../data data tests/data'
@@ -151,7 +180,7 @@ if [ ! -x "$sm" ]; then
 fi
 
 # Print out the count of tests.
-echo 23
+echo 29
 
 # Point sm at the appropriate inn.conf file and create our required directory
 # structure.
@@ -203,6 +232,32 @@ multiple "$token2" "$token3" articles/2 articles/3
 
 # Check silencing of error messages.
 quiet
+
+# Check that -e tells a missing article (token1 was removed above) from an
+# article that cannot be read: make the directory of token2 a file, so that
+# opening the article fails with ENOTDIR.
+failure "$token1" "sm: article $token1 does not exist"
+mv spool/example/config spool/example/config.saved
+touch spool/example/config
+failure "$token2" "sm: could not retrieve $token2: *"
+rm -f spool/example/config
+mv spool/example/config.saved spool/example/config
+
+# The options that -e cannot be combined with.
+output=$($sm -e -r "$token2" 2>&1)
+if [ $? = 1 ] && [ "$output" = "sm: -e cannot be used with -c, -i, -r, -d, or -s" ]; then
+    printcount "ok"
+else
+    echo "Have: $output"
+    printcount "not ok"
+fi
+output=$($sm -e -s </dev/null 2>&1)
+if [ $? = 1 ] && [ "$output" = "sm: -e cannot be used with -c, -i, -r, -d, or -s" ]; then
+    printcount "ok"
+else
+    echo "Have: $output"
+    printcount "not ok"
+fi
 
 # All done.  Clean up.
 rm -rf spool
