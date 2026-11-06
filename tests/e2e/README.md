@@ -62,6 +62,10 @@ needs the Go standard library:
 | `TestNews2mailNoQueue` | innd, news2mail | `news2mail -n` does not give the MTA `-odq` (only queue the mail), `news2mail` alone does (#85) |
 | `TestPullnews` | innd, pullnews | articles pulled from an upstream are fed to innd, and the mark is recorded |
 | `TestProcbatchCheck` | innd, procbatch, sm | `procbatch -c` keeps the storage tokens of articles still in the spool and drops a cancelled one, with tradspool and timehash, and still checks pathname entries for a file (#189) |
+| `TestMethodMatrix` | innd, nnrpd, ovsqlite-server, ovdb_init, ctlinnd, sm, grephistory, expireover, expire, makehistory | each storage method (tradspool, timehash, timecaf, cnfs, trash) with each overview method (tradindexed, buffindexed, ovsqlite, ovdb) and hisv6, and each storage method with hissqlite (all 40 combinations with `INN_E2E_MATRIX=full`): articles fed with IHAVE and TAKETHIS (crossposts, one of 330 KB) read back byte for byte by number and Message-ID, with GROUP, LISTGROUP, OVER and HDR, and with `sm`; duplicates refused; a cancel by ctlinnd and by control message; the same after restarting innd; expireover and expire; overview and history rebuilt by `makehistory -O`. ovdb is skipped without Berkeley DB |
+| `TestBytesBodyStartsWithDot` | innd, nnrpd | the `:bytes` overview field is the article's size also when its body begins with a dot-stuffed line |
+| `TestOvsqliteReaderSeesNewArticle` | innd, nnrpd, ovsqlite-server | with ovsqlite, GROUP shows an article as soon as innd has accepted it, with and without `walmode` |
+| `TestTimecafExpireoverCurrentFile` | innd, expireover | expireover removes an expired timecaf article in the CAF file innd is writing to, without waiting for innd to move on to another file |
 
 ## Running
 
@@ -77,7 +81,8 @@ INN_PREFIX=$HOME/inn-e2e go test ./...
 
 Without `INN_PREFIX` every test is skipped. `NNTP_TEST_DEADLINE` (default `60s`)
 bounds every blocking step, so a hung server fails the test instead of hanging
-it. `pullnews` needs the Perl module `Net::NNTP` (libnet).
+it. `INN_E2E_MATRIX=full` makes `TestMethodMatrix` run all 40 combinations of
+storage, overview and history methods instead of 25. `pullnews` needs the Perl module `Net::NNTP` (libnet).
 
 The tests need a Linux or other Unix system where 127.0.0.2 can be used as a
 source address (Linux routes the whole 127.0.0.0/8 to the loopback interface).

@@ -62,6 +62,10 @@ type SiteOptions struct {
 	Etc       map[string]string // further files in etc, by name (innfeed.conf, passwd.nntp, ...)
 	Args      []string          // further innd arguments (innd always gets -f)
 
+	// BeforeStart runs after the site's files and history database are written, just
+	// before innd starts: the place to start helper daemons such as ovsqlite-server.
+	BeforeStart func(tb testing.TB, s *Site)
+
 	// TLS writes a self-signed certificate for 127.0.0.1 to etc/cert.pem and its key to
 	// etc/key.pem (mode 0600), the files nnrpd uses for STARTTLS by default; Site.CertPool
 	// trusts it.
@@ -78,6 +82,7 @@ type Site struct {
 
 	CertPool *x509.CertPool // trusts the site's certificate when SiteOptions.TLS is set
 	start    time.Time
+	args     []string // innd's arguments
 
 	syslogFile   string // INN_E2E_SYSLOG: read syslog messages from this file, not the journal
 	syslogOffset int64  // size of syslogFile when the site started
@@ -100,8 +105,10 @@ func prefix(tb testing.TB) string {
 	return p
 }
 
-// NewSite writes a site into a temporary directory, creates its history database, starts
-// innd -f on a free port of 127.0.0.1 and waits for its greeting. The cleanup shuts innd down
+// NewSite writes a site into a temporary directory, creates its history database (an empty
+// history file and its dbz index with "makedbz -i -o" for hisv6, or with makehistory on the
+// empty spool for hissqlite, the way "make install" does), starts innd -f on a free port of
+// 127.0.0.1 and waits for its greeting. The cleanup shuts innd down
 // with "ctlinnd shutdown" (the way rc.news stops it) and, when the test failed, logs innd's
 // output and the syslog messages of INN programs since the site started (via journalctl,
 // when present, or from the INN_E2E_SYSLOG file).
@@ -176,20 +183,48 @@ func NewSite(tb testing.TB, o SiteOptions) *Site {
 	s.writeFile(tb, "db/active", active.String())
 	s.writeFile(tb, "db/active.times", "")
 	s.writeFile(tb, "db/newsgroups", descs.String())
-	s.writeFile(tb, "db/history", "")
-	if out, err := s.run("makedbz", "-i", "-o"); err != nil {
-		tb.Fatalf("makedbz -i -o: %v\n%s", err, out)
+	if conf["hismethod"] == "hissqlite" {
+		if out, err := s.run("makehistory"); err != nil {
+			tb.Fatalf("makehistory: %v\n%s", err, out)
+		}
+	} else {
+		s.writeFile(tb, "db/history", "")
+		if out, err := s.run("makedbz", "-i", "-o"); err != nil {
+			tb.Fatalf("makedbz -i -o: %v\n%s", err, out)
+		}
 	}
 
 	tb.Cleanup(func() { s.dumpSyslog(tb) }) // runs last: after innd has stopped
+	if o.BeforeStart != nil {
+		o.BeforeStart(tb, s)
+	}
+	s.args = append([]string{"-f"}, o.Args...)
+	s.Start(tb)
+	return s
+}
+
+// Start starts innd -f on the site (again, after Stop) and waits for its greeting.
+func (s *Site) Start(tb testing.TB) {
+	tb.Helper()
 	s.Proc = proc.StartTCP(tb, proc.Options{
 		Path: filepath.Join(s.Prefix, "bin", "innd"),
-		Args: append([]string{"-f"}, o.Args...),
+		Args: s.args,
 		Env:  s.Env,
 		Dir:  s.Dir,
 	}, s.Addr)
 	tb.Cleanup(func() { s.shutdown(tb) }) // runs before proc's cleanup (SIGTERM, then SIGKILL)
-	return s
+}
+
+// Stop shuts innd down with "ctlinnd shutdown", like the cleanup, and fails the test unless
+// it exits; Start starts it again on the same site.
+func (s *Site) Stop(tb testing.TB) {
+	tb.Helper()
+	s.shutdown(tb)
+	select {
+	case <-s.Proc.Done():
+	default:
+		tb.Fatal("innd did not stop")
+	}
 }
 
 // DefaultReaders gives 127.0.0.1 read, post, approve and NEWNEWS access to every group.
