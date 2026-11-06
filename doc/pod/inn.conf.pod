@@ -1873,7 +1873,11 @@ buffers automatically, the buffer then grows with the bandwidth and the
 latency of the connection; setting a value disables this automatic tuning
 on Linux.  The operating system may round the value or cap it with a system
 limit (Linux, for instance, doubles it to make room for its bookkeeping
-and caps it at the C<net.core.rmem_max> sysctl).  The default value is C<0>.
+and caps it at the C<net.core.rmem_max> sysctl).  As INN sets the buffer
+once the connection is established, a value larger than the system default
+does not always give an equally large TCP window: the window scale is agreed
+on when the connection opens, from the buffer size at that time.  The default
+value is C<0>.
 
 Before this parameter was added, INN always used S<24 KB> for both buffers.
 Set I<peerrcvbufsize> and I<peersndbufsize> to C<24576> to keep this
