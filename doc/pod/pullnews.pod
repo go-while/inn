@@ -171,8 +171,11 @@ is opened in append mode.
 When B<pullnews> runs as part of INN, the standard name of its log file is
 F<pullnews.log> in I<pathlog> (as set in F<inn.conf>), for instance
 S<C<-l /usr/local/news/log/pullnews.log>> with the default value of
-I<pathlog>.  This file is then rotated by B<scanlogs> (see newslog(5)).
-Log files with other names are not rotated by INN.
+I<pathlog>.  This file is then rotated by B<scanlogs> (see newslog(5)):
+because B<pullnews> keeps it open, B<scanlogs> copies the file and truncates
+it, so that a running B<pullnews> goes on appending to the same file.  Log
+lines written in the very short time between the copy and the truncation are
+lost.  Log files with other names are not rotated by INN.
 
 =item B<-L> I<size>
 

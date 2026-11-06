@@ -222,7 +222,8 @@ B<scanlogs>.
 The B<pullnews> program appends progress and statistics to this file when
 the path to this file is given with its B<-l> flag (otherwise, they are
 written to standard output, or to another file which is not rotated).  The
-F<pullnews.log> file is rotated by B<scanlogs>.
+F<pullnews.log> file is rotated by B<scanlogs>, which copies it and truncates
+it as B<pullnews> keeps it open.
 
 =item F<send-ihave.log>
 

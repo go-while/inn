@@ -215,7 +215,9 @@ them.  Many thanks to Kevin Bowling for the patches.
 =item *
 
 B<scanlogs> now rotates F<pullnews.log> in I<pathlog>, which is the standard
-name of the log file of B<pullnews> when called with the B<-l> flag.
+name of the log file of B<pullnews> when called with the B<-l> flag.  As
+B<pullnews> keeps its log file open, the file is copied and truncated, so that
+a running B<pullnews> goes on writing to it.
 
 =back
 
