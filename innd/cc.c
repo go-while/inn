@@ -1460,28 +1460,51 @@ CCinnconfsetup(void)
     path = getenv(INN_ENV_INNCONF);
     if (path == NULL)
         path = INN_PATH_CONFIG;
-    if (stat(path, &CCinnconfstat) < 0)
+    /* On failure, CCinnconfpath stays NULL, which makes a later reload
+     * report that it cannot verify inn.conf.  A relative path must not be
+     * kept: innd changes its working directory afterwards. */
+    if (stat(path, &CCinnconfstat) < 0) {
+        syslog(L_ERROR, "%s cannot stat %s: %m", LogName, path);
         return;
-    if (*path != '/' && getcwd(cwd, sizeof(cwd)) != NULL)
-        CCinnconfpath = concatpath(cwd, path);
-    else
+    }
+    if (*path == '/') {
         CCinnconfpath = xstrdup(path);
+    } else if (getcwd(cwd, sizeof(cwd)) != NULL) {
+        CCinnconfpath = concatpath(cwd, path);
+    } else {
+        syslog(L_ERROR, "%s cannot get the current directory: %m", LogName);
+    }
 }
 
 
 /*
-**  Whether inn.conf has changed since innd started.
+**  Whether inn.conf has changed since innd started.  The answer is
+**  CC_INNCONF_UNCHANGED, CC_INNCONF_CHANGED, or CC_INNCONF_UNKNOWN when
+**  it cannot be verified (the file could not be examined at startup or
+**  cannot be examined now).
 */
-static bool
-CCinnconfchanged(void)
+enum {
+    CC_INNCONF_UNCHANGED,
+    CC_INNCONF_CHANGED,
+    CC_INNCONF_UNKNOWN
+};
+
+static int
+CCinnconfstatus(void)
 {
     struct stat Sb;
 
-    if (CCinnconfpath == NULL || stat(CCinnconfpath, &Sb) < 0)
-        return false;
-    return Sb.st_ino != CCinnconfstat.st_ino
-           || Sb.st_mtime != CCinnconfstat.st_mtime
-           || Sb.st_size != CCinnconfstat.st_size;
+    if (CCinnconfpath == NULL)
+        return CC_INNCONF_UNKNOWN;
+    if (stat(CCinnconfpath, &Sb) < 0) {
+        syslog(L_ERROR, "%s cannot stat %s: %m", LogName, CCinnconfpath);
+        return CC_INNCONF_UNKNOWN;
+    }
+    if (Sb.st_ino != CCinnconfstat.st_ino
+        || Sb.st_mtime != CCinnconfstat.st_mtime
+        || Sb.st_size != CCinnconfstat.st_size)
+        return CC_INNCONF_CHANGED;
+    return CC_INNCONF_UNCHANGED;
 }
 
 
@@ -1527,13 +1550,24 @@ CCreload(char *av[])
         if (PYreadfilter())
             syslog(L_NOTICE, "reloaded pyfilter OK");
 #endif
-        if (CCinnconfchanged()) {
+        switch (CCinnconfstatus()) {
+        case CC_INNCONF_CHANGED:
             syslog(L_ERROR,
                    "%s inn.conf changed since startup, restart innd to "
                    "apply it",
                    LogName);
             reply = "0 Ok, but inn.conf changed since innd started and "
                     "cannot be reloaded; restart innd to apply it";
+            break;
+        case CC_INNCONF_UNKNOWN:
+            syslog(L_ERROR, "%s cannot verify whether inn.conf changed",
+                   LogName);
+            reply = "0 Ok, but cannot verify whether inn.conf changed "
+                    "since innd started; restart innd to be sure it is "
+                    "applied";
+            break;
+        default:
+            break;
         }
         p = "all";
     } else if (strcmp(p, "active") == 0 || strcmp(p, "newsfeeds") == 0) {
