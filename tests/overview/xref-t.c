@@ -158,6 +158,10 @@ overview_load(int n, const char *data, struct overview *overview)
                 ok_int(n++, strlen(start) + (result - article.overview) + 2,
                        article.overlen);
             }
+            /* Release the search's reference to the mapped data so a later
+             * cancellation can close and reopen it, as OpenBSD requires. */
+            if (search != NULL)
+                overview_search_close(overview, search);
         }
     }
     fclose(overdata);
