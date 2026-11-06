@@ -50,7 +50,7 @@
 #
 #         The special keys __BODY__, __HEAD__ and __LINES__ hold the body
 #         of the article, its whole header (all the header fields as
-#         received, also those not listed above, with CRLF line endings)
+#         received, also those not listed above, normally with CRLF endings)
 #         and the number of lines of its body.
 #
 #     sub filter_mode { ... }
