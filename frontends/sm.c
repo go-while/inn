@@ -24,7 +24,7 @@
 #define WIRE_CHUNK_SIZE 0x10000
 
 static const char usage[] = "\
-Usage: sm [-cdHiqrRSs] [token ...]\n\
+Usage: sm [-cdeHiqrRSs] [token ...]\n\
 \n\
 Command-line interface to the INN storage manager.  The default action is\n\
 to display the complete article associated with each token given.  If no\n\
@@ -33,6 +33,7 @@ line.\n\
 \n\
     -c          Show clear information about a token\n\
     -d, -r      Delete the articles associated with the given tokens\n\
+    -e          Tell a missing article from a retrieval error\n\
     -H          Display the headers of articles only\n\
     -i          Translate tokens into newsgroup names and article numbers\n\
     -q          Suppress all error messages except usage\n\
@@ -47,6 +48,7 @@ struct options {
     bool artinfo;   /* Show newsgroup and article number. */
     bool clearinfo; /* Show clear information about a token. */
     bool delete;    /* Delete articles instead of showing them. */
+    bool errors;    /* Tell a missing article from a retrieval error. */
     bool header;    /* Display article headers only. */
     bool raw;       /* Display or consume wire-format articles. */
     bool rnews;     /* Output articles as rnews batch files. */
@@ -271,9 +273,18 @@ process_token(const char *id, const struct options *options)
          * expiretombstone is disabled. */
         SMcanceltombstone(token);
     } else {
+        /* Forget the error of a previous token, in case the storage method
+         * does not set one when it fails. */
+        SMerrno = SMERR_NOERROR;
         article = SMretrieve(token, options->header ? RETR_HEAD : RETR_ALL);
         if (article == NULL) {
-            warn("could not retrieve %s", id);
+            if (!options->errors)
+                warn("could not retrieve %s", id);
+            else if (SMerrno == SMERR_NOENT)
+                warn("article %s does not exist", id);
+            else
+                warn("could not retrieve %s: %s", id,
+                     SMerrorstr != NULL ? SMerrorstr : "unknown error");
             return false;
         }
         if (options->raw) {
@@ -298,7 +309,7 @@ main(int argc, char *argv[])
 {
     int option;
     bool okay, status;
-    struct options options = {false, false, false, false, false, false};
+    struct options options = {false, false, false, false, false, false, false};
     bool store = false;
 
     /* Suppress notice messages like tradspool rebuilding its map. */
@@ -309,7 +320,7 @@ main(int argc, char *argv[])
     if (!innconf_read(NULL))
         exit(1);
 
-    while ((option = getopt(argc, argv, "cdHiqrRSs")) != EOF) {
+    while ((option = getopt(argc, argv, "cdeHiqrRSs")) != EOF) {
         switch (option) {
         case 'c':
             options.clearinfo = true;
@@ -317,6 +328,9 @@ main(int argc, char *argv[])
         case 'd':
         case 'r':
             options.delete = true;
+            break;
+        case 'e':
+            options.errors = true;
             break;
         case 'H':
             options.header = true;
@@ -344,6 +358,9 @@ main(int argc, char *argv[])
     }
 
     /* Check options for consistency. */
+    if (options.errors
+        && (options.artinfo || options.clearinfo || options.delete || store))
+        die("-e cannot be used with -c, -i, -r, -d, or -s");
     if (options.artinfo && options.delete)
         die("-i cannot be used with -r or -d");
     if (options.artinfo && (options.header || options.raw || options.rnews))
