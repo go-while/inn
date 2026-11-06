@@ -219,7 +219,10 @@ any storage method.  It used to look only for files in a tradspool article
 spool, so it dropped every entry given as a storage API token, even of
 articles still present.  B<procbatch> now asks B<sm> about all the tokens
 of a batchfile at once, and keeps the file check for entries giving a
-pathname.
+pathname.  An article is dropped only when the storage manager reports that
+it does not exist; entries are kept, with an error exit status, when it
+cannot tell because of a storage error.  B<sm> has a new B<-e> flag to tell
+a missing article from a retrieval error.
 
 =back
 

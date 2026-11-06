@@ -61,8 +61,13 @@ may need fixing.
 Check for the existence of an article before writing references to it to
 the tape files.  Entries whose article no longer exists are dropped.
 Storage API tokens are checked with the storage manager, whatever the
-storage method: B<procbatch> runs B<sm> once for all the tokens of
-I<batchfile> and drops those whose article B<sm> cannot retrieve.
+storage method: B<procbatch> runs B<sm -e> once for all the tokens of
+I<batchfile> and drops those whose article B<sm> reports as not existing.
+When B<sm> cannot tell, because of an error of the storage system, the
+entries of that article are kept, a warning is displayed, and B<procbatch>
+exits with status 1 once it has finished.  If B<sm> fails or reports
+anything unexpected, B<procbatch> exits with an error before writing
+anything.
 Entries giving a pathname are checked for a file of that name in the
 article spool (see B<-s>).
 
