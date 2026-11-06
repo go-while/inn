@@ -468,6 +468,9 @@ jobs:
         ref: ${{ fromJSON(needs.source.outputs.refs) }}
     env:
       REF: ${{ matrix.ref }}
+      # The VM sets LANG=C.UTF-8, which it lacks: Perl then warns on every
+      # start, and the warnings end up in the output that tests compare.
+      LC_ALL: C
       CONFIGURE_ARGS: --with-sqlite3=/usr/local
       CPPFLAGS: -I/usr/local/include
       LDFLAGS: -L/usr/local/lib
@@ -479,7 +482,7 @@ jobs:
       - name: Build and make check
         uses: vmactions/dragonflybsd-vm@v1.3.4
         with:
-          envs: REF CONFIGURE_ARGS CPPFLAGS LDFLAGS
+          envs: REF LC_ALL CONFIGURE_ARGS CPPFLAGS LDFLAGS
           # The VM comes without a host name; configure would then leave
           # pathhost empty in the sample inn.conf that the tests read.
           prepare: |

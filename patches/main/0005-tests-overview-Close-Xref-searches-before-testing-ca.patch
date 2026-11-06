@@ -1,7 +1,7 @@
 From ffddb3fc6e316e0b290aafcc9ed2e87273d05625 Mon Sep 17 00:00:00 2001
 From: go-while <go-while@users.noreply.github.com>
 Date: Fri, 6 Nov 2026 14:06:17 +0000
-Subject: [PATCH 5/6] tests/overview: Close Xref searches before testing
+Subject: [PATCH 5/7] tests/overview: Close Xref searches before testing
  cancellation
 
 Release every search handle after checking its article. Otherwise the

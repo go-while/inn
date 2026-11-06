@@ -1,7 +1,7 @@
 From 390be334cf783278943cf249179f39d2e77e8b00 Mon Sep 17 00:00:00 2001
 From: go-while <go-while@users.noreply.github.com>
 Date: Fri, 6 Nov 2026 14:08:07 +0000
-Subject: [PATCH 6/6] tests/lib: Stop innconf tests after a configuration read
+Subject: [PATCH 6/7] tests/lib: Stop innconf tests after a configuration read
  failure
 
 A bad generated sample configuration, such as one configured with an
