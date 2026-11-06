@@ -129,7 +129,9 @@ sub check_articles {
         }
     }
     close $SM;
-    my $status = $? >> 8;
+    # The child exits with 0, 1 or 2; if it was killed by a signal, the low
+    # bits of $? are set and its exit code says nothing.
+    my $status = ($? & 127) ? 2 : $? >> 8;
 
     # sm exits with status 1 when it could not retrieve some articles, which
     # is expected only if it reported one; any other status is a failure, and
