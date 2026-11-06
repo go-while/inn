@@ -124,13 +124,28 @@ test_external(struct client *client, const char *arg, const char *user,
     test_external_timeout(client, arg, 5, user, error);
 }
 
+/* Check one program_timeout value from readers.conf.  Takes the value and
+   the expected result: the number of seconds, or 0 if it must be rejected.
+   A rejected value must leave the output variable alone. */
+static void
+test_timeout_parse(const char *value, unsigned long expected)
+{
+    unsigned long timeout = 42;
+
+    is_int(expected != 0, auth_timeout_parse(value, &timeout),
+           "program_timeout \"%s\" is %s", value,
+           expected != 0 ? "valid" : "rejected");
+    is_int(expected != 0 ? expected : 42, timeout,
+           "program_timeout \"%s\" value", value);
+}
+
 int
 main(void)
 {
     struct client *client;
     char *result;
 
-    plan(14 * 6 + 2);
+    plan(14 * 6 + 2 + 2 * 18);
 
     client = client_new();
 
@@ -168,6 +183,26 @@ main(void)
               "empty external command is reported");
     free(errors);
     errors = NULL;
+
+    /* Boundaries of the program_timeout parameter. */
+    test_timeout_parse("1", 1);
+    test_timeout_parse("5", 5);
+    test_timeout_parse("86400", 86400);
+    test_timeout_parse("0", 0);
+    test_timeout_parse("86401", 0);
+    test_timeout_parse("2147483647", 0);
+    test_timeout_parse("2147483648", 0);
+    test_timeout_parse("4294967296", 0);
+    test_timeout_parse("9223372036854775807", 0);
+    test_timeout_parse("18446744073709551615", 0);
+    test_timeout_parse("18446744073709551616", 0);
+    test_timeout_parse("99999999999999999999999999", 0);
+    test_timeout_parse("-1", 0);
+    test_timeout_parse("+5", 0);
+    test_timeout_parse(" 5", 0);
+    test_timeout_parse("5s", 0);
+    test_timeout_parse("", 0);
+    test_timeout_parse("0x10", 0);
 
     free(client);
     return 0;

@@ -13,6 +13,7 @@
 
 #include "portable/system.h"
 
+#include <ctype.h>
 #include <errno.h>
 #include <signal.h>
 #include <sys/wait.h>
@@ -34,6 +35,31 @@ struct process {
     int write_fd; /* Write to child. */
     int error_fd;
 };
+
+
+/*
+**  Parse the value of the program_timeout parameter of an auth group in
+**  readers.conf: a number of seconds between 1 and AUTH_TIMEOUT_MAX, in
+**  plain decimal digits.  The upper bound keeps the value well inside what
+**  a signed time_t, and select() on every platform, can take.  Returns true
+**  and stores the value in timeout if it is valid, and false otherwise.
+*/
+bool
+auth_timeout_parse(const char *value, unsigned long *timeout)
+{
+    char *end;
+    unsigned long seconds;
+
+    if (!isdigit((unsigned char) value[0]))
+        return false;
+    errno = 0;
+    seconds = strtoul(value, &end, 10);
+    if (*end != '\0' || errno == ERANGE || seconds < 1
+        || seconds > AUTH_TIMEOUT_MAX)
+        return false;
+    *timeout = seconds;
+    return true;
+}
 
 
 /*
