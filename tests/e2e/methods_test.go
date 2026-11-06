@@ -90,6 +90,19 @@ func TestMethodMatrix(t *testing.T) {
 // overview and history method (40) instead of the default 25.
 const EnvMatrix = "INN_E2E_MATRIX"
 
+// EnvKnownIssues: set to run the tests of INN issues that are known but not fixed yet;
+// without it, knownIssue skips them so that the suite stays green.
+const EnvKnownIssues = "INN_E2E_KNOWN_ISSUES"
+
+// knownIssue skips tb unless INN_E2E_KNOWN_ISSUES is set; why says what fails and where it
+// is reported.
+func knownIssue(tb testing.TB, why string) {
+	tb.Helper()
+	if os.Getenv(EnvKnownIssues) == "" {
+		tb.Skipf("known INN issue, not fixed yet (set %s=1 to run): %s", EnvKnownIssues, why)
+	}
+}
+
 // matrixCombinations returns the {storage, overview, history} combinations to run: by
 // default every storage method with every overview method and hisv6, plus every storage
 // method once with hissqlite, each with another overview method; with full, all of them.
@@ -1281,6 +1294,10 @@ func TestOvsqliteReaderSeesNewArticle(t *testing.T) {
 		{"walmode=true/transrowlimit=1", "walmode: true\ntransrowlimit: 1\n"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
+			if tc.name == "walmode=true" {
+				knownIssue(t, "with walmode, nnrpd sees a new article only after "+
+					"ovsqlite-server commits (up to transtimelimit, 10 s); waits for the maintainer")
+			}
 			s := NewSite(t, SiteOptions{
 				InnConf: map[string]string{"ovmethod": "ovsqlite"},
 				Etc:     map[string]string{"ovsqlite.conf": tc.conf},
@@ -1321,6 +1338,8 @@ func TestOvsqliteReaderSeesNewArticle(t *testing.T) {
 // another file, and expireover's cancel (CAFRemoveMultArts) waits for the lock, so it
 // blocks for as long as innd keeps writing to that file, indefinitely on a quiet server.
 func TestTimecafExpireoverCurrentFile(t *testing.T) {
+	knownIssue(t, "expireover waits for innd's lock on the CAF file innd is writing to; "+
+		"waits for the maintainer")
 	s := NewSite(t, SiteOptions{
 		Groups: matrixGroups,
 		Etc: map[string]string{

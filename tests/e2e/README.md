@@ -82,7 +82,9 @@ INN_PREFIX=$HOME/inn-e2e go test ./...
 Without `INN_PREFIX` every test is skipped. `NNTP_TEST_DEADLINE` (default `60s`)
 bounds every blocking step, so a hung server fails the test instead of hanging
 it. `INN_E2E_MATRIX=full` makes `TestMethodMatrix` run all 40 combinations of
-storage, overview and history methods instead of 25. `pullnews` needs the Perl module `Net::NNTP` (libnet).
+storage, overview and history methods instead of 25. Tests of INN issues that
+are known but not fixed yet are skipped; `INN_E2E_KNOWN_ISSUES=1` runs them.
+`pullnews` needs the Perl module `Net::NNTP` (libnet).
 
 The tests need a Linux or other Unix system where 127.0.0.2 can be used as a
 source address (Linux routes the whole 127.0.0.0/8 to the loopback interface).
