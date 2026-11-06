@@ -38,6 +38,10 @@ sure it is not rejected by the F<newsfeeds> C<ME> entry.
 A list of recommended distributions can be specified and described
 in distributions(5).
 
+Nothing needs to be reloaded after modifying F<distrib.pats>: B<nnrpd>
+reads it each time an article is posted, and each time a client sends
+the LIST DISTRIB.PATS command.
+
 =head1 HISTORY
 
 Written by Rich $alz <rsalz@uunet.uu.net> for InterNetNews.  Converted to

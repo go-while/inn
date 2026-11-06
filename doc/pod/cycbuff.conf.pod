@@ -106,6 +106,11 @@ metacycbuff line.
 B<innd> only reads F<cycbuff.conf> on startup, so if you change anything
 in this file and want B<innd> to pick up the changes, you have to use
 C<ctlinnd xexec innd>; C<ctlinnd reload all ''> is not sufficient.
+B<nnrpd> reads F<cycbuff.conf> each time it is spawned for a new
+connection, even when it runs as a daemon with B<-D>, and other programs
+like B<expire> read it each time they start.  B<cnfsstat>, when started
+in loop mode by B<rc.news>, notices changes automatically (see
+cnfsstat(8)).
 
 When articles are stored, the cycbuff into which they're stored is saved
 as part of the article token.  In order for INN to retrieve articles from
