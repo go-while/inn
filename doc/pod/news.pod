@@ -144,7 +144,8 @@ case the overview of the newsgroup is rebuilt from its directory in a
 tradspool article spool, found from I<patharticles> in F<inn.conf> and the
 newsgroup name.  Rebuilding the overview of many newsgroups is therefore
 easier, for instance with B<xargs>.  B<tdx-util> also no longer changes the
-overview when the directory given to B<-R> cannot be read.
+overview when the directory given to B<-R> cannot be opened or read
+completely.
 
 =back
 
