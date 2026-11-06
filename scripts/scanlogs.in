@@ -170,13 +170,20 @@ if ${ROTATE}; then
     fi
 
     ##  These are live files, so use link rather than copy.
+    ##  pullnews keeps its log file open, in append mode, and never reopens
+    ##  it: copy that file and truncate the original, like syslog files.
     for F in ${LIVEFILES}; do
         if [ -f ${F} ]; then
             rm -f ${F}.old ${F}.new
-            ln ${F} ${F}.old
-            touch ${F}.new
-            chmod 0660 ${F}.new
-            mv ${F}.new ${F}
+            if [ "${F}" = "${PULLNEWS}" ]; then
+                cp ${F} ${F}.old
+                cat /dev/null >${F}
+            else
+                ln ${F} ${F}.old
+                touch ${F}.new
+                chmod 0660 ${F}.new
+                mv ${F}.new ${F}
+            fi
         fi
     done
 
