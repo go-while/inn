@@ -72,8 +72,10 @@ insert into artinfo (groupid, artnum, arrived, expires, token, overview)
     values(?1, ?2, ?3, ?4, ?5, ?6);
 
 -- .update_groupinfo_add
+-- With cutofflow (?3), do not raise the initial low water mark to the first
+-- article inserted: makehistory -I may insert lower-numbered articles later.
 update groupinfo
-    set low = case when "count" then min(low, ?2) else ?2 end,
+    set low = case when "count" or ?3 then min(low, ?2) else ?2 end,
         high = case when "count" then max(high, ?2) else ?2 end,
         "count" = "count"+1
     where groupid=?1;
