@@ -29,6 +29,10 @@ If authentication credentials are present for the remote server in the
 F<passwd.nntp> file in I<pathetc>, then B<innxbatch> will use them to
 authenticate.
 
+The sizes of the socket buffers of the connection can be set with the
+I<peerrcvbufsize> and I<peersndbufsize> parameters in F<inn.conf>.  By
+default, the operating system defaults are used.
+
 B<innxbatch> itself does not use any file locking.  At worst, a batch could be
 transmitted twice in parallel by two independent invocations of B<innxbatch>.
 To prevent this, it should be invoked by a script run out of cron(8) that uses
@@ -118,7 +122,7 @@ Karsten Leipold <poldi@dfn.de>.  Rewritten into POD by Julien Elie.
 
 =head1 SEE ALSO
 
-ctlinnd(8), incoming.conf(5), innxmit(8), newsfeeds(5), nntpsend(8),
-passwd.nntp(5), shlock(8).
+ctlinnd(8), incoming.conf(5), inn.conf(5), innxmit(8), newsfeeds(5),
+nntpsend(8), passwd.nntp(5), shlock(8).
 
 =cut
