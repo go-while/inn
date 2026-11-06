@@ -1,0 +1,34 @@
+#!/bin/sh
+
+##  Apply the patches in a directory to an INN source tree, skipping those
+##  that upstream already has.
+##
+##      apply-patches PATCHDIR SRCDIR
+##
+##  A patch that applies in reverse is already upstream and is skipped.  A
+##  patch that applies neither way fails the run: it has to be refreshed or
+##  removed.  Each result goes to stdout and, in GitHub Actions, to the job
+##  summary.
+
+set -eu
+
+patchdir=$1
+src=$2
+summary=${GITHUB_STEP_SUMMARY:-/dev/null}
+
+for p in "$patchdir"/*.patch; do
+    [ -e "$p" ] || continue
+    name=$(basename "$p")
+    subject=$(sed -n 's/^Subject: \(\[PATCH[^]]*\] \)\{0,1\}//p' "$p" | head -n 1)
+    if git -C "$src" apply --check -R "$p" 2>/dev/null; then
+        echo "already upstream: $name ($subject)"
+        echo "- already upstream: \`$name\` $subject" >>"$summary"
+    elif git -C "$src" apply --check "$p"; then
+        git -C "$src" apply "$p"
+        echo "applied: $name ($subject)"
+        echo "- applied: \`$name\` $subject" >>"$summary"
+    else
+        echo "::error::$name applies neither way to upstream: refresh or remove it"
+        exit 1
+    fi
+done

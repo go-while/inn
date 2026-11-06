@@ -1,0 +1,296 @@
+From c78a4aec7fad2097d54978e9823d87c81c41c1c0 Mon Sep 17 00:00:00 2001
+From: go-while <go-while@users.noreply.github.com>
+Date: Sun, 25 Oct 2026 02:10:23 +0000
+Subject: [PATCH] Fix const qualifiers discarded with C23 string functions
+
+glibc 2.43 implements the C23 qualifier-preserving strchr, strrchr,
+strstr, strpbrk, memchr and bsearch: called with a pointer to const,
+they return a pointer to const.  gcc then warns for each assignment of
+the result to a plain pointer (16 warnings on Ubuntu 26.04 with gcc 15
+and glibc 2.43, 19 on Arch Linux with gcc 16 and glibc 2.44, which also
+covers strstr).
+
+Most pointers are only read and are now declared const.  Elsewhere:
+
+- nnrpd wrote NUL bytes into the response returned by ARTpost(), which
+  may be a string literal; it now replies with a copy of its first line.
+- nnrpd removed the insecure SASL mechanisms from the list returned by
+  sasl_listmech(), which belongs to the SASL library; it now works on a
+  copy.
+- archive cuts the group names in its own copy of the Xref header field
+  body, as storage/ov.c does, with a cast.
+- innd looks for the site exclusions in the writable newsfeeds entry
+  rather than through the const site name, and NGparseentry() takes the
+  writable active file line it stores pointers into.
+
+The dbm_open() warning of ckpasswd is #299.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ backends/archive.c             |  2 +-
+ expire/fastrm.c                |  4 ++--
+ innd/newsfeeds.c               |  2 +-
+ innd/ng.c                      |  2 +-
+ innfeed/configfile.y           |  2 +-
+ innfeed/host.c                 |  6 +++---
+ lib/dispatch.c                 |  2 +-
+ lib/hash.c                     |  2 +-
+ lib/messageid.c                |  2 +-
+ nnrpd/commands.c               | 15 ++++++++-------
+ nnrpd/nnrpd.c                  | 18 ++++++++++++++----
+ storage/expire.c               |  2 +-
+ storage/tradindexed/tdx-util.c |  2 +-
+ 13 files changed, 36 insertions(+), 25 deletions(-)
+
+diff --git a/backends/archive.c b/backends/archive.c
+index 5ad6dfc7a..2663d43aa 100644
+--- a/backends/archive.c
++++ b/backends/archive.c
+@@ -306,7 +306,7 @@ process_article(ARTHANDLE *art, const char *token, struct config *config)
+     first = NULL;
+     for (i = 1; i < groups->count; i++) {
+         group = groups->strings[i];
+-        delim = strchr(group, ':');
++        delim = (char *) strchr(group, ':');
+         if (delim == NULL) {
+             warn("bogus Xref entry %s in %s", group, token);
+             continue;
+diff --git a/expire/fastrm.c b/expire/fastrm.c
+index b86e572e4..57f67ee57 100644
+--- a/expire/fastrm.c
++++ b/expire/fastrm.c
+@@ -633,8 +633,8 @@ bad_path(const char *p)
+ int
+ main(int argc, char *argv[])
+ {
+-    const char *name;
+-    char *p, **arg;
++    const char *name, *p;
++    char **arg;
+     QIOSTATE *qp;
+     filelist *list;
+     int filecount, deleted;
+diff --git a/innd/newsfeeds.c b/innd/newsfeeds.c
+index cb962aafa..d54646cc8 100644
+--- a/innd/newsfeeds.c
++++ b/innd/newsfeeds.c
+@@ -484,7 +484,7 @@ SITEparseone(char *Entry, SITE *sp, char *subbed, char *poison)
+         return "missing field 2";
+     *f2++ = '\0';
+     sp->Name = Entry;
+-    if ((p = strchr(sp->Name, NF_SUBFIELD_SEP)) != NULL) {
++    if ((p = strchr(Entry, NF_SUBFIELD_SEP)) != NULL) {
+         /* Exclusions within the site field. */
+         *p++ = '\0';
+         if (*p)
+diff --git a/innd/ng.c b/innd/ng.c
+index 8a096f613..6679b69d8 100644
+--- a/innd/ng.c
++++ b/innd/ng.c
+@@ -66,7 +66,7 @@ NGcompare(const void *p1, const void *p2)
+ **  or we want to just blat it out to disk later.
+ */
+ static bool
+-NGparseentry(NEWSGROUP *ngp, const char *p, char *end)
++NGparseentry(NEWSGROUP *ngp, char *p, char *end)
+ {
+     char *q;
+     unsigned int j;
+diff --git a/innfeed/configfile.y b/innfeed/configfile.y
+index 8d436d859..34c13bdfb 100644
+--- a/innfeed/configfile.y
++++ b/innfeed/configfile.y
+@@ -280,7 +280,7 @@ scope *
+ findScope(scope *s, const char *name, int mustExist)
+ {
+     scope *p = NULL;
+-    char *q;
++    const char *q;
+     int i;
+ 
+ 
+diff --git a/innfeed/host.c b/innfeed/host.c
+index 542fa10c8..9a29976c6 100644
+--- a/innfeed/host.c
++++ b/innfeed/host.c
+@@ -3717,7 +3717,7 @@ validateInteger(FILE *fp, const char *name, long low, long high, int required,
+     int rval = VALUE_OK;
+     value *v;
+     scope *s;
+-    char *p = strrchr(name, ':');
++    const char *p = strrchr(name, ':');
+ 
+     v = findValue(sc, name, inh);
+     if (v == NULL && required != NOTREQNOADD) {
+@@ -3762,7 +3762,7 @@ validateReal(FILE *fp, const char *name, double low, double high, int required,
+     int rval = VALUE_OK;
+     value *v;
+     scope *s;
+-    char *p = strrchr(name, ':');
++    const char *p = strrchr(name, ':');
+ 
+     v = findValue(sc, name, inh);
+     if (v == NULL && required != NOTREQNOADD) {
+@@ -3804,7 +3804,7 @@ validateBool(FILE *fp, const char *name, int required, bool setval, scope *sc,
+     int rval = VALUE_OK;
+     value *v;
+     scope *s;
+-    char *p = strrchr(name, ':');
++    const char *p = strrchr(name, ':');
+ 
+     v = findValue(sc, name, inh);
+     if (v == NULL && required != NOTREQNOADD) {
+diff --git a/lib/dispatch.c b/lib/dispatch.c
+index 46bd546ad..34d70af98 100644
+--- a/lib/dispatch.c
++++ b/lib/dispatch.c
+@@ -37,7 +37,7 @@ void
+ dispatch(struct cvector *command, const struct dispatch *table, size_t count,
+          dispatch_func unknown, dispatch_func syntax, void *cookie)
+ {
+-    struct dispatch *rule;
++    const struct dispatch *rule;
+     int argc = command->count - 1;
+ 
+     if (argc < 0) {
+diff --git a/lib/hash.c b/lib/hash.c
+index 9bf6aeed2..c516672eb 100644
+--- a/lib/hash.c
++++ b/lib/hash.c
+@@ -31,7 +31,7 @@ static HASH empty = {
+ static const char *
+ cipoint(const char *s, size_t size)
+ {
+-    char *p;
++    const char *p;
+     static const char post[] = "postmaster";
+     static int plen = sizeof(post) - 1;
+ 
+diff --git a/lib/messageid.c b/lib/messageid.c
+index c9a3a1280..47b75da94 100644
+--- a/lib/messageid.c
++++ b/lib/messageid.c
+@@ -134,7 +134,7 @@ bool
+ IsValidMessageID(const char *MessageID, bool stripspaces, bool laxsyntax)
+ {
+     const unsigned char *p;
+-    char *q;
++    const char *q;
+ 
+     if (!initialized) {
+         InitializeMessageIDcclass();
+diff --git a/nnrpd/commands.c b/nnrpd/commands.c
+index a837005b3..029f802b7 100644
+--- a/nnrpd/commands.c
++++ b/nnrpd/commands.c
+@@ -841,23 +841,24 @@ CMDpost(int ac, char *av[])
+               ihave ? NNTP_OK_IHAVE : NNTP_OK_POST, idbuff);
+         POSTreceived++;
+     } else {
+-        if ((p = strchr(response, '\r')) != NULL)
+-            *p = '\0';
+-        if ((p = strchr(response, '\n')) != NULL)
+-            *p = '\0';
++        /* Keep only the first line of the response, without writing in it:
++         * it may be a string literal. */
++        char *reply = xstrndup(response, strcspn(response, "\r\n"));
++
+         notice("%s %s failed %s", Client.host, ihave ? "ihave" : "post",
+-               response);
++               reply);
+         if (!ihave || permanent) {
+             /* For permanent errors, reject the message. */
+             Reply("%d %s\r\n",
+                   ihave ? NNTP_FAIL_IHAVE_REJECT : NNTP_FAIL_POST_REJECT,
+-                  response);
++                  reply);
+         } else {
+             /* Non-permanent errors only have relevance to IHAVE, for
+              * these we have the error status from the upstream
+              * server to report.  It includes the answer code. */
+-            Reply("%s\r\n", response);
++            Reply("%s\r\n", reply);
+         }
++        free(reply);
+         POSTrejected++;
+     }
+ }
+diff --git a/nnrpd/nnrpd.c b/nnrpd/nnrpd.c
+index 6d4ba16ae..f4e8fb6b3 100644
+--- a/nnrpd/nnrpd.c
++++ b/nnrpd/nnrpd.c
+@@ -312,7 +312,8 @@ void
+ CMDhelp(int ac UNUSED, char *av[] UNUSED)
+ {
+     CMDENT *cp;
+-    char *p, *q;
++    const char *p;
++    char *q;
+     static const char *newsmaster = NEWSMASTER;
+ 
+     Reply("%d Legal commands\r\n", NNTP_INFO_HELP);
+@@ -366,7 +367,8 @@ void
+ CMDcapabilities(int ac, char *av[])
+ {
+ #ifdef HAVE_SASL
+-    const char *mechlist = NULL;
++    const char *saslmechs = NULL;
++    char *mechlist = NULL;
+ #endif
+ 
+     if (ac == 2 && !IsValidKeyword(av[1])) {
+@@ -385,8 +387,12 @@ CMDcapabilities(int ac, char *av[])
+ 
+ #ifdef HAVE_SASL
+     /* Check for available SASL mechanisms.
+-     * Start the string with a space for the strstr() calls afterwards. */
+-    sasl_listmech(sasl_conn, NULL, " ", " ", "", &mechlist, NULL, NULL);
++     * Start the string with a space for the strstr() calls afterwards.
++     * The list belongs to the SASL library; work on a copy, from which
++     * insecure mechanisms may be removed. */
++    sasl_listmech(sasl_conn, NULL, " ", " ", "", &saslmechs, NULL, NULL);
++    if (saslmechs != NULL)
++        mechlist = xstrdup(saslmechs);
+ #endif
+ 
+     /* The client is not already authenticated. */
+@@ -503,6 +509,10 @@ CMDcapabilities(int ac, char *av[])
+     }
+ 
+     Printf(".\r\n");
++
++#ifdef HAVE_SASL
++    free(mechlist);
++#endif
+ }
+ 
+ 
+diff --git a/storage/expire.c b/storage/expire.c
+index 32cb360f0..1d1199a32 100644
+--- a/storage/expire.c
++++ b/storage/expire.c
+@@ -639,7 +639,7 @@ OVERGetHeader(const char *p, int field)
+     static int buffsize;
+     int i;
+     ARTOVERFIELD *fp;
+-    char *next;
++    const char *next;
+ 
+     fp = &ARTfields[field];
+ 
+diff --git a/storage/tradindexed/tdx-util.c b/storage/tradindexed/tdx-util.c
+index 949a44b60..fb62009ba 100644
+--- a/storage/tradindexed/tdx-util.c
++++ b/storage/tradindexed/tdx-util.c
+@@ -109,7 +109,7 @@ dump_overview(const char *group, ARTNUM low, ARTNUM high, bool overchan)
+     struct group_entry *entry;
+     struct article article;
+     struct search *search;
+-    char *p;
++    const char *p;
+     char datestring[256];
+ 
+     index = tdx_index_open(OV_READ);
+-- 
+2.47.3
+

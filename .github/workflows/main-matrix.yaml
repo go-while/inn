@@ -1,0 +1,352 @@
+##  Build and test upstream INN (InterNetNews/inn, branch main by default) on
+##  many systems, with only the patches in patches/ that upstream does not
+##  have yet.  It catches breakage of the next release (2.8.0) caused by new
+##  compilers, C libraries and runner images before it reaches the
+##  maintainers' CI.
+##
+##  - Ubuntu: upstream's own ci/install and ci/test (make warnings, i.e.
+##    -Werror, in three configurations) with gcc and clang, on x86-64 and
+##    ARM64, on the current and the previous LTS.
+##  - Sanitizers: AddressSanitizer and UndefinedBehaviorSanitizer, make check.
+##  - Linux distributions: 20 container images, through e2e-distro (build,
+##    make check).
+##  - FreeBSD, OpenBSD, NetBSD, DragonFly BSD and OmniOS (illumos) in VMs.
+##  - macOS only when started by hand with "macos" ticked.
+##
+##  Runs on a push to this branch, by hand (Actions, main-matrix, "Run
+##  workflow", where another ref such as 2.7 can be chosen), and weekly.
+##  GitHub runs scheduled workflows only from the default branch of the
+##  repository, so the schedule takes effect only if this file is there too.
+
+name: main-matrix
+
+"on":
+  push:
+    branches: [main-matrix]
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: InterNetNews/inn branch, tag or commit to test
+        default: main
+      patches:
+        description: Apply the patches in patches/ that upstream lacks
+        type: boolean
+        default: true
+      macos:
+        description: Also build on macOS
+        type: boolean
+        default: false
+  schedule:
+    - cron: "41 4 * * 1"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: main-matrix-${{ github.ref }}-${{ inputs.ref || 'main' }}
+  cancel-in-progress: true
+
+jobs:
+  source:
+    name: Source (upstream ${{ inputs.ref || 'main' }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout this branch
+        uses: actions/checkout@v7
+        with:
+          path: matrix
+          persist-credentials: false
+      - name: Checkout upstream
+        uses: actions/checkout@v7
+        with:
+          repository: InterNetNews/inn
+          ref: ${{ inputs.ref || 'main' }}
+          path: src
+          persist-credentials: false
+      - name: Apply patches
+        if: inputs.patches != false
+        run: |
+          {
+            echo "### Upstream InterNetNews/inn ${{ inputs.ref || 'main' }}"
+            echo "commit \`$(git -C src rev-parse --short=9 HEAD)\`: $(git -C src log -1 --format=%s)"
+            echo
+          } >>"$GITHUB_STEP_SUMMARY"
+          sh matrix/apply-patches matrix/patches src
+      - name: Generate configure
+        run: |
+          sudo apt-get -qq update && sudo apt-get -qq install -y autoconf >/dev/null
+          cd src && ./autogen
+      # inn/ is the source tree; e2e-distro sits next to it, outside the tree,
+      # so that upstream's make check-manifest does not see it.
+      - name: Make the source tarball
+        run: |
+          tar czf inn-src.tar.gz --exclude=.git --transform 's,^src,inn,' src \
+              -C matrix e2e-distro
+      - name: Upload
+        uses: actions/upload-artifact@v7
+        with:
+          name: inn-src
+          path: inn-src.tar.gz
+          retention-days: 3
+
+  ubuntu:
+    name: Ubuntu ${{ matrix.name }}
+    needs: source
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: latest, gcc
+            runner: ubuntu-latest
+            cc: gcc
+          - name: latest, clang
+            runner: ubuntu-latest
+            cc: clang
+          - name: 24.04, gcc
+            runner: ubuntu-24.04
+            cc: gcc
+          - name: 24.04 ARM64, gcc
+            runner: ubuntu-24.04-arm
+            cc: gcc
+    env:
+      AUTHOR_TESTING: 1
+      C_TAP_VERBOSE: 1
+      COMPILER: ${{ matrix.cc }}
+    steps:
+      - name: Download
+        uses: actions/download-artifact@v8
+        with:
+          name: inn-src
+      - name: Unpack
+        run: tar xzf inn-src.tar.gz --strip-components=1 inn && rm inn-src.tar.gz
+      - name: Install
+        run: |
+          grep -h '^PRETTY_NAME' /etc/os-release
+          sudo -E ci/install
+          sudo apt-get -qq install -y autoconf ${{ matrix.cc }} >/dev/null
+      - name: ci/test
+        run: ci/test
+
+  sanitizers:
+    name: Ubuntu ASan + UBSan
+    needs: source
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    # New: findings show up here first, without failing the whole run.
+    continue-on-error: true
+    env:
+      ASAN_OPTIONS: detect_leaks=0:abort_on_error=1
+      UBSAN_OPTIONS: print_stacktrace=1:halt_on_error=1
+    steps:
+      - name: Download
+        uses: actions/download-artifact@v8
+        with:
+          name: inn-src
+      - name: Unpack
+        run: tar xzf inn-src.tar.gz --strip-components=1 inn && rm inn-src.tar.gz
+      - name: Install
+        run: sudo -E ci/install
+      - name: Build
+        run: |
+          ./configure --disable-shared --with-openssl --with-sqlite3 --with-zlib \
+              CFLAGS='-g -O1 -fno-omit-frame-pointer -fsanitize=address,undefined' \
+              LDFLAGS='-fsanitize=address,undefined'
+          make -j"$(nproc)"
+      - name: make check
+        run: make check
+
+  distro:
+    name: ${{ matrix.image }}
+    needs: source
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        image:
+          - almalinux:9
+          - almalinux:10
+          - alpine:3.22
+          - alpine:3.23
+          - alpine:3.24
+          - archlinux:latest
+          - quay.io/centos/centos:stream9
+          - quay.io/centos/centos:stream10
+          - debian:12
+          - debian:13
+          - fedora:latest
+          - gentoo/stage3:latest
+          - openeuler/openeuler:25.03
+          - opensuse/leap:15.6
+          - opensuse/leap:16.0
+          - rockylinux/rockylinux:9
+          - rockylinux/rockylinux:10
+          - ubuntu:24.04
+          - ubuntu:25.10
+          - ubuntu:26.04
+    steps:
+      - name: Download
+        uses: actions/download-artifact@v8
+        with:
+          name: inn-src
+      - name: Build and make check
+        env:
+          IMAGE: ${{ matrix.image }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/work"
+          tar xzf inn-src.tar.gz
+          set -- --rm -v "$PWD/inn:/src:ro" -v "$PWD/e2e-distro:/e2e-distro:ro" \
+              -v "$RUNNER_TEMP/work:/work" -w /src \
+              -e BUILDDIR=/work/build -e PREFIX=/opt/inn-e2e
+          case "$IMAGE" in
+          gentoo/*)
+              # The stage3 image has no ebuild repository.
+              docker create --name portage gentoo/portage:latest /bin/true
+              set -- "$@" --volumes-from portage
+              ;;
+          esac
+          docker run "$@" "$IMAGE" sh /e2e-distro
+      - name: Logs
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: logs-${{ strategy.job-index }}
+          path: ${{ runner.temp }}/work/build/*.log
+          if-no-files-found: ignore
+
+  # The BSD and illumos jobs build as root in a VM.  The build and test
+  # script is the same for all of them (see &vm-build); the jobs differ in
+  # the packages and in where those install.
+  freebsd:
+    name: FreeBSD
+    needs: source
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      CONFIGURE_ARGS: --with-sqlite3=/usr/local
+      CPPFLAGS: -I/usr/local/include
+      LDFLAGS: -L/usr/local/lib
+    steps:
+      - &download
+        name: Download
+        uses: actions/download-artifact@v8
+        with:
+          name: inn-src
+      - name: Build and make check
+        uses: vmactions/freebsd-vm@v1.5.9
+        with:
+          envs: CONFIGURE_ARGS CPPFLAGS LDFLAGS
+          usesh: true
+          prepare: pkg install -y perl5 gmake sqlite3
+          run: &vm-build |
+            set -e
+            uname -a
+            gzip -dc inn-src.tar.gz | tar xf -
+            cd inn
+            ./configure --with-perl --with-openssl $CONFIGURE_ARGS \
+                CPPFLAGS="$CPPFLAGS" LDFLAGS="$LDFLAGS" >../configure.log 2>&1 \
+                || { tail -n 40 ../configure.log; exit 1; }
+            gmake -j2 >../make.log 2>&1 || { tail -n 60 ../make.log; exit 1; }
+            echo "warnings: $(grep -c 'warning:' ../make.log || true)"
+            grep 'warning:' ../make.log | sort -u | head -n 40 || true
+            if ! gmake check >../check.log 2>&1; then
+                grep -E 'FAILED|ABORTED|dubious' ../check.log | head -n 40 || true
+                tail -n 20 ../check.log
+                exit 1
+            fi
+            tail -n 6 ../check.log
+
+  openbsd:
+    name: OpenBSD
+    needs: source
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      CONFIGURE_ARGS: --with-sqlite3=/usr/local
+      CPPFLAGS: -I/usr/local/include
+      LDFLAGS: -L/usr/local/lib
+    steps:
+      - *download
+      - name: Build and make check
+        uses: vmactions/openbsd-vm@v1.4.9
+        with:
+          envs: CONFIGURE_ARGS CPPFLAGS LDFLAGS
+          prepare: pkg_add -I gmake sqlite3
+          run: *vm-build
+
+  netbsd:
+    name: NetBSD
+    needs: source
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      CONFIGURE_ARGS: --with-sqlite3=/usr/pkg
+      CPPFLAGS: -I/usr/pkg/include
+      LDFLAGS: -L/usr/pkg/lib -Wl,-R/usr/pkg/lib
+    steps:
+      - *download
+      - name: Build and make check
+        uses: vmactions/netbsd-vm@v1.5.3
+        with:
+          envs: CONFIGURE_ARGS CPPFLAGS LDFLAGS
+          prepare: /usr/sbin/pkg_add gmake perl sqlite3
+          run: *vm-build
+
+  dragonfly:
+    name: DragonFly BSD
+    needs: source
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      CONFIGURE_ARGS: --with-sqlite3=/usr/local
+      CPPFLAGS: -I/usr/local/include
+      LDFLAGS: -L/usr/local/lib
+    steps:
+      - *download
+      - name: Build and make check
+        uses: vmactions/dragonflybsd-vm@v1.3.4
+        with:
+          envs: CONFIGURE_ARGS CPPFLAGS LDFLAGS
+          prepare: pkg install -y perl5 gmake sqlite3
+          run: *vm-build
+
+  omnios:
+    name: OmniOS (illumos)
+    needs: source
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    # New and least known: don't fail the run until it has been green once.
+    continue-on-error: true
+    env:
+      CONFIGURE_ARGS: --with-sqlite3
+      CPPFLAGS: ""
+      LDFLAGS: ""
+    steps:
+      - *download
+      - name: Build and make check
+        uses: vmactions/omnios-vm@v1.3.8
+        with:
+          envs: CONFIGURE_ARGS CPPFLAGS LDFLAGS
+          prepare: pkg install build-essential database/sqlite-3
+          run: *vm-build
+
+  macos:
+    name: macOS
+    needs: source
+    if: github.event_name == 'workflow_dispatch' && inputs.macos
+    runs-on: macos-latest
+    timeout-minutes: 45
+    continue-on-error: true
+    steps:
+      - *download
+      - name: Build and make check
+        run: |
+          brew install sqlite openssl@3
+          tar xzf inn-src.tar.gz --strip-components=1 inn
+          ./configure --with-perl --with-openssl="$(brew --prefix openssl@3)" \
+              --with-sqlite3="$(brew --prefix sqlite)"
+          make -j"$(sysctl -n hw.ncpu)"
+          make check
