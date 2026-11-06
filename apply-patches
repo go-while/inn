@@ -12,7 +12,8 @@
 
 set -eu
 
-patchdir=$1
+# git -C resolves the patch path in SRCDIR, so make it absolute.
+patchdir=$(cd "$1" && pwd)
 src=$2
 summary=${GITHUB_STEP_SUMMARY:-/dev/null}
 
