@@ -1,7 +1,7 @@
-From b4459f4a896aa966cd726435bab187167976d3b1 Mon Sep 17 00:00:00 2001
+From 89c66997cb1d58a72c3d625b0dadd5504dda9e19 Mon Sep 17 00:00:00 2001
 From: go-while <go-while@users.noreply.github.com>
 Date: Fri, 6 Nov 2026 14:05:39 +0000
-Subject: [PATCH 4/7] tests/authprogs: Fall back to bcrypt when DES is
+Subject: [PATCH 4/6] tests/authprogs: Fall back to bcrypt when DES is
  unavailable
 
 OpenBSD crypt only supports bcrypt, so all successful authentications

@@ -1,14 +1,14 @@
-From 9668f2e323e940383efab16066347987fb3580af Mon Sep 17 00:00:00 2001
+From 61b932e1ff55293b444cd1f76b9bb6fa40a6ee0b Mon Sep 17 00:00:00 2001
 From: go-while <go-while@users.noreply.github.com>
 Date: Fri, 6 Nov 2026 14:08:07 +0000
-Subject: [PATCH 6/7] tests/lib: Stop innconf tests after a configuration read
+Subject: [PATCH 6/6] tests/lib: Stop innconf tests after a configuration read
  failure
 
 A bad generated sample configuration, such as one configured with an
-empty hostname, makes innconf_read fail. Bail out with that cause rather
-than passing NULL configurations to innconf_compare and crashing.
+empty hostname, makes innconf_read fail.  Bail out with that cause
+rather than passing NULL configurations to innconf_compare and crashing.
 
-This only changes failure reporting in the test. The CI VM still needs
+This only changes failure reporting in the test.  The CI VM still needs
 a nonempty hostname to produce a valid sample configuration.
 
 Co-Authored-By: GPT-6.1 Sol <noreply@openai.com>
