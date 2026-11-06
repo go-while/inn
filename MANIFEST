@@ -1040,6 +1040,7 @@ tests/nnrpd/auth-ext-t.c              Tests for auth_external in nnrpd
 tests/nnrpd/auth-test                 Helper program for external auth tests
 tests/overview                        Test suite for overview (Directory)
 tests/overview/api-t.c                Basic tests for overview API
+tests/overview/build-t.c              Tests for :bytes and :lines of built overview
 tests/overview/overchan.t             Tests for backends/overchan
 tests/overview/overview-t.c           Basic tests for overview methods
 tests/overview/ovsqlite-integ.t       Integration test for ovsqlite direct reader
