@@ -105,7 +105,9 @@ and truncated.
 
 B<Note:> WAL mode requires shared-memory support and does not work on
 network filesystems such as NFS.  Do not enable this parameter if
-I<pathoverview> is on a network filesystem.
+I<pathoverview> is on a network filesystem.  Where SQLite cannot use WAL
+mode, B<ovsqlite-server> logs a warning and SQLite keeps its previous journal
+mode; B<nnrpd> then reads overview data through the server.
 
 The default value is false.
 
