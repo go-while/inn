@@ -2,9 +2,9 @@
 
 CI only: this branch holds no INN sources. Its workflow
 (`.github/workflows/main-matrix.yaml`) checks out upstream InterNetNews/inn
-(branch `main`, i.e. the coming 2.8.0, unless another ref is chosen), applies
-the patches in `patches/` that upstream does not have yet, and builds and tests
-the result on:
+branches `main` (the coming 2.8.0) and `2.7` (the stable line, the coming
+2.7.5), applies the patches in `patches/<ref>/` that upstream does not have
+yet, and builds and tests each on:
 
 | Jobs | Systems | What runs |
 |---|---|---|
@@ -15,18 +15,19 @@ the result on:
 | macOS | only when started by hand with "macos" | build, `make check` |
 
 It runs on a push to this branch and by hand (Actions, main-matrix, "Run
-workflow": choose a ref such as `2.7`, or untick the patches to test upstream
-as it is).
+workflow": give one ref such as a tag `inn-2.7.4` instead of main and 2.7, or
+untick the patches to test upstream as it is).
 
 ## Patches
 
-`patches/*.patch` are `git format-patch` files of fixes that upstream needs for
+`patches/<ref>/*.patch` (`/` in a ref becomes `_`) are `git format-patch` files of fixes that upstream needs for
 this matrix to build, e.g. a fork PR waiting for review. `apply-patches` skips
 a patch that upstream already has (it applies in reverse) and fails on one that
 applies neither way. Remove a patch once upstream has it.
 
-| Patch | Fork PR | Why |
-|---|---|---|
-| `0001-glibc-const.patch` | go-while/inn#5 | glibc 2.43 (C23) const string functions break `make warnings` |
+| Patch | Refs | Fork PR | Why |
+|---|---|---|---|
+| `0001-glibc-const.patch` | main, 2.7 | go-while/inn#5 | glibc 2.43 (C23) const string functions break `make warnings` |
+| `0002-clang-pre-c11-compat.patch` | main, 2.7 | branch `fix-clang-pre-c11` | glibc 2.43 `_Generic` macros trip Clang's `-Wpre-c11-compat` |
 
 `e2e-distro` is a copy of `ci/e2e-distro` from the fork's `e2e` branch.

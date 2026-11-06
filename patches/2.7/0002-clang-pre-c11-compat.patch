@@ -1,0 +1,45 @@
+From 56f03069f27eefcdc9898de8d33f9793cdbc9f68 Mon Sep 17 00:00:00 2001
+From: go-while <go-while@users.noreply.github.com>
+Date: Fri, 6 Nov 2026 13:48:32 +0000
+Subject: [PATCH] configure: Don't warn about C11 constructs with Clang
+
+glibc 2.43 implements strchr, strrchr, strstr, memchr and a few other
+string functions as macros using _Generic, so that they return a
+const pointer for a const argument.  Clang's -Wpre-c11-compat, part of
+-Weverything, flags every call that expands such a macro, and make
+warnings fails on the first one (lib/artnumber.c with Clang 21 on
+Ubuntu 26.04).
+
+Disable that warning for Clang.  GCC's -Wc99-c11-compat stays, so
+INN's own code is still checked for C99 compatibility; GCC does not
+warn about the macros, which come from a system header.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ configure.ac | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/configure.ac b/configure.ac
+index cdaf5f7e6..dc184b2ef 100644
+--- a/configure.ac
++++ b/configure.ac
+@@ -808,6 +808,7 @@ dnl   -Wnrvo                          Fine in C.
+ dnl   -Wpacked                        Not an actual problem.
+ dnl   -Wpadded                        Not an actual problem.
+ dnl   -Wpoison-system-directories     Not an actual problem (e.g. Xcode).
++dnl   -Wpre-c11-compat                glibc 2.43 string.h macros use _Generic.
+ dnl   -Wreserved-id-macro             Autoconf sets several of these normally.
+ dnl   -Wreserved-identifier           False positives with FD_ZERO.
+ dnl   -Wsign-conversion               Too many fiddly changes for the benefit.
+@@ -854,7 +855,7 @@ m4_foreach_w(
+      -Wno-disabled-macro-expansion -Wno-excess-padding -Wno-extra-semi-stmt
+      -Wno-implicit-int-conversion -Wno-implicit-void-ptr-cast
+      -Wno-packed -Wno-padded
+-     -Wno-poison-system-directories
++     -Wno-poison-system-directories -Wno-pre-c11-compat
+      -Wno-reserved-id-macro -Wno-reserved-identifier -Wno-shorten-64-to-32
+      -Wno-sign-conversion -Wno-stack-protector-purecap-ignored
+      -Wno-switch-default -Wno-switch-enum
+-- 
+2.47.3
+
