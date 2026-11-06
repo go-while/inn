@@ -212,6 +212,13 @@ malformed stored Xref records with tradspool and corrupt history records.
 The overview and storage backends also validate more structures before using
 them.  Many thanks to Kevin Bowling for the patches.
 
+=item *
+
+Fixed missing articles when rebuilding ovsqlite overview data with
+C<makehistory -O -I>.  Inserting the first article no longer raises the low
+water mark used as the cutoff, so lower-numbered articles encountered later
+in the spool scan are retained if they are at or above the original cutoff.
+
 =back
 
 =head1 Changes in 2.7.4 (2026-06-22)
