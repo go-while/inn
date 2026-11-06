@@ -64,7 +64,8 @@ static PyObject *PYFilterModule = NULL;
 static PyObject *PYheaders = NULL;
 static PyObject **PYheaditem;
 static PyObject **PYheadkey;
-static PyObject *PYlineskey, *PYbodykey;
+static PyObject *PYlineskey, *PYbodykey, *PYheadblockkey;
+static struct buffer PYheadblock = {0, 0, 0, NULL};
 
 /*  External functions. */
 static PyObject *msgid_method = NULL;
@@ -116,7 +117,8 @@ PYcontrol(char **av)
 **  Reject articles we don't like.
 */
 char *
-PYartfilter(const ARTDATA *data, char *artBody, long artLen, int lines)
+PYartfilter(const ARTDATA *data, char *artHead, long headLen, char *artBody,
+            long artLen, int lines)
 {
     const HDRCONTENT *hc = data->HdrContent;
     int hdrnum;
@@ -137,6 +139,17 @@ PYartfilter(const ARTDATA *data, char *artBody, long artLen, int lines)
         PyDict_SetItem(PYheaders, PYheadkey[hdrnum], PYheaditem[hdrnum]);
         hdrnum++;
     }
+
+    /* ...then the whole header block, from a copy because the header block
+     * in the channel buffer has a nul instead of the '\r' after each known
+     * header field body (see ARTclean()), which the copy undoes... */
+    if (headLen > 0 && artHead != NULL) {
+        buffer_set(&PYheadblock, artHead, headLen);
+        ARTrestoreheader(data, artHead, PYheadblock.data, headLen);
+        PYheaditem[hdrnum] = PYBUFF_FROMMEMORY(PYheadblock.data, headLen);
+    } else
+        PYheaditem[hdrnum] = Py_None;
+    PyDict_SetItem(PYheaders, PYheadblockkey, PYheaditem[hdrnum++]);
 
     /* ...then the body... */
     if (artLen && artBody != NULL)
@@ -798,11 +811,12 @@ PYsetup(void)
     }
 
     /* Grab space for these so we aren't forever recreating them.  We also
-     * cut the body and the line count into PYheaditem, so it needs to be
-     * two elements longer than the total number of headers. */
+     * cut the header block, the body and the line count into PYheaditem,
+     * so it needs to be three elements longer than the total number of
+     * headers. */
     PYheaders = PyDict_New();
     hdrcount = ARRAY_END(ARTheaders) - ARTheaders;
-    PYheaditem = xmalloc((hdrcount + 2) * sizeof(PyObject *));
+    PYheaditem = xmalloc((hdrcount + 3) * sizeof(PyObject *));
     PYheadkey = xmalloc(hdrcount * sizeof(PyObject *));
 
     /* Preallocate keys for the article dictionary. */
@@ -810,6 +824,7 @@ PYsetup(void)
         PYheadkey[hp - ARTheaders] = PyString_InternFromString(hp->Name);
     PYlineskey = PyString_InternFromString("__LINES__");
     PYbodykey = PyString_InternFromString("__BODY__");
+    PYheadblockkey = PyString_InternFromString("__HEAD__");
 
     syslog(L_NOTICE, "python interpreter initialized OK");
 }
