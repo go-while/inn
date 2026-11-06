@@ -159,12 +159,17 @@ build_header(const char *article, size_t length, const char *header,
 **  article without the final ".\r\n" and without the dots added by
 **  dot-stuffing, counting CRLF as two octets.  :lines is the number of lines
 **  in the body.
+**
+**  Like innd (see ARTparseheader and ARTparsebody), lines end at CRLF only:
+**  a bare LF or a bare CR within an article neither ends a line nor makes
+**  the next octet the beginning of a line, so a dot after it is not counted
+**  as a dot-stuffing one.
 */
 static void
 count_article(const char *article, size_t length, unsigned long *bytes,
               unsigned long *lines)
 {
-    const char *p, *body, *end;
+    const char *p, *q, *body, *end;
     unsigned long dots = 0;
 
     *lines = 0;
@@ -172,14 +177,19 @@ count_article(const char *article, size_t length, unsigned long *bytes,
         length -= 3;
     end = article + length;
     body = wire_findbody(article, length);
-    for (p = article; p != NULL && p < end;) {
+    for (p = article; p < end;) {
+        /* p is at the beginning of a line. */
         if (*p == '.')
             dots++;
-        if (body != NULL && p >= body)
+        /* Look for the CRLF that ends the line. */
+        for (q = p; (q = memchr(q, '\r', end - q)) != NULL; q++)
+            if (end - q >= 2 && q[1] == '\n')
+                break;
+        if (q == NULL)
+            break;
+        if (body != NULL && q >= body)
             (*lines)++;
-        p = memchr(p, '\n', end - p);
-        if (p != NULL)
-            p++;
+        p = q + 2;
     }
     *bytes = (unsigned long) length - dots;
 }
