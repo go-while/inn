@@ -49,7 +49,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: main-matrix-${{ github.ref }}-${{ inputs.ref || 'all' }}
+  group: main-matrix-${{ github.ref }}-${{ inputs.ref || 'all' }}-${{ inputs.patches }}-${{ inputs.only || 'all' }}-${{ inputs.macos }}
   cancel-in-progress: true
 
 jobs:
