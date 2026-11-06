@@ -492,12 +492,45 @@ func (m *matrix) rebuild(t *testing.T) {
 	m.s.Start(t)
 	m.s.Ctlinnd(t, "renumber", "")
 	m.forgotten = true
+	m.revived(t, before)
 	m.verify(t, "after rebuilding overview and history")
 	for _, g := range m.groups {
 		after := overviewLines(t, m.s, g)
 		if !slices.Equal(after, before[g]) {
 			t.Errorf("after rebuilding: OVER of %s differs:\n%s\nbefore:\n%s", g,
 				strings.Join(after, "\n"), strings.Join(before[g], "\n"))
+		}
+	}
+}
+
+// revived accepts overview entries that "makehistory -I" brings back for articles still in
+// the spool that expired from one of their groups: INN shows a group that expireover
+// emptied with its low water mark at the old high water mark (tdx-group.c and the other
+// methods), so -I does not skip that number. It adds them to the model and to before.
+func (m *matrix) revived(t *testing.T, before map[string][]string) {
+	t.Helper()
+	for _, g := range m.groups {
+		listed := map[int]bool{}
+		c := m.s.Reader(t)
+		expect(t, c, 211, "LISTGROUP %s", g)
+		for _, l := range c.ReadDotLines() {
+			n, _ := strconv.Atoi(l)
+			listed[n] = true
+		}
+		expect(t, c, 205, "QUIT")
+		for _, a := range m.arts {
+			n, ok := a.xref[g]
+			if _, still := a.nums[g]; !ok || still || a.state != present || !listed[n] {
+				continue
+			}
+			t.Logf("makehistory -I brought back %s as %d in %s, where it had expired", a.id, n, g)
+			a.nums[g] = n
+			before[g] = append(before[g], a.overview(n))
+			slices.SortFunc(before[g], func(x, y string) int {
+				nx, _ := strconv.Atoi(field(strings.ReplaceAll(x, "\t", " "), 0))
+				ny, _ := strconv.Atoi(field(strings.ReplaceAll(y, "\t", " "), 0))
+				return nx - ny
+			})
 		}
 	}
 }
