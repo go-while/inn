@@ -20,6 +20,18 @@ summary=${GITHUB_STEP_SUMMARY:-/dev/null}
 for p in "$patchdir"/*.patch; do
     [ -e "$p" ] || continue
     name=$(basename "$p")
+    # ONLY: space-separated name prefixes; other patches are left out.
+    if [ -n "${ONLY:-}" ]; then
+        keep=false
+        for prefix in $ONLY; do
+            case $name in "$prefix"*) keep=true ;; esac
+        done
+        if [ "$keep" = false ]; then
+            echo "left out: $name"
+            echo "- left out: \`$name\`" >>"$summary"
+            continue
+        fi
+    fi
     subject=$(sed -n 's/^Subject: \(\[PATCH[^]]*\] \)\{0,1\}//p' "$p" | head -n 1)
     if git -C "$src" apply --check -R "$p" 2>/dev/null; then
         echo "already upstream: $name ($subject)"

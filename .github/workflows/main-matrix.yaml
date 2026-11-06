@@ -39,6 +39,9 @@ name: main-matrix
         description: Also build on macOS
         type: boolean
         default: false
+      only:
+        description: Apply only the patches whose names start with these prefixes, space-separated (e.g. "0002"); empty = all
+        default: ""
   schedule:
     - cron: "41 4 * * 1"
 
@@ -84,6 +87,7 @@ jobs:
       - name: Fetch, patch, make the tarballs
         env:
           PATCHES: ${{ github.event_name != 'workflow_dispatch' || inputs.patches }}
+          ONLY: ${{ inputs.only }}
         run: |
           while read -r ref; do
             safe=$(printf '%s' "$ref" | tr '/' '_')
