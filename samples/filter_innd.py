@@ -199,6 +199,11 @@ class InndFilter:
         The whole header, with all header fields (also those not
         listed above) as received, is the buffer in art[__HEAD__].
 
+        The buffers point into innd's memory, which it reuses for the
+        next article: they are only valid until filter_art returns.
+        Don't modify or keep them (or art); to keep a value, copy it
+        here, e.g. saved = bytes(art[__HEAD__]).
+
         If you want to keep an article, return None or "".  If you
         want to reject, return a non-empty string.  The rejection
         string will appear in transfer and posting response banners,

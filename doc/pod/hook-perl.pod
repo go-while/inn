@@ -113,8 +113,9 @@ article, including the ones not in the above list.
 C<$hdr{'__HEAD__'}> is the header of the article as it arrived: every header
 field line in the order received, with folded and repeated header fields
 as they are, without the empty line that separates the header from the
-body.  Like C<$hdr{'__BODY__'}>, it is in wire format: each line ends with
-CRLF (C<\r\n>), and a line beginning with a dot has that dot doubled.  For
+body.  Like C<$hdr{'__BODY__'}>, it is in wire format: each line normally
+ends with CRLF (C<\r\n>; B<innd> also accepts a bare CR or LF and passes it
+on unchanged), and a line beginning with a dot has that dot doubled.  For
 instance, to reject articles carrying a header field that INN does not
 know:
 
