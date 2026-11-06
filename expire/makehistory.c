@@ -603,7 +603,7 @@ static void
 DoArt(ARTHANDLE *art)
 {
     ARTOVERFIELD *fp;
-    const char *p, *end;
+    const char *p, *end, *line;
     char *q;
     static struct buffer buffer = {0, 0, 0, NULL};
     static char SEP[] = "\t";
@@ -669,6 +669,11 @@ DoArt(ARTHANDLE *art)
             if (!hasCounts
                 && (p = wire_findbody(art->data, art->len)) != NULL) {
                 end = art->data + art->len - 1;
+                /* Header field names can be dot-stuffed too. */
+                for (line = art->data; line != NULL && line < p;
+                     line = wire_nextline(line, end))
+                    if (*line == '.')
+                        DotStuffedLines++;
                 /* p is at the beginning of the body, if any. */
                 for (; *p != '\0';) {
                     /* p is at the beginning of a new line, if any. */
