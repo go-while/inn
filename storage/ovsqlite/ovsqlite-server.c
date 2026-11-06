@@ -719,12 +719,17 @@ open_db(void)
         } else {
             const char *mode = NULL;
 
-            if (sqlite3_step(stmt) == SQLITE_ROW)
+            status = sqlite3_step(stmt);
+            if (status == SQLITE_ROW)
                 mode = (const char *) sqlite3_column_text(stmt, 0);
-            if (mode == NULL || strcmp(mode, "wal") != 0)
-                warn("cannot enable WAL mode: journal mode is %s; readers"
+            if (status != SQLITE_ROW)
+                warn("cannot enable WAL mode: %s", sqlite3_errmsg(connection));
+            else if (mode == NULL)
+                warn("cannot enable WAL mode: no journal mode returned");
+            else if (strcmp(mode, "wal") != 0)
+                warn("WAL mode not available: journal mode is %s; readers"
                      " will use the server instead of the database",
-                     mode != NULL ? mode : "unknown");
+                     mode);
             sqlite3_finalize(stmt);
         }
         status = sqlite3_exec(connection, "pragma synchronous = 'NORMAL';", 0,

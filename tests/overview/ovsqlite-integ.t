@@ -167,9 +167,11 @@ fi
 
 # Where SQLite cannot use WAL mode (no shared memory, as on some network
 # filesystems or GNU/Hurd), the server warns and keeps another journal mode;
-# there is then no direct reader to test.
+# there is then no direct reader to test.  Only that warning skips the
+# direct-reader tests: an SQLite error while setting the journal mode
+# ("cannot enable WAL mode: ...") leaves them to fail.
 nowal=
-if grep -q 'cannot enable WAL mode' "$tmpdir/server.log"; then
+if grep -q 'WAL mode not available: journal mode is ' "$tmpdir/server.log"; then
     nowal="SQLite cannot use WAL mode here"
     echo "# $nowal:"
     sed 's/^/# /' "$tmpdir/server.log"
