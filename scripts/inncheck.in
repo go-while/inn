@@ -116,6 +116,15 @@ sub eprint {
     return;
 }
 
+##  Quote a string for a POSIX shell: it is put in single quotes, and every
+##  single quote it contains becomes '\'' (end the quoted string, a quoted
+##  single quote, start a new quoted string).
+sub shquote {
+    my ($str) = @_;
+    $str =~ s/'/'\\''/g;
+    return "'$str'";
+}
+
 sub spacious {
     my ($i);
 
@@ -1108,21 +1117,21 @@ sub checkperm {
 
         if ($owner ne $u) {
             eprint "$f:0: owned by $owner, should be $u\n";
-            print "chown $u $f\n"
+            print "chown $u ", shquote($f), "\n"
               if $fix;
         }
         if ($group ne $g) {
             # rnews may be setuid news and owned by group uucp.
             if ($f !~ /\/rnews$/ or $group ne 'uucp') {
                 eprint "$f:0: in group $group, should be $g\n";
-                print "chgrp $g $f\n"
+                print "chgrp $g ", shquote($f), "\n"
                   if $fix;
             }
         }
         if ((($mode & @$m[0]) ne @$m[0]) or (($mode | @$m[1]) ne @$m[1])) {
             eprint sprintf "$f:0: mode %o, should be between %o and %o\n",
               $mode, @$m[0], @$m[1];
-            printf "chmod %o $f\n", @$m[1]
+            printf "chmod %o %s\n", @$m[1], shquote($f)
               if $fix;
         }
     }
