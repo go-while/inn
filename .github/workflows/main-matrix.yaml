@@ -480,7 +480,11 @@ jobs:
         uses: vmactions/dragonflybsd-vm@v1.3.4
         with:
           envs: REF CONFIGURE_ARGS CPPFLAGS LDFLAGS
-          prepare: pkg install -y perl5 gmake sqlite3
+          # The VM comes without a host name; configure would then leave
+          # pathhost empty in the sample inn.conf that the tests read.
+          prepare: |
+            hostname inn-ci.example.invalid
+            pkg install -y perl5 gmake sqlite3
           run: |
             set -e
             uname -a

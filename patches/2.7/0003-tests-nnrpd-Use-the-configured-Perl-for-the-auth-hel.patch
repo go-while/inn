@@ -1,0 +1,119 @@
+From 28c48761150f07ce8a48a8a9cc3f4a6500427b2c Mon Sep 17 00:00:00 2001
+From: go-while <go-while@users.noreply.github.com>
+Date: Fri, 6 Nov 2026 14:02:15 +0000
+Subject: [PATCH 3/6] tests/nnrpd: Use the configured Perl for the auth helper
+
+Generate auth-test from a template with fixscript instead of executing
+a hard-coded /usr/bin/perl. FreeBSD, NetBSD and DragonFly install Perl
+under a package prefix, so the helper could not start and the auth-ext
+tests failed before receiving any input.
+
+Build and clean the helper with the other test support programs, and
+update the manifest, ignore list and Perl maintenance targets.
+
+Co-Authored-By: GPT-6.1 Sol <noreply@openai.com>
+---
+ .gitignore                              | 1 +
+ MANIFEST                                | 2 +-
+ Makefile                                | 4 ++--
+ tests/Makefile                          | 7 +++++--
+ tests/nnrpd/{auth-test => auth-test.in} | 1 +
+ 5 files changed, 10 insertions(+), 5 deletions(-)
+ rename tests/nnrpd/{auth-test => auth-test.in} (96%)
+ mode change 100755 => 100644
+
+diff --git a/.gitignore b/.gitignore
+index ac9aef4a7..0ba0916b4 100644
+--- a/.gitignore
++++ b/.gitignore
+@@ -257,6 +257,7 @@
+ /tests/lib/network/client.t
+ /tests/lib/network/server.t
+ /tests/nnrpd/auth-ext.t
++/tests/nnrpd/auth-test
+ /tests/overview/api.t
+ /tests/overview/buffindexed.t
+ /tests/overview/ovsqlite.t
+diff --git a/MANIFEST b/MANIFEST
+index 882e9cbe7..491795f54 100644
+--- a/MANIFEST
++++ b/MANIFEST
+@@ -1037,7 +1037,7 @@ tests/lib/xmalloc.t                   Tests for lib/xmalloc.c
+ tests/lib/xwrite-t.c                  Tests for lib/xwrite.c
+ tests/nnrpd                           Test suite for nnrpd (Directory)
+ tests/nnrpd/auth-ext-t.c              Tests for auth_external in nnrpd
+-tests/nnrpd/auth-test                 Helper program for external auth tests
++tests/nnrpd/auth-test.in              Helper program for external auth tests
+ tests/overview                        Test suite for overview (Directory)
+ tests/overview/api-t.c                Basic tests for overview API
+ tests/overview/overchan.t             Tests for backends/overchan
+diff --git a/Makefile b/Makefile
+index 9aa6fe9b2..80e10bd14 100644
+--- a/Makefile
++++ b/Makefile
+@@ -271,7 +271,7 @@ code-check:
+ 	        \! -wholename ./scripts/innshellvars.pl \
+ 	        ; echo ./support/mkmanifest \
+ 	        ; echo ./tests/data/overview/munge-data \
+-	        ; echo ./tests/nnrpd/auth-test) \
++	        ; echo ./tests/nnrpd/auth-test.in) \
+ 	        | grep -v pgpverify | grep -v '^./site/' | sort -u` ; \
+ 	if command -v "perlcritic" >/dev/null 2>&1; then \
+ 	    echo "Running perlcritic to check Perl code..." ; \
+@@ -337,7 +337,7 @@ reformat:
+ 	        \! -wholename ./scripts/innshellvars.pl \
+ 	        ; echo ./support/mkmanifest \
+ 	        ; echo ./tests/data/overview/munge-data \
+-	        ; echo ./tests/nnrpd/auth-test) \
++	        ; echo ./tests/nnrpd/auth-test.in) \
+ 	        | grep -v pgpverify | grep -v '^./site/' | sort -u \
+ 	        | xargs perltidy ; \
+ 	else \
+diff --git a/tests/Makefile b/tests/Makefile
+index 2a67ea5a9..c48718319 100644
+--- a/tests/Makefile
++++ b/tests/Makefile
+@@ -41,7 +41,7 @@ TESTS	= authprogs/ident.t expire/tombstone.t expire/tombstone-hisexpire.t \
+ 
+ ##  Extra stuff that needs to be built before tests can be run.
+ 
+-EXTRA	= runtests clients/server-list docs/pod.t lib/xmalloc \
++EXTRA	= runtests clients/server-list docs/pod.t lib/xmalloc nnrpd/auth-test \
+ 	  overview/ovsqlite-read.t overview/ovsqlite-write.t \
+ 	  perl/minimum-version.t
+ 
+@@ -328,10 +328,13 @@ lib/xwrite.t: lib/xwrite-t.o lib/xwrite.o lib/fakewrite.o tap/basic.o $(LIBINN)
+ 	$(LINK) lib/xwrite-t.o lib/xwrite.o lib/fakewrite.o tap/basic.o \
+ 	    $(LIBINN)
+ 
+-nnrpd/auth-ext.t: nnrpd/auth-ext-t.o ../nnrpd/auth-ext.o tap/basic.o tap/messages.o tap/string.o $(LIBINN)
++nnrpd/auth-ext.t: nnrpd/auth-ext-t.o ../nnrpd/auth-ext.o tap/basic.o tap/messages.o tap/string.o $(LIBINN) nnrpd/auth-test
+ 	$(LINK) nnrpd/auth-ext-t.o ../nnrpd/auth-ext.o tap/basic.o \
+ 	    tap/messages.o tap/string.o $(LIBINN)
+ 
++nnrpd/auth-test: nnrpd/auth-test.in $(FIXSCRIPT)
++	$(FIX) -i nnrpd/auth-test.in
++
+ overview/api.t: overview/api-t.o tap/basic.o $(STORAGEDEPS)
+ 	$(LINKDEPS) overview/api-t.o tap/basic.o $(STORAGELIBS) $(LIBS)
+ 
+diff --git a/tests/nnrpd/auth-test b/tests/nnrpd/auth-test.in
+old mode 100755
+new mode 100644
+similarity index 96%
+rename from tests/nnrpd/auth-test
+rename to tests/nnrpd/auth-test.in
+index 1b14e71d3..397a50f11
+--- a/tests/nnrpd/auth-test
++++ b/tests/nnrpd/auth-test.in
+@@ -3,6 +3,7 @@
+ # Test resolver and authenticator, used for testing nnrpd external auth.
+ # Saves all of its input into a file named input in the current directory, as
+ # seen, and then produces output based on its command-line parameter.
++# The interpreter path is replaced with the configured Perl at build time.
+ #
+ # Originally written by Russ Allbery in shell in 2005.
+ # Rewritten in Perl by Julien Élie in 2026 because on OpenBSD, when the script
+-- 
+2.47.3
+

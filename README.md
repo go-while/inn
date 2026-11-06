@@ -30,5 +30,6 @@ applies neither way. Remove a patch once upstream has it.
 |---|---|---|---|
 | `0001-glibc-const.patch` | main, 2.7 | go-while/inn#5 | glibc 2.43 (C23) const string functions break `make warnings` |
 | `0002-clang-pre-c11-compat.patch` | main, 2.7 | branch `fix-clang-pre-c11` | glibc 2.43 `_Generic` macros trip Clang's `-Wpre-c11-compat` |
+| `0003`-`0006` `tests-*` | main, 2.7 | branch `fix-bsd-tests` | `make check` on the BSDs: configured Perl for the auth helper, bcrypt fixture without DES, close Xref searches, stop innconf tests after a read failure |
 
 `e2e-distro` is a copy of `ci/e2e-distro` from the fork's `e2e` branch.
