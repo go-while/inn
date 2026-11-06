@@ -406,7 +406,8 @@ C<SIGTERM>, logs C<auth: program timeout>, and considers that the program
 failed; the next resolver or authenticator, if any, is then tried.  The
 timeout applies to each wait for output, not to the total running time of the
 program: a program that keeps writing, for instance error messages, may run
-longer.  The value must be a positive integer.  It has no effect on
+longer.  The value must be an integer between 1 and 86400 (one day); another value
+is a syntax error.  It has no effect on
 I<perl_auth> and I<python_auth>.  The default value is C<5>.
 
 =item I<python_access>

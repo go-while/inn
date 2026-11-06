@@ -199,7 +199,8 @@ them.  Many thanks to Kevin Bowling for the patches.
 The time B<nnrpd> waits for output from the external programs given in the
 I<res> and I<auth> parameters of auth groups in F<readers.conf> before
 killing them, so far hard-coded to five seconds, can now be set with the new
-I<program_timeout> parameter of auth groups.
+I<program_timeout> parameter of auth groups, to a number of seconds between
+1 and 86400.
 
 =back
 

@@ -302,6 +302,13 @@ char *auth_external(struct client *, const char *command,
                     const char *directory, const char *username,
                     const char *password, unsigned long timeout);
 
+/*
+**  Parse the program_timeout parameter of readers.conf: a number of seconds
+**  between 1 and AUTH_TIMEOUT_MAX.  Returns false if the value is invalid.
+*/
+#define AUTH_TIMEOUT_MAX 86400UL
+bool auth_timeout_parse(const char *value, unsigned long *timeout);
+
 void write_buffer(const char *buff, ssize_t len);
 
 extern char *HandleHeaders(char *article);

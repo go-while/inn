@@ -857,14 +857,11 @@ authdecl_parse(AUTHGROUP *curauth, CONFFILE *f, CONFTOKEN *tok)
         SET_CONFIG(PERMlocaladdress);
         break;
     case PERMprogram_timeout:
-        errno = 0;
-        timeout = strtoul(tok->name, &p, 10);
-        if (!isdigit((unsigned char) tok->name[0]) || *p != '\0'
-            || errno == ERANGE || timeout == 0) {
+        if (!auth_timeout_parse(tok->name, &timeout)) {
             snprintf(buff, sizeof(buff),
                      "Invalid program_timeout value '%s', expected a "
-                     "positive number of seconds.",
-                     tok->name);
+                     "number of seconds between 1 and %lu.",
+                     tok->name, AUTH_TIMEOUT_MAX);
             ReportError(f, buff);
         }
         curauth->program_timeout = timeout;
