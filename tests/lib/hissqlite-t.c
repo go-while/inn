@@ -114,11 +114,38 @@ remembered(struct history *h, unsigned long n)
     return r;
 }
 
+/* Whether SQLite can use WAL mode in dir.  Where it cannot (no shared
+   memory, as on some network filesystems or GNU/Hurd), it keeps the rollback
+   journal, and hissqlite refuses read-only opens of the history. */
+static bool
+wal_supported(const char *dir)
+{
+    char path[160];
+    sqlite3 *db = NULL;
+    sqlite3_stmt *stmt;
+    bool wal = false;
+
+    snprintf(path, sizeof(path), "%s/walcheck", dir);
+    if (sqlite3_open(path, &db) == SQLITE_OK
+        && sqlite3_prepare_v2(db, "pragma journal_mode = wal", -1, &stmt, NULL)
+               == SQLITE_OK) {
+        if (sqlite3_step(stmt) == SQLITE_ROW) {
+            const char *mode = (const char *) sqlite3_column_text(stmt, 0);
+
+            wal = (mode != NULL && strcmp(mode, "wal") == 0);
+        }
+        sqlite3_finalize(stmt);
+    }
+    sqlite3_close(db);
+    return wal;
+}
+
 int
 main(void)
 {
     struct history *h;
     char tmpdir[64], histpath[128];
+    bool wal;
     TOKEN token, t2;
     unsigned long i;
     struct walkcount wc;
@@ -130,6 +157,9 @@ main(void)
     if (mkdtemp(tmpdir) == NULL)
         sysbail("can't create temp directory");
     snprintf(histpath, sizeof(histpath), "%s/history", tmpdir);
+    wal = wal_supported(tmpdir);
+    if (!wal)
+        diag("SQLite cannot use WAL mode here: read-only opens are skipped");
 
     /* create + populate */
     h = HISopen(histpath, "hissqlite", HIS_CREAT | HIS_RDWR);
@@ -288,7 +318,11 @@ main(void)
             sqlite3_close(raw);
         }
         vh = HISopen(vpath, "hissqlite", HIS_RDONLY);
-        if (vh != NULL) {
+        if (!wal) {
+            skip(21, "no WAL mode, no read-only open");
+            if (vh != NULL)
+                HISclose(vh);
+        } else if (vh != NULL) {
             TOKEN got;
             memset(&got, 0, sizeof(got));
             ok(21, !HISlookup(vh, "<corrupt@test>", NULL, NULL, NULL, &got));
@@ -397,104 +431,118 @@ main(void)
             HISclose(eh);
     }
 
-    /* bulk write batching: HIS_INCORE (the rebuild hint makehistory passes)
-       makes writes commit in transactions of BULK_BATCH rows.  Writes inside
-       an open batch are deferred (invisible to a WAL direct reader) until a
-       commit: on batch full, on HISsync, and on close. */
+    if (!wal) {
+        int n;
+
+        for (n = 28; n <= 33; n++)
+            skip(n, "no WAL mode, no read-only open");
+    } else {
+        /* bulk write batching: HIS_INCORE (the rebuild hint makehistory
+           passes) makes writes commit in transactions of BULK_BATCH rows.
+           Writes inside an open batch are deferred (invisible to a WAL direct
+           reader) until a commit: on batch full, on HISsync, and on close. */
 #    define BULK_BATCH 50000 /* must match HISSQLITE_BULK_BATCH */
-    {
-        char bpath[160];
-        struct history *bw, *br;
-        TOKEN bt;
-        unsigned long n;
-        char msgid[64];
-
-        snprintf(bpath, sizeof(bpath), "%s/batch", tmpdir);
-        bw = HISopen(bpath, "hissqlite", HIS_CREAT | HIS_RDWR | HIS_INCORE);
-        if (bw == NULL)
-            bail("can't create bulk hissqlite history");
-        memset(&bt, 0, sizeof(bt));
-        bt.type = 1;
-
-        /* 5 writes: the batch is far from full, so it is still open and a
-           WAL direct reader must not see them yet. */
-        for (n = 0; n < 5; n++) {
-            snprintf(msgid, sizeof(msgid), "<batch-%lu@test>", n);
-            if (!HISwrite(bw, msgid, BASE, BASE, 0, &bt))
-                bail("batched HISwrite failed: %s", HISerror(bw));
-        }
-        br = HISopen(bpath, "hissqlite", HIS_RDONLY);
-        ok(28, br != NULL && !HIScheck(br, "<batch-0@test>"));
-
-        /* HISsync commits the open batch; the same reader now sees them. */
-        ok(29, HISsync(bw) && br != NULL && HIScheck(br, "<batch-0@test>")
-                   && HIScheck(br, "<batch-4@test>"));
-
-        /* BULK_BATCH + 3 more writes: one batch fills and commits on its own
-           (its last row, BULK_BATCH+4, becomes visible), three stay pending
-           in the next batch (BULK_BATCH+5..+7, invisible). */
-        for (n = 5; n < 5 + BULK_BATCH + 3; n++) {
-            snprintf(msgid, sizeof(msgid), "<batch-%lu@test>", n);
-            if (!HISwrite(bw, msgid, BASE, BASE, 0, &bt))
-                bail("batched HISwrite failed: %s", HISerror(bw));
-        }
         {
-            bool committed, pending_hidden;
+            char bpath[160];
+            struct history *bw, *br;
+            TOKEN bt;
+            unsigned long n;
+            char msgid[64];
 
-            snprintf(msgid, sizeof(msgid), "<batch-%d@test>", BULK_BATCH + 4);
-            committed = br != NULL && HIScheck(br, msgid);
+            snprintf(bpath, sizeof(bpath), "%s/batch", tmpdir);
+            bw =
+                HISopen(bpath, "hissqlite", HIS_CREAT | HIS_RDWR | HIS_INCORE);
+            if (bw == NULL)
+                bail("can't create bulk hissqlite history");
+            memset(&bt, 0, sizeof(bt));
+            bt.type = 1;
+
+            /* 5 writes: the batch is far from full, so it is still open and a
+               WAL direct reader must not see them yet. */
+            for (n = 0; n < 5; n++) {
+                snprintf(msgid, sizeof(msgid), "<batch-%lu@test>", n);
+                if (!HISwrite(bw, msgid, BASE, BASE, 0, &bt))
+                    bail("batched HISwrite failed: %s", HISerror(bw));
+            }
+            br = HISopen(bpath, "hissqlite", HIS_RDONLY);
+            ok(28, br != NULL && !HIScheck(br, "<batch-0@test>"));
+
+            /* HISsync commits the open batch; the same reader now sees them.
+             */
+            ok(29, HISsync(bw) && br != NULL && HIScheck(br, "<batch-0@test>")
+                       && HIScheck(br, "<batch-4@test>"));
+
+            /* BULK_BATCH + 3 more writes: one batch fills and commits on its
+               own (its last row, BULK_BATCH+4, becomes visible), three stay
+               pending in the next batch (BULK_BATCH+5..+7, invisible). */
+            for (n = 5; n < 5 + BULK_BATCH + 3; n++) {
+                snprintf(msgid, sizeof(msgid), "<batch-%lu@test>", n);
+                if (!HISwrite(bw, msgid, BASE, BASE, 0, &bt))
+                    bail("batched HISwrite failed: %s", HISerror(bw));
+            }
+            {
+                bool committed, pending_hidden;
+
+                snprintf(msgid, sizeof(msgid), "<batch-%d@test>",
+                         BULK_BATCH + 4);
+                committed = br != NULL && HIScheck(br, msgid);
+                snprintf(msgid, sizeof(msgid), "<batch-%d@test>",
+                         BULK_BATCH + 7);
+                pending_hidden = br != NULL && !HIScheck(br, msgid);
+                ok(30, committed && pending_hidden);
+            }
+            if (br != NULL)
+                HISclose(br);
+
+            /* Close flushes the pending tail; everything written is present.
+             */
+            if (!HISclose(bw))
+                bail("batched HISclose failed");
+            br = HISopen(bpath, "hissqlite", HIS_RDONLY);
             snprintf(msgid, sizeof(msgid), "<batch-%d@test>", BULK_BATCH + 7);
-            pending_hidden = br != NULL && !HIScheck(br, msgid);
-            ok(30, committed && pending_hidden);
+            ok(31, br != NULL && HIScheck(br, "<batch-0@test>")
+                       && HIScheck(br, msgid));
+            if (br != NULL)
+                HISclose(br);
         }
-        if (br != NULL)
-            HISclose(br);
 
-        /* Close flushes the pending tail; everything written is present. */
-        if (!HISclose(bw))
-            bail("batched HISclose failed");
-        br = HISopen(bpath, "hissqlite", HIS_RDONLY);
-        snprintf(msgid, sizeof(msgid), "<batch-%d@test>", BULK_BATCH + 7);
-        ok(31, br != NULL && HIScheck(br, "<batch-0@test>")
-                   && HIScheck(br, msgid));
-        if (br != NULL)
-            HISclose(br);
-    }
+        /* Without HIS_INCORE, writes autocommit: immediately visible to a
+           direct reader with no sync -- the steady-state two-writer invariant.
+         */
+        {
+            char apath[160];
+            struct history *aw, *ar;
+            TOKEN at;
 
-    /* Without HIS_INCORE, writes autocommit: immediately visible to a direct
-       reader with no sync -- the steady-state two-writer invariant. */
-    {
-        char apath[160];
-        struct history *aw, *ar;
-        TOKEN at;
+            snprintf(apath, sizeof(apath), "%s/autocommit", tmpdir);
+            aw = HISopen(apath, "hissqlite", HIS_CREAT | HIS_RDWR);
+            memset(&at, 0, sizeof(at));
+            at.type = 1;
+            if (aw != NULL)
+                HISwrite(aw, "<auto@test>", BASE, BASE, 0, &at);
+            ar = HISopen(apath, "hissqlite", HIS_RDONLY);
+            ok(32, aw != NULL && ar != NULL && HIScheck(ar, "<auto@test>"));
+            if (ar != NULL)
+                HISclose(ar);
+            if (aw != NULL)
+                HISclose(aw);
+        }
 
-        snprintf(apath, sizeof(apath), "%s/autocommit", tmpdir);
-        aw = HISopen(apath, "hissqlite", HIS_CREAT | HIS_RDWR);
-        memset(&at, 0, sizeof(at));
-        at.type = 1;
-        if (aw != NULL)
-            HISwrite(aw, "<auto@test>", BASE, BASE, 0, &at);
-        ar = HISopen(apath, "hissqlite", HIS_RDONLY);
-        ok(32, aw != NULL && ar != NULL && HIScheck(ar, "<auto@test>"));
-        if (ar != NULL)
-            HISclose(ar);
-        if (aw != NULL)
-            HISclose(aw);
-    }
+        /* HISCTLG_ENTRYESTIMATE: a cheap, conservative overestimate of the
+           entry count (expireover relies on it to size its Bloom filter).  The
+           main database peaked at N_TOKEN + N_REMEMBER rows and pages are
+           never returned to the filesystem, so the estimate must be at least
+           that. */
+        {
+            struct history *eh;
+            size_t est = 0;
 
-    /* HISCTLG_ENTRYESTIMATE: a cheap, conservative overestimate of the entry
-       count (expireover relies on it to size its Bloom filter).  The main
-       database peaked at N_TOKEN + N_REMEMBER rows and pages are never
-       returned to the filesystem, so the estimate must be at least that. */
-    {
-        struct history *eh;
-        size_t est = 0;
-
-        eh = HISopen(histpath, "hissqlite", HIS_RDONLY);
-        ok(33, eh != NULL && HISctl(eh, HISCTLG_ENTRYESTIMATE, &est)
-                   && est >= N_TOKEN + N_REMEMBER);
-        if (eh != NULL)
-            HISclose(eh);
+            eh = HISopen(histpath, "hissqlite", HIS_RDONLY);
+            ok(33, eh != NULL && HISctl(eh, HISCTLG_ENTRYESTIMATE, &est)
+                       && est >= N_TOKEN + N_REMEMBER);
+            if (eh != NULL)
+                HISclose(eh);
+        }
     }
 
     /* hisv6 implements the estimate too (empty text file -> exactly 0,
