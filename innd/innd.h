@@ -772,6 +772,7 @@ extern void ICDwrite(void);
 extern void ICDwriteactive(void);
 
 extern void CCclose(void);
+extern void CCinnconfsetup(void);
 extern void CCsetup(void);
 
 extern void KEYgenerate(HDRCONTENT *, const char *, size_t);

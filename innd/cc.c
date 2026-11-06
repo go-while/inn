@@ -73,6 +73,11 @@ static const char *CClowmark(char *av[]);
 
 static char *CCpath = NULL;
 static char **CCargv;
+
+/* inn.conf as read at startup: it cannot be reloaded, so "ctlinnd reload
+ * all" warns when it has changed since. */
+static char *CCinnconfpath = NULL;
+static struct stat CCinnconfstat;
 static char CCnosite[] = "1 No such site";
 static char CCwrongtype[] = "1 Wrong site type";
 static char CCnogroup[] = "1 No such group";
@@ -1442,6 +1447,68 @@ CCreject(char *av[])
 
 
 /*
+**  Remember which inn.conf file innd read at startup, and its inode,
+**  modification time and size.  Called before innd changes its working
+**  directory, so a relative INNCONF path is made absolute.
+*/
+void
+CCinnconfsetup(void)
+{
+    const char *path;
+    char cwd[4096];
+
+    path = getenv(INN_ENV_INNCONF);
+    if (path == NULL)
+        path = INN_PATH_CONFIG;
+    /* On failure, CCinnconfpath stays NULL, which makes a later reload
+     * report that it cannot verify inn.conf.  A relative path must not be
+     * kept: innd changes its working directory afterwards. */
+    if (stat(path, &CCinnconfstat) < 0) {
+        syslog(L_ERROR, "%s cannot stat %s: %m", LogName, path);
+        return;
+    }
+    if (*path == '/') {
+        CCinnconfpath = xstrdup(path);
+    } else if (getcwd(cwd, sizeof(cwd)) != NULL) {
+        CCinnconfpath = concatpath(cwd, path);
+    } else {
+        syslog(L_ERROR, "%s cannot get the current directory: %m", LogName);
+    }
+}
+
+
+/*
+**  Whether inn.conf has changed since innd started.  The answer is
+**  CC_INNCONF_UNCHANGED, CC_INNCONF_CHANGED, or CC_INNCONF_UNKNOWN when
+**  it cannot be verified (the file could not be examined at startup or
+**  cannot be examined now).
+*/
+enum {
+    CC_INNCONF_UNCHANGED,
+    CC_INNCONF_CHANGED,
+    CC_INNCONF_UNKNOWN
+};
+
+static int
+CCinnconfstatus(void)
+{
+    struct stat Sb;
+
+    if (CCinnconfpath == NULL)
+        return CC_INNCONF_UNKNOWN;
+    if (stat(CCinnconfpath, &Sb) < 0) {
+        syslog(L_ERROR, "%s cannot stat %s: %m", LogName, CCinnconfpath);
+        return CC_INNCONF_UNKNOWN;
+    }
+    if (Sb.st_ino != CCinnconfstat.st_ino
+        || Sb.st_mtime != CCinnconfstat.st_mtime
+        || Sb.st_size != CCinnconfstat.st_size)
+        return CC_INNCONF_CHANGED;
+    return CC_INNCONF_UNCHANGED;
+}
+
+
+/*
 **  Re-read all in-core data.
 */
 static const char *
@@ -1449,6 +1516,7 @@ CCreload(char *av[])
 {
     const char *p;
     const char *error;
+    const char *reply = NULL;
 
 #ifdef DO_PERL
     static char BADPERLRELOAD[] = "1 Failed to define filter_art";
@@ -1482,6 +1550,25 @@ CCreload(char *av[])
         if (PYreadfilter())
             syslog(L_NOTICE, "reloaded pyfilter OK");
 #endif
+        switch (CCinnconfstatus()) {
+        case CC_INNCONF_CHANGED:
+            syslog(L_ERROR,
+                   "%s inn.conf changed since startup, restart innd to "
+                   "apply it",
+                   LogName);
+            reply = "0 Ok, but inn.conf changed since innd started and "
+                    "cannot be reloaded; restart innd to apply it";
+            break;
+        case CC_INNCONF_UNKNOWN:
+            syslog(L_ERROR, "%s cannot verify whether inn.conf changed",
+                   LogName);
+            reply = "0 Ok, but cannot verify whether inn.conf changed "
+                    "since innd started; restart innd to be sure it is "
+                    "applied";
+            break;
+        default:
+            break;
+        }
         p = "all";
     } else if (strcmp(p, "active") == 0 || strcmp(p, "newsfeeds") == 0) {
         /* Check the syntax of the newsfeeds file before reloading. */
@@ -1561,7 +1648,7 @@ CCreload(char *av[])
         return "1 Unknown reload type";
 
     syslog(L_NOTICE, "%s reload %s %s", LogName, p, av[1]);
-    return NULL;
+    return reply;
 }
 
 
