@@ -199,8 +199,8 @@ stored with tradspool.
 
 The articles must be in the history database, from which the storage API
 token, the arrival time and the expiration time of each article are taken.
-The directory is read before the overview is changed, so if it cannot be
-read, the overview of the group is left untouched.
+The directory is read completely before the overview is changed, so if it
+cannot be opened or read, the overview of the group is left untouched.
 
 If this option is given, the B<-n> option must also be given to specify
 the newsgroup on which to act.

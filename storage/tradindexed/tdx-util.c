@@ -16,6 +16,7 @@
 
 #include <ctype.h>
 #include <dirent.h>
+#include <errno.h>
 #include <sys/stat.h>
 
 #include "inn/buffer.h"
@@ -251,10 +252,25 @@ article_list(const char *directory)
     articles = opendir(directory);
     if (articles == NULL)
         sysdie("cannot open directory %s", directory);
-    while ((file = readdir(articles)) != NULL) {
+    for (;;) {
+        /* Reset errno before each call: processing an entry may change
+         * it, and readdir() leaves it alone at the end of the directory. */
+        errno = 0;
+        file = readdir(articles);
+        if (file == NULL)
+            break;
         if (!check_number(file->d_name))
             continue;
         vector_add(list, file->d_name);
+    }
+    /* A failed read must not look like the end of the directory: the
+     * caller rebuilds the overview from the list. */
+    if (errno != 0) {
+        int saved = errno;
+
+        closedir(articles);
+        errno = saved;
+        sysdie("cannot read directory %s", directory);
     }
     closedir(articles);
 
