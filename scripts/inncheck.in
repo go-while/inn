@@ -1306,8 +1306,11 @@ foreach my $workfile (@todo) {
         eprint "$file:0: file missing\n";
         next ACTION;
     }
-    print "${pfx}Looking at $file...\n"
-      if $verbose > 0;
+    if ($verbose > 0) {
+        my $msg = "Looking at $file...\n";
+        $msg =~ s/^/$pfx/mg;
+        print $msg;
+    }
     if (!open($IN, '<', $file)) {
         eprint "$workfile:0: can't open $!\n";
         next ACTION;
