@@ -1473,6 +1473,7 @@ do_add_article(client_t *client)
     stmt = sql_main.update_groupinfo_add;
     sqlite3_bind_int64(stmt, 1, groupid);
     sqlite3_bind_int64(stmt, 2, artnum);
+    sqlite3_bind_int(stmt, 3, client->cutofflow);
     status = sqlite3_step(stmt);
     if (status != SQLITE_DONE)
         fail_stmt();

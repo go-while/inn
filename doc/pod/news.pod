@@ -255,6 +255,13 @@ for B<nnrpd> now reads the body of the article from C<$body>.  It used
 C<$hdr{'__BODY__'}>, which B<nnrpd> does not set, so articles with too much
 quoted text were never rejected when the check was enabled.
 
+=item *
+
+Fixed missing articles when rebuilding ovsqlite overview data with
+C<makehistory -O -I>.  Inserting the first article no longer raises the low
+water mark used as the cutoff, so lower-numbered articles encountered later
+in the spool scan are retained if they are at or above the original cutoff.
+
 =back
 
 =head1 Changes in 2.7.4 (2026-06-22)
