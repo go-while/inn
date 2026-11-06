@@ -105,12 +105,21 @@ reckoning of the number of lines in the article.  All the other elements
 will be buffer/memoryview objects with the contents of the same-named
 article headers.
 
+These buffer/memoryview objects point into B<innd>'s own memory, which it
+reuses for the next article.  They are only valid until C<filter_art>
+returns: don't modify them, and don't keep them (or the I<art> dictionary,
+or a copy of it) for later.  To keep a value, copy its contents inside
+C<filter_art>, for instance with C<saved = bytes(art['__HEAD__'])> with
+S<Python 3.x>.
+
 C<art['__HEAD__']> is a buffer/memoryview object containing all the header
 fields of the article, including the ones not in the above list: every
 header field line in the order received, with folded and repeated header
 fields as they are, without the empty line that separates the header from
-the body.  Like C<art['__BODY__']>, it is in wire format: each line ends
-with CRLF (C<\r\n>), and a line beginning with a dot has that dot doubled.
+the body.  Like C<art['__BODY__']>, it is in wire format: each line
+normally ends with CRLF (C<\r\n>; B<innd> also accepts a bare CR or LF and
+passes it on unchanged), and a line beginning with a dot has that dot
+doubled.
 For instance, to reject articles carrying a header field that INN does not
 know (with Python 3.x):
 
