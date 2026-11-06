@@ -226,8 +226,9 @@ client_ipv6_udp_writer(const char *source)
 static void
 test_server_connection(socket_type client)
 {
-    FILE *out;
     char buffer[512];
+    size_t used;
+    ssize_t n;
 
     /* Verify that the result of accept is good. */
     if (client == INVALID_SOCKET) {
@@ -238,14 +239,26 @@ test_server_connection(socket_type client)
     ok(1, "...socket accept");
 
     /* Read data from the client and ensure it matches our expectations. */
-    out = fdopen(client, "r");
-    if (fgets(buffer, sizeof(buffer), out) == NULL) {
+    /*
+     * Read with socket_read rather than through stdio: on GNU/Hurd, a socket
+     * returned by accept may report itself as write-only to fcntl(F_GETFL),
+     * so that fdopen(client, "r") fails with EINVAL.
+     */
+    used = 0;
+    do {
+        n = socket_read(client, buffer + used, sizeof(buffer) - 1 - used);
+        if (n > 0)
+            used += n;
+    } while (n > 0 && used < sizeof(buffer) - 1
+             && memchr(buffer, '\n', used) == NULL);
+    if (n < 0) {
         sysdiag("cannot read from socket");
         ok(0, "...socket read");
     } else {
+        buffer[used] = '\0';
         is_string("socket test\r\n", buffer, "...socket read");
     }
-    fclose(out);
+    socket_close(client);
 }
 
 
