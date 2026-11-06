@@ -69,7 +69,7 @@ for prog in "$server" "$writer" "$reader"; do
     fi
 done
 
-echo 23
+echo 24
 
 # Set up temp directory with config files.  Use absolute paths because
 # the C test programs chdir to the test data directory before reading
@@ -281,7 +281,7 @@ else
     printcount "not ok" "# reopen"
 fi
 
-# Tests 21-23: server restart resilience.
+# Tests 21-24: server restart resilience and low article cutoff.
 # Simulate INN restart: start a new server against the existing WAL database,
 # shut it down, verify the reader can still read all data.  This is the
 # scenario where nnrpd outlives a server restart cycle.
@@ -305,6 +305,19 @@ if [ -S "$tmpdir/ovsqlite.sock" ]; then
     printcount "ok" "# server restart"
 else
     printcount "not ok" "# server restart"
+fi
+
+# Exercise out-of-order inserts with makehistory -I's low article cutoff.
+# Do this after the statistics checks, since it creates additional groups.
+cutoff_output=$($writer --cutoff 2>&1)
+cutoff_rc=$?
+cutoff_count=$(echo "$cutoff_output" | grep -c "^ok ")
+if [ $cutoff_rc -eq 0 ] && [ "$cutoff_count" -eq 36 ]; then
+    printcount "ok" "# out-of-order inserts with low article cutoff"
+else
+    echo "# Cutoff test failed (rc=$cutoff_rc):"
+    echo "$cutoff_output" | sed 's/^/# /'
+    printcount "not ok" "# out-of-order inserts with low article cutoff"
 fi
 
 kill $server_pid 2>/dev/null
