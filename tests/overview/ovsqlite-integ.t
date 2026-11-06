@@ -285,6 +285,9 @@ fi
 # Simulate INN restart: start a new server against the existing WAL database,
 # shut it down, verify the reader can still read all data.  This is the
 # scenario where nnrpd outlives a server restart cycle.
+# The server leaves its socket behind on exit.  Remove it so the startup
+# wait below cannot mistake the old socket for the new server being ready.
+rm -f "$tmpdir/ovsqlite.sock"
 $server -d >"$tmpdir/server2.log" 2>&1 &
 server_pid=$!
 waited=0

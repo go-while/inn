@@ -50,7 +50,7 @@ overview_data_parse(char *data, unsigned long *artnum)
 /* Check both the active-file cutoff used by makehistory -I and the normal
  * first-article low water mark when cutoff is disabled. */
 static bool
-group_stats(const char *group, int wantlow, int wanthigh, int wantcount)
+group_stats(char *group, int wantlow, int wanthigh, int wantcount)
 {
     int low, high, count, flag;
 
@@ -70,8 +70,8 @@ static int
 cutoff_test(void)
 {
     char flag[] = NF_FLAG_OK_STRING;
-    const char *group = "cutoff.test";
-    const char *uncut = "cutoff.disabled";
+    char group[] = "cutoff.test";
+    char uncut[] = "cutoff.disabled";
     bool cutoff = true;
     TOKEN token;
 
