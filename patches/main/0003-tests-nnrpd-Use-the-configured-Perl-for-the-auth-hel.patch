@@ -1,7 +1,7 @@
-From 1df88be726aa9ec1416c546fcb0b4753acfed9e7 Mon Sep 17 00:00:00 2001
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: go-while <go-while@users.noreply.github.com>
 Date: Fri, 6 Nov 2026 23:31:22 +0000
-Subject: [PATCH 3/6] tests/nnrpd: Use the configured Perl for the auth helper
+Subject: [PATCH 1/2] tests/nnrpd: Use the configured Perl for the auth helper
 
 Generate auth-test from a template with fixscript instead of executing
 a hard-coded /usr/bin/perl.  FreeBSD, NetBSD and DragonFly install Perl
@@ -39,10 +39,10 @@ index ac9aef4a7..0ba0916b4 100644
  /tests/overview/buffindexed.t
  /tests/overview/ovsqlite.t
 diff --git a/MANIFEST b/MANIFEST
-index 882e9cbe7..491795f54 100644
+index 08fc66d1c..96e8967f6 100644
 --- a/MANIFEST
 +++ b/MANIFEST
-@@ -1037,7 +1037,7 @@ tests/lib/xmalloc.t                   Tests for lib/xmalloc.c
+@@ -1039,7 +1039,7 @@ tests/lib/xmalloc.t                   Tests for lib/xmalloc.c
  tests/lib/xwrite-t.c                  Tests for lib/xwrite.c
  tests/nnrpd                           Test suite for nnrpd (Directory)
  tests/nnrpd/auth-ext-t.c              Tests for auth_external in nnrpd
