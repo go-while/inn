@@ -212,6 +212,14 @@ malformed stored Xref records with tradspool and corrupt history records.
 The overview and storage backends also validate more structures before using
 them.  Many thanks to Kevin Bowling for the patches.
 
+=item *
+
+When WAL mode is enabled, B<ovsqlite-server> now commits a transaction after
+250 milliseconds without another modifying request, while retaining the
+existing row and transaction-time limits.  This shortens the delay before
+direct readers see articles on a low-traffic server.  It does not guarantee
+immediate visibility after acceptance, and non-WAL batching is unchanged.
+
 =back
 
 =head1 Changes in 2.7.4 (2026-06-22)
