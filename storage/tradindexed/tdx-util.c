@@ -42,7 +42,7 @@ dump_index(const char *group)
 {
     struct group_index *index;
 
-    index = tdx_index_open(OV_READ);
+    index = tdx_index_open(false);
     if (index == NULL)
         return;
     if (group == NULL)
@@ -72,7 +72,7 @@ dump_group_index(const char *group)
     struct group_entry *entry;
     struct group_data *data;
 
-    index = tdx_index_open(OV_READ);
+    index = tdx_index_open(false);
     if (index == NULL)
         return;
     entry = tdx_index_entry(index, group);
@@ -109,10 +109,10 @@ dump_overview(const char *group, ARTNUM low, ARTNUM high, bool overchan)
     struct group_entry *entry;
     struct article article;
     struct search *search;
-    char *p;
+    const char *p;
     char datestring[256];
 
-    index = tdx_index_open(OV_READ);
+    index = tdx_index_open(false);
     if (index == NULL)
         return;
     entry = tdx_index_entry(index, group);
@@ -304,7 +304,7 @@ group_rebuild(const char *group, const char *path)
     struct article artdata;
     struct stat st;
 
-    index = tdx_index_open(OV_READ);
+    index = tdx_index_open(true);
     if (index == NULL)
         die("cannot open group index");
     entry = tdx_index_entry(index, group);
@@ -400,6 +400,7 @@ group_rebuild(const char *group, const char *path)
         die("cannot finish rebuilding data for group %s", group);
     tdx_data_close(data);
     HISclose(history);
+    tdx_index_close(index);
 }
 
 

@@ -20,12 +20,12 @@
 #endif
 #include <time.h>
 
+#include "inn/buffer.h"
 #include "inn/innconf.h"
 #include "inn/libinn.h"
 #include "inn/messages.h"
 #include "inn/overview.h"
 #include "inn/paths.h"
-#include "inn/qio.h"
 
 /* Statistics kept while overchan is running. */
 struct statistics {
@@ -122,6 +122,32 @@ write_overview(struct overview *overview, struct overview_data *data,
 
 
 /*
+**  Read a line of any length from F into line and return it, nul-terminated
+**  and without its trailing newline, or NULL at end of file or on a read
+**  error (check ferror).  A last line without a newline is ignored, as QIO
+**  does.  QIO is not used for the input because it skips lines longer
+**  than QIO_BUFFERSIZE, and innd stores overview data of any length.
+*/
+static char *
+read_line(FILE *F, struct buffer *line)
+{
+    char chunk[8192];
+    size_t length;
+
+    buffer_set(line, NULL, 0);
+    while (fgets(chunk, sizeof(chunk), F) != NULL) {
+        length = strlen(chunk);
+        buffer_append(line, chunk, length);
+        if (length > 0 && chunk[length - 1] == '\n') {
+            line->data[line->left - 1] = '\0';
+            return line->data;
+        }
+    }
+    return NULL;
+}
+
+
+/*
 **  Process a single file.  Takes the open overview struct, the file name
 **  (which may be - to process standard input), and the statistics struct and
 **  calls parse_line and write_overview for each line.
@@ -132,31 +158,29 @@ process_file(struct overview *overview, const char *file,
 {
     char *line;
     struct overview_data data;
-    QIOSTATE *qp;
+    struct buffer *buffer;
+    FILE *F;
 
     if (strcmp(file, "-") == 0)
-        qp = QIOfdopen(STDIN_FILENO);
+        F = stdin;
     else
-        qp = QIOopen(file);
-    if (qp == NULL) {
+        F = fopen(file, "r");
+    if (F == NULL) {
         syswarn("cannot open %s", file);
         return;
     }
 
-    while (1) {
-        line = QIOread(qp);
-        if (line == NULL) {
-            if (QIOtoolong(qp)) {
-                warn("input line too long, skipping");
-                continue;
-            }
-            break;
-        }
+    buffer = buffer_new();
+    while ((line = read_line(F, buffer)) != NULL) {
         if (!parse_line(line, &data))
             continue;
         write_overview(overview, &data, statistics);
     }
-    QIOclose(qp);
+    if (ferror(F))
+        syswarn("cannot read %s", file);
+    buffer_free(buffer);
+    if (F != stdin)
+        fclose(F);
 }
 
 
