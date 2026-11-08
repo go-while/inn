@@ -1,5 +1,10 @@
 # main-matrix
 
+> **This is a test fork of INN, not meant for users.** For INN itself, its releases and its
+> issue tracker, go to [InterNetNews/inn](https://github.com/InterNetNews/inn). Developers and
+> their agents work here: fix branches become pull requests upstream, and the `integration`
+> branch merges all of them so that they can be tested together first.
+
 CI only: this branch holds no INN sources. Its workflow
 (`.github/workflows/main-matrix.yaml`) checks out upstream InterNetNews/inn
 branches `main` (the coming 2.8.0) and `2.7` (the stable line, the coming
