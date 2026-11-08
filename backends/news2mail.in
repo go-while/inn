@@ -38,6 +38,19 @@ use strict;
 use warnings;
 
 use FileHandle;
+use Getopt::Std;
+
+my $usage = "Usage:
+  $0 [-n]
+
+Options:
+  -n   Do not ask the MTA to queue the messages (no -odq flag).
+
+  Reads lines with a storage token followed by list names on stdin.
+";
+
+my %opt;
+getopts('n', \%opt) || die $usage;
 
 my $cfFile = $INN::Config::pathetc . "/news2mail.cf";
 my $sm = $INN::Config::pathbin . "/sm";
@@ -115,10 +128,11 @@ sub mailto {
     $sendmail =~ s!\s*%s!!;
     $sendmail =~ s!(^|\s+)-f\s*\S*!!;
     $sendmail =~ s!(^|\s+)-oem!!;
-    my @command = (
-        split(' ', $sendmail),
-        '-oee', '-odq', "-f$s", "-pNNTP:$INN::Config::pathhost", @a,
-    );
+    # Unless -n is given, ask the MTA to only queue the message (to avoid
+    # DOS attacks by mass postings).
+    my @command = (split(' ', $sendmail), '-oee');
+    push(@command, '-odq') if (!$opt{'n'});
+    push(@command, "-f$s", "-pNNTP:$INN::Config::pathhost", @a);
 
     syslog('debug', join(' ', @command)) if ($use_syslog);
 
