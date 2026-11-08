@@ -404,8 +404,16 @@ hissqlite_doopen(struct hissqlite *h)
         sqlite_helper_term(&hissqlite_main_helper, (sqlite3_stmt **) &h->main);
         goto fail;
     }
-    /* Track WAL growth so HISsync can keep it bounded (the .sql init section
-       has already put us in WAL mode). */
+    /* The .sql init section asks for WAL mode, but SQLite silently keeps the
+       rollback journal where WAL is not possible (no shared memory, as on
+       some network filesystems or GNU/Hurd).  Writing still works then, but
+       every read-only open (nnrpd, grephistory) is refused, so say why. */
+    if (!hissqlite_is_wal(h))
+        warn("hissqlite: SQLite could not put %s in WAL mode; read-only"
+             " opens of the history (nnrpd, grephistory) will fail",
+             h->path);
+
+    /* Track WAL growth so HISsync can keep it bounded. */
     sqlite3_wal_hook(h->db, hissqlite_wal_hook, h);
 
     /* Writer cache + mmap from inn.conf, applied after the .sql WAL pragmas.
