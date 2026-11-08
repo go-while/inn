@@ -24,9 +24,6 @@
 #    include <openssl/x509.h>
 
 /* Protocol support. */
-#    define INN_TLS_SSLv3   2
-#    define INN_TLS_TLSv1   4
-#    define INN_TLS_TLSv1_1 8
 #    define INN_TLS_TLSv1_2 16
 #    define INN_TLS_TLSv1_3 32
 
