@@ -65,6 +65,13 @@ In e-mail messages, the To header field body will have the mailing-list
 address (i.e. the second field).  Besides, B<news2mail> strips most article
 header fields from the article before mailing.
 
+When an article is fed to several mailing-lists (for instance because it
+is crossposted to newsgroups gatewayed to different lists), B<innd> gives
+B<news2mail> all these lists at once.  B<news2mail> then sends one e-mail
+per envelope-from address, to the mailing-lists which use it, so that each
+list gets the article with its own envelope-from address.  The To header
+field body of each e-mail has the addresses of these mailing-lists.
+
 In F<newsfeeds>, the channel feed should look like:
 
     news2mail!:!*:Ac,Tc,Wn*:<pathbin>/news2mail
@@ -98,14 +105,6 @@ The Perl program itself used to gateway news into e-mails.
 The configuration file which specifies the mapping to use for gatewaying.
 
 =back
-
-=head1 BUGS
-
-The B<news2mail> program is set up as a funnelled channel in F<newsfeeds>,
-implying multiple matches should be handled as one S<- and> multiple matching
-funnelled feeds will result in a single call to the script.  Therefore,
-since only one mail is sent, crossposts are not currently properly handled
-as for the envelope-from address (which then defaults to the C<news> user).
 
 =head1 HISTORY
 
