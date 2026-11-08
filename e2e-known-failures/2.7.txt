@@ -1,0 +1,32 @@
+# e2e tests of the fork that fail on plain upstream 2.7 because only fork PRs fix them.
+# One test name per line.  Remove a name when its fix is merged upstream (the job summary
+# lists such tests as now passing); add one when the e2e branch gets a test for a new fork fix.
+TestAuthProgramTimeout
+TestBytesBodyStartsWithDot
+TestCompress
+TestFilterBodyPerl
+TestFilterHeadPerl
+TestFilterNnrpdQuotedText
+TestHistoryDbzErrors
+TestInncheckFixOutput
+TestInnfeedDebugSnapshotFiles
+TestInnmailAddresses
+TestMakedbzMalformedHistory
+TestMakehistoryLongOverview
+TestMethodMatrix
+TestNews2mailNoQueue
+TestNews2mailSenders
+TestNewsDailyReportExpireFirst
+TestNewsfeedsVariables
+TestPeerStoreFailure
+TestProcbatchCheck
+TestReloadAllInnConfChanged
+TestScanlogsRotatesPullnewsLog
+TestSIGTERMWhileBusy
+TestSIGTERMWhileIdle
+TestStartTLSDump
+TestStartTLSIdleTimer
+TestStartTLSLogLevel
+TestTdxUtilHashChainLoop
+TestTdxUtilRebuildBytesLines
+TestTdxUtilRebuildFromSpool

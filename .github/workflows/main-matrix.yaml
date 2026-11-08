@@ -10,8 +10,9 @@
 ##  - Sanitizers: AddressSanitizer and UndefinedBehaviorSanitizer, make check.
 ##  - Linux distributions: 20 container images, through e2e-distro (build,
 ##    make check).
-##  - The fork's e2e tests (branch e2e) against plain upstream, for
-##    information only: which fork fixes upstream still lacks.
+##  - The fork's e2e tests (branch e2e) against plain upstream.  Tests of
+##    fixes only the fork has are listed in e2e-known-failures/; any other
+##    failure fails the job.
 ##  - FreeBSD, OpenBSD, NetBSD, DragonFly BSD and OmniOS (illumos) in VMs.
 ##  - macOS only when started by hand with "macos" ticked.
 ##
@@ -248,15 +249,17 @@ jobs:
           if-no-files-found: ignore
 
   # The e2e tests of the fork's e2e branch (tests/e2e, Go) against plain
-  # upstream.  They also check bugs that only fork PRs fix, so failures are
-  # expected: the list in the job summary shows which fork fixes upstream
-  # lacks, and shrinks as they are merged.  It never fails the run.
+  # upstream.  They also check bugs that only fork PRs fix; those tests are
+  # listed in e2e-known-failures/<ref>.txt.  The job fails only when another
+  # test fails (a regression upstream, or a new e2e test missing from the
+  # list), so a failed weekly run means something to look at.  Listed tests
+  # that pass again are shown in the summary: remove them from the list.
+  # Refs without a list (a single ref chosen by hand) are informational.
   e2e-upstream:
-    name: ${{ matrix.ref }} e2e tests of the fork (informational)
+    name: ${{ matrix.ref }} e2e tests of the fork
     needs: source
     runs-on: ubuntu-latest
     timeout-minutes: 60
-    continue-on-error: true
     strategy:
       fail-fast: false
       matrix:
@@ -269,6 +272,12 @@ jobs:
         with:
           ref: e2e
           path: e2e
+          persist-credentials: false
+      - name: Checkout the lists of known failures
+        uses: actions/checkout@v7
+        with:
+          path: matrix
+          sparse-checkout: e2e-known-failures
           persist-credentials: false
       - name: Setup Go
         uses: actions/setup-go@v7
@@ -286,6 +295,8 @@ jobs:
         with:
           name: inn-src
       - name: Build, make check, e2e tests
+        # The Summary step decides whether the job fails.
+        continue-on-error: true
         run: |
           mkdir -p "$RUNNER_TEMP/work"
           tar xzf "inn-src-$(printf '%s' "$REF" | tr '/' '_').tar.gz"
@@ -297,20 +308,50 @@ jobs:
         if: always()
         run: |
           log="$RUNNER_TEMP/work/build/e2e.log"
+          known="matrix/e2e-known-failures/$(printf '%s' "$REF" | tr '/' '_').txt"
+          rc=0
           {
             echo "### e2e tests of the fork against upstream $REF"
             echo "(e2e branch $(git -C e2e rev-parse --short=9 HEAD))"
             echo
-            if [ -f "$log" ]; then
+            if [ ! -f "$log" ]; then
+              echo "no e2e log: the build or make check failed"
+              rc=1
+            else
               echo "$(grep -c '^--- PASS' "$log") passed," \
                   "$(grep -c '^--- SKIP' "$log") skipped," \
                   "$(grep -c '^--- FAIL' "$log") failed"
               echo
-              grep '^--- FAIL' "$log" | sed 's/^--- FAIL: \([^ ]*\).*/- \1/' || true
-            else
-              echo "no e2e log: the build or make check failed"
+              grep '^--- FAIL' "$log" | sed 's/^--- FAIL: \([^ ]*\).*/\1/' |
+                  sort -u >"$RUNNER_TEMP/failed"
+              if [ -f "$known" ]; then
+                grep -v '^#' "$known" | sort -u >"$RUNNER_TEMP/known"
+                new=$(comm -23 "$RUNNER_TEMP/failed" "$RUNNER_TEMP/known")
+                fixed=$(comm -13 "$RUNNER_TEMP/failed" "$RUNNER_TEMP/known")
+                echo "**New failures** (not in $known):"
+                if [ -n "$new" ]; then
+                  echo "$new" | sed 's/^/- /'
+                  rc=1
+                else
+                  echo "none"
+                fi
+                echo
+                echo "**Known failures that pass now** (remove them from the list):"
+                if [ -n "$fixed" ]; then echo "$fixed" | sed 's/^/- /'; else echo "none"; fi
+                echo
+                echo "<details><summary>Known failures (fork-only fixes)</summary>"
+                echo
+                comm -12 "$RUNNER_TEMP/failed" "$RUNNER_TEMP/known" | sed 's/^/- /'
+                echo
+                echo "</details>"
+              else
+                echo "No list of known failures for $REF; informational only."
+                echo
+                sed 's/^/- /' "$RUNNER_TEMP/failed"
+              fi
             fi
           } >>"$GITHUB_STEP_SUMMARY"
+          exit $rc
 
   # The BSD and illumos jobs build as root in a VM.  The build and test
   # script is the same for all of them (keep the copies in step); the jobs
