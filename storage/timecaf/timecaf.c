@@ -979,6 +979,12 @@ timecaf_ctl(PROBETYPE type, TOKEN *token UNUSED, void *value)
 bool
 timecaf_flushcacheddata(FLUSHTYPE type)
 {
+    /* A completed article has no pending CAF metadata.  Release the cached
+       writer's lock on a full flush so expiration need not wait for another
+       article to select a different CAF file.  Keep it cached between flushes.
+     */
+    if (type == SM_ALL)
+        CloseOpenFile(&WritingFile);
     if (type == SM_ALL || type == SM_CANCELLEDART)
         DoCancels();
     return true;

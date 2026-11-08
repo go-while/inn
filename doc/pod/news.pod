@@ -262,6 +262,15 @@ C<makehistory -O -I>.  Inserting the first article no longer raises the low
 water mark used as the cutoff, so lower-numbered articles encountered later
 in the spool scan are retained if they are at or above the original cutoff.
 
+=item *
+
+The timecaf storage method now closes its cached CAF writer on a full storage
+flush, and B<innd> flushes storage during its periodic maintenance as well as
+when idle.  This releases the write lock so expiration can remove articles
+from that CAF without waiting for another article to select a different
+file, even when other storage methods keep B<innd> busy.  Expiration can
+still wait until the next flush; this does not add a new timer.
+
 =back
 
 =head1 Changes in 2.7.4 (2026-06-22)

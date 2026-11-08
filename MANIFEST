@@ -1030,6 +1030,7 @@ tests/storage/archive.t               Tests for backends/archive
 tests/storage/cancel-tombstone-t.c    Tests for SMcanceltombstone
 tests/storage/makehistory.t           Tests for expire/makehistory
 tests/storage/sm.t                    Tests for frontends/sm
+tests/storage/timecaf-t.c             Tests for timecaf writer flush and reopen
 tests/tap                             Helper scripts for TAP (Directory)
 tests/tap/basic.c                     Helper C library for writing tests
 tests/tap/basic.h                     Header file for basic testing routines
