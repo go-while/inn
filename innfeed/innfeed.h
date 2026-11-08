@@ -39,8 +39,10 @@
 #define TAPE_DISABLE            false     /* no-backlog */
 
 /* in main.c */
-#define PID_FILE                "innfeed.pid" /* [pathrun]/pid-file */
-#define LOG_FILE                "innfeed.log" /* [pathlog]/log-file */
+#define PID_FILE                "innfeed.pid"      /* [pathrun]/pid-file */
+#define LOG_FILE                "innfeed.log"      /* [pathlog]/log-file */
+#define DEBUG_FILE              "innfeed.debug"    /* [pathlog]/debug-file */
+#define SNAPSHOT_FILE           "innfeed.snapshot" /* [pathlog]/snapshot-file */
 
 /* in host.c */
 #define DNS_RETRY_PERIOD        900              /* dns-retry */
@@ -76,19 +78,10 @@
  * The rest below are not run-time configurable.
  */
 
-/* If this file exists at startup then it's the same as having done
-   '-d 1' on the command line. This is a cheap way of avoiding continual
-   reloading of the newsfeeds file when debugging. */
-#define DEBUG_FILE              "innfeed.debug" /* Relative to pathlog */
-
 /* if defined to a non-zero number, then a snapshot will be printed
    whenever die() is called (e.g. on assert failure). This can use up a
    lot of disk space. */
 #define SNAPSHOT_ON_DIE         0
-
-/* the full pathname of the file to get a printed dump of the system when
-   a SIGINT is delivered (or SNAPSHOT_ON_DIE is non-zero--see below). */
-#define SNAPSHOT_FILE           "innfeed.snapshot" /* Relative to pathlog */
 
 /* strings that get added to the end of a peer name for generating
    backlog file names.  A peername cannot end in any of these string
