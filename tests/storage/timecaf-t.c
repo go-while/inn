@@ -4,6 +4,7 @@
 
 #include "portable/system.h"
 
+#include "portable/uio.h"
 #include <errno.h>
 #include <fcntl.h>
 #include <signal.h>
