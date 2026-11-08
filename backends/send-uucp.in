@@ -345,6 +345,9 @@ Fields are separated by spaces and only the site name needs to be specified,
 with defaults being used for unspecified values.  If the first character on
 a line is a hash sign (C<#>) then the rest of the line is ignored.
 
+Nothing needs to be reloaded after modifying F<send-uucp.cf>: B<send-uucp>
+reads it each time it runs.
+
 =head1 EXAMPLE
 
 Here is an example for the F<send-uucp.cf> configuration file:

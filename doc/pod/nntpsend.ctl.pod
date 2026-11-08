@@ -29,6 +29,10 @@ C<-t 180> will be given to B<innxmit>.
 
 See nntpsend(8) for an example of F<nntpsend.ctl> config file.
 
+Nothing needs to be reloaded after modifying F<nntpsend.ctl>: B<nntpsend>
+reads it each time it runs.  After any changes, you can run C<inncheck> to
+perform basic syntax checks.
+
 =head1 HISTORY
 
 Written by Landon Curt Noll <chongo@toad.com> for InterNetNews.  Converted to
