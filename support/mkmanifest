@@ -347,4 +347,5 @@ tests/overview/tradindexed.t
 tests/overview/xref.t
 tests/perl/minimum-version.t
 tests/storage/cancel-tombstone.t
+tests/storage/timecaf.t
 tests/util/innbind.t
