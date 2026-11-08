@@ -168,6 +168,7 @@ struct innconf {
     char *tlsciphers13;          /* OpenSSL-style cipher string for TLS 1.3 */
     bool tlscompression;         /* Turn TLS compression on/off */
     char *tlseccurve;            /* ECDH curve name */
+    unsigned long tlsloglevel;   /* Level of TLS/SSL logging */
     bool tlspreferserverciphers; /* Make server select the cipher */
     struct vector *tlsprotocols; /* List of supported TLS versions */
 
