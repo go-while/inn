@@ -24,6 +24,8 @@ static SITE SITEnull;
 static char *SITEfeedspath = NULL;
 static SITEVARIABLES *SITEvariables = NULL;
 
+static char *SITEexpandvariables(char *site);
+
 
 /*
 **  Return a copy of an array of strings.
@@ -50,7 +52,7 @@ SITEcopystrings(char **av)
 static bool
 SITEaddvariable(char *line)
 {
-    char *p, *q;
+    char *p, *q, *value;
     SITEVARIABLES *v, *w;
 
     if (*line != VARIABLE_CHAR)
@@ -76,6 +78,18 @@ SITEaddvariable(char *line)
     if (*p == '\0')
         return false;
 
+    /* Copy the contents without whitespace, and expand the variables they
+       refer to, with their values at this point of the file. */
+    for (q = value = xmalloc(strlen(p) + 1); *p != '\0'; p++)
+        if (*p != ' ' && *p != '\t')
+            *q++ = *p;
+    *q = '\0';
+    if (strchr(value, VARIABLE_CHAR) != NULL) {
+        q = SITEexpandvariables(value);
+        free(value);
+        value = q;
+    }
+
     /* Is variable already defined?  Free and reassign. */
     w = NULL;
     v = SITEvariables;
@@ -96,14 +110,11 @@ SITEaddvariable(char *line)
     }
 
     /* Add variable's contents. */
+    v->Value = value;
     v->Elements = 1;
-    for (q = v->Value = xmalloc(strlen(p) + 1); *p != '\0'; p++) {
-        if (*p != ' ' && *p != '\t')
-            *q++ = *p;
-        if (*p == ',')
+    for (q = value; *q != '\0'; q++)
+        if (*q == ',')
             v->Elements++;
-    }
-    *q = '\0';
     return true;
 }
 
