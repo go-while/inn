@@ -38,6 +38,13 @@ You may also take benefit from the new hissqlite history storage method based
 on SQLite.  See hissqlite(5) and hissqlite-convert(8) for more information and
 how to migrate from an existing hisv6 history database.
 
+=item *
+
+B<nnrpd> no longer supports the SSLv3, S<TLS 1.0> and S<TLS 1.1> protocols.
+If the I<tlsprotocols> parameter in F<inn.conf> lists only some of them,
+B<nnrpd> refuses to initiate TLS: add C<TLSv1.2> and C<TLSv1.3> to it, or
+remove the parameter to use the default value.
+
 =back
 
 If you are upgrading from a version prior to S<INN 2.7>, see also
@@ -110,6 +117,15 @@ C<:bytes> and C<:lines> metadata to news clients using CAPABILITIES.
 Support for old insecure OpenSSL and LibreSSL versions have been dropped.
 You will have to use at least S<OpenSSL 1.1.1> or S<LibreSSL 2.8.0>.  Thanks
 to Roman Donchenko for the code simplification and cleaning.
+
+=item *
+
+Support for the insecure SSLv3, S<TLS 1.0> and S<TLS 1.1> protocols has been
+dropped from B<nnrpd>, as it already was for SSLv2: at least S<TLS 1.2> is
+now always required.  These protocols may still be listed in the
+I<tlsprotocols> parameter in F<inn.conf> for compatibility, but they are
+ignored and a notice is logged.  If no other protocol is listed, B<nnrpd>
+now refuses to initiate TLS.
 
 =item *
 

@@ -393,17 +393,13 @@ tls_init_serverengine(int verifydepth, int askcert, int requirecert,
     if ((tls_proto_vect != NULL) && (tls_proto_vect->count > 0)) {
         for (i = 0; i < tls_proto_vect->count; i++) {
             if (tls_proto_vect->strings[i] != NULL) {
-                if (strcmp(tls_proto_vect->strings[i], "SSLv2") == 0) {
-                    syslog(
-                        L_NOTICE,
-                        "TLS engine: cannot enable SSLv2 - support removed");
-                } else if (strcmp(tls_proto_vect->strings[i], "SSLv3") == 0) {
-                    tls_protos |= INN_TLS_SSLv3;
-                } else if (strcmp(tls_proto_vect->strings[i], "TLSv1") == 0) {
-                    tls_protos |= INN_TLS_TLSv1;
-                } else if (strcmp(tls_proto_vect->strings[i], "TLSv1.1")
-                           == 0) {
-                    tls_protos |= INN_TLS_TLSv1_1;
+                if (strcmp(tls_proto_vect->strings[i], "SSLv2") == 0
+                    || strcmp(tls_proto_vect->strings[i], "SSLv3") == 0
+                    || strcmp(tls_proto_vect->strings[i], "TLSv1") == 0
+                    || strcmp(tls_proto_vect->strings[i], "TLSv1.1") == 0) {
+                    syslog(L_NOTICE,
+                           "TLS engine: cannot enable %s - support removed",
+                           tls_proto_vect->strings[i]);
                 } else if (strcmp(tls_proto_vect->strings[i], "TLSv1.2")
                            == 0) {
                     tls_protos |= INN_TLS_TLSv1_2;
@@ -422,16 +418,15 @@ tls_init_serverengine(int verifydepth, int askcert, int requirecert,
         tls_protos = (INN_TLS_TLSv1_2 | INN_TLS_TLSv1_3);
     }
 
-    if ((tls_protos & INN_TLS_SSLv3) == 0) {
-        SSL_CTX_set_options(CTX, SSL_OP_NO_SSLv3);
+    if (tls_protos == 0) {
+        syslog(L_ERROR, "TLS engine: no supported protocol in tlsprotocols");
+        return (-1);
     }
 
-    if ((tls_protos & INN_TLS_TLSv1) == 0) {
-        SSL_CTX_set_options(CTX, SSL_OP_NO_TLSv1);
-    }
-
-    if ((tls_protos & INN_TLS_TLSv1_1) == 0) {
-        SSL_CTX_set_options(CTX, SSL_OP_NO_TLSv1_1);
+    /* SSL and TLS protocols prior to TLS 1.2 are no longer supported. */
+    if (SSL_CTX_set_min_proto_version(CTX, TLS1_2_VERSION) == 0) {
+        syslog(L_ERROR, "TLS engine: cannot set minimum protocol version");
+        return (-1);
     }
 
     if ((tls_protos & INN_TLS_TLSv1_2) == 0) {
