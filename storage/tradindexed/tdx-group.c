@@ -795,7 +795,9 @@ tdx_index_add(struct group_index *index, const char *group, ARTNUM low,
         }
     loc = index->header->freelist.recno;
     if (loc < 0 || loc >= index->count || index->entries[loc].next.recno < -1
-        || index->entries[loc].next.recno >= index->count) {
+        || index->entries[loc].next.recno >= index->count
+        || (index->entries[loc].deleted == 0
+            && !HashEmpty(index->entries[loc].hash))) {
         warn("tradindexed: invalid free list entry %ld", loc);
         index_lock(index->fd, INN_LOCK_UNLOCK);
         return false;
@@ -1233,6 +1235,7 @@ hashmap_load(void)
         data = cvector_split_space(line, data);
         if (data->count != 4) {
             warn("tradindexed: malformed active file line %s", line);
+            line = QIOread(active);
             continue;
         }
         group = xmalloc(sizeof(struct hashmap));
@@ -1379,6 +1382,29 @@ index_audit_deleted(struct group_entry *entry, long number, bool fix)
 
 
 /*
+**  Check whether an entry has already been visited while walking the hash
+**  chains and the free list.  If so, the location pointing to it closes a
+**  loop or joins two chains, and the walk must stop there.  If fix is true,
+**  cut the chain at that location; entries left unreachable by the cut are
+**  reattached later.  Returns true if the walk must stop.
+*/
+static bool
+index_audit_visited(bool *visited, long current, int *parent, bool fix)
+{
+    if (!visited[current]) {
+        visited[current] = true;
+        return false;
+    }
+    warn("tradindexed: entry %ld is reachable from multiple paths", current);
+    if (fix) {
+        *parent = -1;
+        inn_msync_page(parent, sizeof(*parent), MS_ASYNC);
+    }
+    return true;
+}
+
+
+/*
 **  Audit the group header for any inconsistencies.  This checks the
 **  reachability of all of the group entries, makes sure that deleted entries
 **  are on the free list, and otherwise checks the linked structure of the
@@ -1391,21 +1417,28 @@ index_audit_header(struct group_index *index, bool fix)
     long bucket, current;
     struct group_entry *entry;
     int *parent, *next;
-    bool *reachable;
+    bool *reachable, *visited;
 
     /* First, walk all of the regular hash buckets, making sure that all of
        the group location pointers are valid and sane, that all groups that
        have been deleted are correctly marked as such, and that all groups are
        in their correct hash chain.  Build reachability information as we go,
-       used later to ensure that all group entries are reachable. */
+       used later to ensure that all group entries are reachable.  Each entry
+       is walked at most once, so that loops and chains joining each other do
+       not make the audit run forever. */
     reachable = xcalloc(index->count, sizeof(bool));
+    visited = xcalloc(index->count, sizeof(bool));
     for (bucket = 0; bucket < TDX_HASH_SIZE; bucket++) {
         parent = &index->header->hash[bucket].recno;
         index_audit_loc(index, parent, bucket, NULL, fix);
         current = *parent;
         while (current >= 0 && current < index->count) {
+            if (index_audit_visited(visited, current, parent, fix))
+                break;
             entry = &index->entries[current];
             next = &entry->next.recno;
+            index_audit_deleted(entry, current, fix);
+            index_audit_loc(index, next, current, entry, fix);
             if (entry->deleted == 0 && bucket != index_bucket(entry->hash)) {
                 warn("tradindexed: entry %ld is in bucket %ld instead of its"
                      " correct bucket %ld",
@@ -1415,14 +1448,8 @@ index_audit_header(struct group_index *index, bool fix)
                     next = parent;
                 }
             } else {
-                if (reachable[current])
-                    warn("tradindexed: entry %ld is reachable from multiple"
-                         " paths",
-                         current);
                 reachable[current] = true;
             }
-            index_audit_deleted(entry, current, fix);
-            index_audit_loc(index, &entry->next.recno, current, entry, fix);
             if (entry->deleted != 0) {
                 warn("tradindexed: entry %ld is deleted but not in the free"
                      " list",
@@ -1446,17 +1473,25 @@ index_audit_header(struct group_index *index, bool fix)
     parent = &index->header->freelist.recno;
     current = *parent;
     while (current >= 0 && current < index->count) {
+        if (index_audit_visited(visited, current, parent, fix))
+            break;
         entry = &index->entries[current];
         index_audit_deleted(entry, current, fix);
+        index_audit_loc(index, &entry->next.recno, current, entry, fix);
         reachable[current] = true;
         if (!HashEmpty(entry->hash) && entry->deleted == 0) {
             warn("tradindexed: undeleted entry %ld in free list", current);
             if (fix) {
+                /* The entry is reattached to its hash chain later.  Splicing
+                   it out leaves the rest of the free list linked to the
+                   parent, so keep the parent and continue with the entry
+                   that now follows it. */
                 entry_splice(entry, parent);
                 reachable[current] = false;
+                current = *parent;
+                continue;
             }
         }
-        index_audit_loc(index, &entry->next.recno, current, entry, fix);
         if (entry->next.recno == current)
             break;
         parent = &entry->next.recno;
@@ -1482,6 +1517,7 @@ index_audit_header(struct group_index *index, bool fix)
 
     /* All done. */
     free(reachable);
+    free(visited);
 }
 
 
@@ -1577,12 +1613,14 @@ tdx_index_audit(bool fix)
     if (fstat(index->fd, &st) < 0) {
         syswarn("tradindexed: cannot fstat %s", index->path);
         index_lock(index->fd, INN_LOCK_UNLOCK);
+        tdx_index_close(index);
         return;
     }
     if (!tdx_index_entry_count(st.st_size, &count)
         || !index_file_size(count, &expected)) {
         syswarn("tradindexed: invalid size for %s", index->path);
         index_lock(index->fd, INN_LOCK_UNLOCK);
+        tdx_index_close(index);
         return;
     }
     if (expected != st.st_size) {
@@ -1594,6 +1632,7 @@ tdx_index_audit(bool fix)
     }
     if (!index_maybe_remap(index, count)) {
         index_lock(index->fd, INN_LOCK_UNLOCK);
+        tdx_index_close(index);
         return;
     }
 
@@ -1607,6 +1646,7 @@ tdx_index_audit(bool fix)
     hashmap = hashmap_load();
     if (hashmap == NULL) {
         warn("tradindexed: cannot hash active file");
+        tdx_index_close(index);
         return;
     }
     data.index = index;
@@ -1619,4 +1659,5 @@ tdx_index_audit(bool fix)
         index_audit_group(index, entry, hashmap, fix);
     }
     hash_free(hashmap);
+    tdx_index_close(index);
 }
