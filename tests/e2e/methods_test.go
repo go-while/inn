@@ -1332,31 +1332,115 @@ func TestOvsqliteReaderSeesNewArticle(t *testing.T) {
 	}
 }
 
-// TestTimecafExpireoverCurrentFile: expireover removes an expired timecaf article stored in
-// the CAF file innd is writing to (articles of the same class received within the same 256
-// seconds). innd keeps that file open with a write lock until it stores an article into
-// another file, and expireover's cancel (CAFRemoveMultArts) waits for the lock, so it
-// blocks for as long as innd keeps writing to that file, indefinitely on a quiet server.
+// TestTimecafExpireoverCurrentFile checks release on idle and periodic maintenance,
+// explicit flush, pause and throttle. Short maintenance intervals bound the test, not
+// the production default wait. Tokens must name the same CAF and the kept article must
+// survive expiration. Busy traffic uses tradspool, never another timecaf bucket/class.
 func TestTimecafExpireoverCurrentFile(t *testing.T) {
 	knownIssue(t, "expireover waits for innd's lock on the CAF file innd is writing to; "+
 		"waits for the maintainer")
+	for _, mode := range []string{"idle", "busy-other-storage", "flush", "pause", "throttle"} {
+		t.Run(mode, func(t *testing.T) { timecafExpireoverFlush(t, mode) })
+	}
+}
+
+func timecafExpireoverFlush(t *testing.T, mode string) {
+	t.Helper()
+	args := []string{"-t", "300"}
+	timer := "0"
+	if mode == "idle" || mode == "busy-other-storage" {
+		args, timer = []string{"-t", "1"}, "1"
+	}
 	s := NewSite(t, SiteOptions{
-		Groups: matrixGroups,
+		Groups:  matrixGroups,
+		Args:    args,
+		InnConf: map[string]string{"timer": timer, "readerswhenstopped": "true"},
 		Etc: map[string]string{
-			"storage.conf": "method timecaf {\n    newsgroups: *\n    class: 0\n}\n",
+			"storage.conf": "method timecaf {\n    newsgroups: e2e.expire,e2e.test\n    class: 0\n}\n" +
+				"method tradspool {\n    newsgroups: *\n    class: 1\n}\n",
 			"expire.ctl": "/remember/:11\n*:A:never:never:never\n" +
 				expireGroup + ":A:" + expireDays + ":" + expireDays + ":" + expireDays + "\n",
 		},
 	})
+	// Avoid the last 32 seconds of a bucket, but still assert the actual tokens:
+	// scheduler delays must cause a failed precondition, never a false pass.
+	if left := 256 - time.Now().Unix()%256; left < 32 {
+		time.Sleep(time.Duration(left+1) * time.Second)
+	}
 	old := s.Inject(t, expireGroup, 1)[0]
 	time.Sleep(expireWait)
-	s.Inject(t, "e2e.test", 1) // innd writes to the same CAF file, unless 256 seconds ended
+	kept := s.Inject(t, "e2e.test", 1)[0]
+	oldToken := strings.TrimSpace(s.Run(t, "grephistory", old))
+	keptToken := strings.TrimSpace(s.Run(t, "grephistory", kept))
+	oldPath := timecafPath(t, s.Run(t, "sm", "-c", oldToken))
+	keptPath := timecafPath(t, s.Run(t, "sm", "-c", keptToken))
+	if oldPath != keptPath {
+		t.Fatalf("precondition failed: articles are in different CAFs: %s vs %s", oldPath, keptPath)
+	}
+	t.Logf("same CAF %s: expired=%s kept=%s", oldPath, oldToken, keptToken)
+	wantKept := s.Run(t, "sm", "-R", keptToken)
+	if mode == "busy-other-storage" {
+		stop, done, ready := make(chan struct{}), make(chan int, 1), make(chan struct{})
+		p := s.Peer(t)
+		go func() {
+			count := 0
+			defer func() { done <- count }()
+			for {
+				select {
+				case <-stop:
+					return
+				default:
+				}
+				id := msgID(t)
+				expect(t, p, 335, "IHAVE %s", id)
+				send(t, p, wire(newArticle(id, "e2e.other", "keep tradspool busy", "body")))
+				status(t, p, 235, "IHAVE "+id)
+				count++
+				if count == 1 {
+					close(ready)
+				}
+				time.Sleep(10 * time.Millisecond)
+			}
+		}()
+		defer func() {
+			close(stop)
+			t.Logf("accepted %d tradspool articles during expiration", <-done)
+		}()
+		select {
+		case <-ready:
+		case <-time.After(10 * time.Second):
+			t.Fatal("no successful busy-traffic injection")
+		}
+	} else if mode == "flush" {
+		s.Ctlinnd(t, "flush", "")
+	} else if mode == "pause" || mode == "throttle" {
+		s.Ctlinnd(t, mode, "timecaf flush test")
+		defer s.Ctlinnd(t, "go", "timecaf flush test")
+	}
+	started := time.Now()
 	out, err := runFor(s, 20*time.Second, "expireover")
 	if err != nil {
 		t.Fatalf("expireover with innd writing to the CAF file of an expired article: %v\n%s", err, out)
 	}
+	t.Logf("expireover completed in %s", time.Since(started).Round(time.Millisecond))
 	c := s.Reader(t)
 	if code, line := c.Cmd("STAT %s", old); code != 430 {
 		t.Errorf("STAT %s after expireover: %q, want 430", old, line)
 	}
+	expect(t, c, 223, "STAT %s", kept)
+	expect(t, c, 205, "QUIT")
+	if got := s.Run(t, "sm", "-R", keptToken); got != wantKept {
+		t.Errorf("non-expired article changed during expiration: got %q, want %q", got, wantKept)
+	}
+}
+
+func timecafPath(t *testing.T, explanation string) string {
+	t.Helper()
+	for _, f := range strings.Fields(explanation) {
+		if p, ok := strings.CutPrefix(f, "file="); ok {
+			return p
+		}
+	}
+	t.Fatalf("no CAF path in token explanation: %q", explanation)
+	return ""
 }
