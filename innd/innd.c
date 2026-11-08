@@ -436,6 +436,7 @@ main(int ac, char *av[])
        command-line options if they exist, so read inn.conf first. */
     if (!innconf_read(NULL))
         exit(1);
+    CCinnconfsetup();
 
     /* Parse JCL. */
     CCcopyargv(av);
