@@ -5,12 +5,15 @@ TestAuthProgramTimeout
 TestBytesBodyStartsWithDot
 TestCompress
 TestFilterBodyPerl
+TestFilterBodyPython
 TestFilterHeadPerl
+TestFilterHeadPython
 TestFilterNnrpdQuotedText
 TestHistoryDbzErrors
 TestInncheckFixOutput
 TestInnfeedDebugSnapshotFiles
 TestInnmailAddresses
+TestInnreportNotArchived
 TestMakedbzMalformedHistory
 TestMakehistoryLongOverview
 TestMethodMatrix
@@ -18,6 +21,7 @@ TestNews2mailNoQueue
 TestNews2mailSenders
 TestNewsDailyReportExpireFirst
 TestNewsfeedsVariables
+TestPeerSocketBuffers
 TestPeerStoreFailure
 TestProcbatchCheck
 TestReloadAllInnConfChanged
