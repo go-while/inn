@@ -259,9 +259,8 @@ $index = &GetValue($output{'default'}{'index'})
 $index = $ref{'i'} if defined $ref{'i'};
 $index = $ref{'index'} if defined $ref{'index'};
 
-$ARCHIVE = &GetValue($output{'default'}{'archive'})
+$ARCHIVE = &GetValue($output{'default'}{'archive'}) eq 'true' ? 1 : 0
   if defined $output{'default'}{'archive'};
-$ARCHIVE = 1 if $ARCHIVE eq 'true';
 $ARCHIVE = 0 if defined $ref{'a'} || defined $ref{'archive'};
 $ARCHIVE = 1 if ($ref{'a'} || $ref{'archive'}) && $HTML;
 $ARCHIVE = 0 unless $HTML;
@@ -299,9 +298,9 @@ $MAX_UNRECOGNIZED = &GetValue($output{'default'}{'max_unknown'})
   if defined $output{'default'}{'max_unknown'};
 $MAX_UNRECOGNIZED = $ref{'maxunrec'} if defined($ref{'maxunrec'});
 
-$CASE_SENSITIVE = &GetValue($output{'default'}{'casesensitive'})
+$CASE_SENSITIVE
+  = &GetValue($output{'default'}{'casesensitive'}) eq 'true' ? 1 : 0
   if defined $output{'default'}{'casesensitive'};
-$CASE_SENSITIVE = 1 if $CASE_SENSITIVE eq 'true';
 $CASE_SENSITIVE = 0 if defined $ref{'casesensitive'};
 $CASE_SENSITIVE = 1 if $ref{'casesensitive'};
 
@@ -1186,6 +1185,12 @@ sub Make_Index($$$$) {
                 my @res = split /\|/, $data{$k};
                 my ($year) = $k =~ m/^news-notice\.
                        (\d+)\.\d+\.\d+-\d+.\d+.\d+$HTML_EXTENSION/x;
+                # When reports are not archived, the file name has no date.
+                # The entry for the current report then gets its year.
+                if (!$year && $k eq $filename) {
+                    $year = $current_year;
+                    $year-- if ($wrap_around > 0);
+                }
                 next unless $year;    # bad filename... strange.
                 my ($start, $end)
                   = $res[$date_idx - 1]
@@ -2365,35 +2370,41 @@ sub Chrono {
         4, $title, $black,
     );
 
-    # Legend
+    # Legend.  Without any data to plot (no usable entry in innreport.db),
+    # statistics are not available.
+    my $stat = sub {
+        my ($label, $value) = @_;
+        return "$label:   n/a" if $t_in == 0;
+        return sprintf "$label: %5.1f $unit", $value * $factor;
+    };
     my $y_in = $ymax - $size - $FontHeight + 5;
     $image->string(gdSmallFont(), $marginl, $y_in, $legend_in, $col_in);
     $image->string(
         gdSmallFont(), $xmax / 4, $y_in,
-        (sprintf "Min: %5.1f $unit", $min_in * $factor), $black,
+        $stat->('Min', $min_in), $black,
     );
     $image->string(
         gdSmallFont(), $xmax / 2, $y_in,
-        (sprintf "Avg: %5.1f $unit", $s_in / $t_in * $factor), $black,
+        $stat->('Avg', $t_in ? $s_in / $t_in : 0), $black,
     );
     $image->string(
         gdSmallFont(), 3 * $xmax / 4,
-        $y_in, (sprintf "Max: %5.1f $unit", $max_in * $factor), $black,
+        $y_in, $stat->('Max', $max_in), $black,
     );
 
     my $y_out = $ymax - $size + 5;
     $image->string(gdSmallFont(), $marginl, $y_out, $legend_out, $col_out);
     $image->string(
         gdSmallFont(), $xmax / 4, $y_out,
-        (sprintf "Min: %5.1f $unit", $min_out * $factor), $black,
+        $stat->('Min', $min_out), $black,
     );
     $image->string(
         gdSmallFont(), $xmax / 2, $y_out,
-        (sprintf "Avg: %5.1f $unit", $s_out / $t_out * $factor), $black,
+        $stat->('Avg', $t_out ? $s_out / $t_out : 0), $black,
     );
     $image->string(
         gdSmallFont(), 3 * $xmax / 4,
-        $y_out, (sprintf "Max: %5.1f $unit", $max_out * $factor), $black,
+        $y_out, $stat->('Max', $max_out), $black,
     );
 
     open(IMG, "> $filename") || die "Error: Can't open \"$filename\": $!\n";
