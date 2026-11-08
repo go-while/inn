@@ -296,6 +296,7 @@ while [ ! -S "$tmpdir/ovsqlite.sock" ] && [ $waited -lt 50 ]; do
         echo "# Server restart failed, log:"
         sed 's/^/# /' "$tmpdir/server2.log"
         printcount "not ok" "# server restart"
+        printcount "not ok" "# out-of-order inserts with low article cutoff"
         printcount "not ok" "# server re-stop"
         printcount "not ok" "# reader after restart"
         rm -rf "$tmpdir"
