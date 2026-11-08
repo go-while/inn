@@ -250,6 +250,12 @@ B<-v> flag, were not prefixed with a hash sign like the other messages.
 The file names in the generated B<chown>, B<chgrp> and B<chmod> commands are
 now quoted, so that names containing spaces or quotes work.
 
+=item *
+
+When the I<timer> parameter in F<inn.conf> is set, B<nnrpd> now also
+collects the idle time of readers using TLS.  It was only counted until
+the TLS negotiation.
+
 =back
 
 =head1 Changes in 2.7.4 (2026-06-22)
