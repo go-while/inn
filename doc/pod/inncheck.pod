@@ -59,7 +59,8 @@ In this case the form I<file>B<=>I<path> will be the more useful.
 Use the B<-f> flag (or B<--fix>) to have B<inncheck> print the appropriate
 B<chown>/B<chgrp>/B<chmod> command necessary to fix a problem that it
 reports.  Any other output lines will be prefixed with a hash sign (C<#>)
-to make the output be valid input for a shell.  Note that the B<--perm>
+to make the output be valid input for a shell; file names in the commands
+are quoted for it.  Note that the B<--perm>
 flag must be used as well when using this flag.
 
 =item B<--noperm>
@@ -127,10 +128,6 @@ F<innfeed.conf> file, do:
     inncheck -a newsfeeds=/var/tmp/newsfeeds.testing innfeed.conf=
 
 =head1 BUGS
-
-If the B<-f> and B<--perm> options are used together, along with B<-a> or
-some I<file> or I<file>B<=>I<path> arguments that refer to a file with
-a syntax problem, then the output will no longer be valid input for a shell.
 
 In most cases, B<inncheck> currently does not correctly understand option
 values spanning multiple lines.  If you get error messages about runaway
