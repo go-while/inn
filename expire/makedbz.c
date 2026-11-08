@@ -4,6 +4,7 @@
 
 #include "portable/system.h"
 
+#include <ctype.h>
 #include <errno.h>
 #include <syslog.h>
 
@@ -67,15 +68,14 @@ Countlines(void)
     if (qp == NULL)
         sysdie("cannot open %s", TextFile);
 
-    /* Loop through all lines in the text file. */
+    /* Loop through all lines in the text file.  Lines too long for QIO are
+       counted too:  Rebuild() skips them but they take a line. */
     count = 0;
-    for (; QIOread(qp) != NULL;)
+    while (QIOread(qp) != NULL || QIOtoolong(qp))
         count++;
     if (QIOerror(qp))
         sysdie("cannot read %s near line %lu", TextFile,
                (unsigned long) count);
-    if (QIOtoolong(qp))
-        sysdie("line %lu of %s is too long", (unsigned long) count, TextFile);
 
     QIOclose(qp);
     return count;
@@ -83,7 +83,29 @@ Countlines(void)
 
 
 /*
-**  Rebuild the DBZ file from the text file.
+**  Check the key of a history line:  "[", the hash as hexadecimal digits,
+**  "]" and nothing else.  TextToHash would silently decode anything.
+*/
+static bool
+ValidHashText(const char *p)
+{
+    size_t i;
+
+    if (*p != '[')
+        return false;
+    for (i = 1; i <= sizeof(HASH) * 2; i++)
+        if (!isxdigit((unsigned char) p[i]))
+            return false;
+    return p[i] == ']' && p[i + 1] == '\0';
+}
+
+
+/*
+**  Rebuild the DBZ file from the text file.  Malformed lines are reported
+**  with their line number and skipped, so that one bad line does not leave
+**  the whole history without a dbz index.  The articles of those lines
+**  cannot be found by message-ID; expire discards the lines when it rewrites
+**  the text file.
 */
 static void
 Rebuild(off_t size, bool IgnoreOld, bool Overwrite)
@@ -92,6 +114,7 @@ Rebuild(off_t size, bool IgnoreOld, bool Overwrite)
     char *p;
     char *save;
     off_t count;
+    unsigned long skipped = 0;
     off_t where;
     HASH key;
     char temp[SMBUF];
@@ -159,30 +182,40 @@ Rebuild(off_t size, bool IgnoreOld, bool Overwrite)
 
     /* Loop through all lines in the text file. */
     count = 0;
-    for (where = QIOtell(qp); (p = QIOread(qp)) != NULL; where = QIOtell(qp)) {
-        count++;
-        if ((save = strchr(p, HIS_FIELDSEP)) == NULL) {
-            warn("bad line #%lu: %.40s", (unsigned long) count, p);
-            if (temp[0])
-                unlink(temp);
-            exit(1);
-        }
-        *save = '\0';
-        switch (*p) {
-        case '[':
-            if (strlen(p) != ((sizeof(HASH) * 2) + 2)) {
-                warn("invalid length for hash %s, skipping", p);
-                continue;
-            }
-            key = TextToHash(p + 1);
-            break;
-        default:
-            warn("invalid message ID %s in history text", p);
+    for (where = QIOtell(qp);; where = QIOtell(qp)) {
+        if ((p = QIOread(qp)) == NULL) {
+            if (!QIOtoolong(qp))
+                break;
+            count++;
+            warn("line %lu: too long, skipping", (unsigned long) count);
+            skipped++;
             continue;
         }
+        count++;
+        if ((save = strchr(p, HIS_FIELDSEP)) == NULL) {
+            warn("line %lu: field separator missing, skipping: %.40s",
+                 (unsigned long) count, p);
+            skipped++;
+            continue;
+        }
+        *save = '\0';
+        if (*p != '[') {
+            warn("line %lu: invalid message ID %.40s, skipping",
+                 (unsigned long) count, p);
+            skipped++;
+            continue;
+        }
+        if (!ValidHashText(p)) {
+            warn("line %lu: invalid hash %.40s, skipping",
+                 (unsigned long) count, p);
+            skipped++;
+            continue;
+        }
+        key = TextToHash(p + 1);
         switch (dbzstore(key, where)) {
         case DBZSTORE_EXISTS:
-            warn("duplicate message ID %s in history text", p);
+            warn("line %lu: duplicate message ID %s in history text",
+                 (unsigned long) count, p);
             break;
         case DBZSTORE_ERROR:
             syswarn("cannot store %s", p);
@@ -200,12 +233,9 @@ Rebuild(off_t size, bool IgnoreOld, bool Overwrite)
             unlink(temp);
         exit(1);
     }
-    if (QIOtoolong(qp)) {
-        warn("line %lu is too long", (unsigned long) count);
-        if (temp[0])
-            unlink(temp);
-        exit(1);
-    }
+    if (skipped > 0)
+        warn("%lu malformed line%s skipped in %s", skipped,
+             skipped == 1 ? "" : "s", TextFile);
 
     /* Close files. */
     QIOclose(qp);
