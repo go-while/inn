@@ -1280,24 +1280,19 @@ func TestBytesBodyStartsWithDot(t *testing.T) {
 	}
 }
 
-// TestOvsqliteReaderSeesNewArticle: with the ovsqlite overview, a reader sees an article as
-// soon as innd has accepted it. With walmode (the default since 2.8.0), nnrpd reads the
-// database directly instead of asking ovsqlite-server, and sees only committed rows; the
-// server commits transtimelimit (10 seconds by default) after the first row of a
-// transaction, so a new article stays out of GROUP and OVER for up to 10 seconds, while
-// ARTICLE by Message-ID already finds it. Without walmode, readers go through the server,
-// which sees its own transaction; with transrowlimit 1, the server commits each row at once.
+// TestOvsqliteReaderSeesNewArticle checks the fork's bounded WRITE-IDLE policy,
+// not the original test's immediate-first-GROUP requirement. A persistent reader
+// must see a quiet WAL write within two seconds; non-WAL and one-row commits
+// retain the original first-GROUP predicate. Record first-observation timing so
+// a late reader cannot conceal the old ten-second transaction delay.
 func TestOvsqliteReaderSeesNewArticle(t *testing.T) {
 	for _, tc := range []struct{ name, conf string }{
 		{"walmode=false", "walmode: false\n"},
 		{"walmode=true", "walmode: true\n"},
 		{"walmode=true/transrowlimit=1", "walmode: true\ntransrowlimit: 1\n"},
+		{"walmode=true/transtimelimit=0", "walmode: true\ntranstimelimit: 0\n"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			if tc.name == "walmode=true" {
-				knownIssue(t, "with walmode, nnrpd sees a new article only after "+
-					"ovsqlite-server commits (up to transtimelimit, 10 s); waits for the maintainer")
-			}
 			s := NewSite(t, SiteOptions{
 				InnConf: map[string]string{"ovmethod": "ovsqlite"},
 				Etc:     map[string]string{"ovsqlite.conf": tc.conf},
@@ -1309,25 +1304,31 @@ func TestOvsqliteReaderSeesNewArticle(t *testing.T) {
 			accepted := time.Now()
 			c := s.Reader(t)
 			expect(t, c, 223, "STAT %s", id)
+			expect(t, c, 220, "ARTICLE %s", id)
+			_ = c.ReadDotLines()
 			got := expect(t, c, 211, "GROUP e2e.test")
-			expect(t, c, 205, "QUIT")
+			first := time.Since(accepted)
+			t.Logf("first GROUP %s after acceptance: %s", first, got)
+			if first >= 2*time.Second {
+				t.Fatal("first observation too late to test the two-second idle-visibility contract")
+			}
 			if got == "211 1 1 1 e2e.test" {
+				expect(t, c, 205, "QUIT")
 				return
 			}
-			// How long until it shows up.
-			var seen time.Duration
-			for time.Since(accepted) < 15*time.Second {
-				time.Sleep(200 * time.Millisecond)
-				r := s.Reader(t)
-				line := expect(t, r, 211, "GROUP e2e.test")
-				expect(t, r, 205, "QUIT")
-				if field(line, 1) == "1" {
-					seen = time.Since(accepted)
-					break
+			if tc.name != "walmode=true" {
+				t.Fatalf("immediate control GROUP: %q, want one article", got)
+			}
+			for time.Since(accepted) < 2*time.Second {
+				time.Sleep(20 * time.Millisecond)
+				line := expect(t, c, 211, "GROUP e2e.test")
+				if line == "211 1 1 1 e2e.test" {
+					t.Logf("persistent GROUP sees committed article %s after acceptance", time.Since(accepted))
+					expect(t, c, 205, "QUIT")
+					return
 				}
 			}
-			t.Errorf("GROUP right after innd accepted %s (STAT finds it): %q, want \"211 1 1 1 e2e.test\"; "+
-				"GROUP showed it %v after it was accepted (0s: not within 15s)", id, got, seen.Round(100*time.Millisecond))
+			t.Errorf("WAL GROUP did not see %s within two seconds after quiet acceptance; first GROUP %q", id, got)
 		})
 	}
 }
