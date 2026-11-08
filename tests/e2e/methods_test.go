@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strconv"
 	"strings"
@@ -1337,6 +1338,9 @@ func TestOvsqliteReaderSeesNewArticle(t *testing.T) {
 // the production default wait. Tokens must name the same CAF and the kept article must
 // survive expiration. Busy traffic uses tradspool, never another timecaf bucket/class.
 func TestTimecafExpireoverCurrentFile(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("blocked-waiter precondition requires Linux /proc/locks")
+	}
 	knownIssue(t, "expireover waits for innd's lock on the CAF file innd is writing to; "+
 		"waits for the maintainer")
 	for _, mode := range []string{"idle", "busy-other-storage", "flush", "pause", "throttle"} {
@@ -1346,15 +1350,12 @@ func TestTimecafExpireoverCurrentFile(t *testing.T) {
 
 func timecafExpireoverFlush(t *testing.T, mode string) {
 	t.Helper()
-	args := []string{"-t", "300"}
-	timer := "0"
-	if mode == "idle" || mode == "busy-other-storage" {
-		args, timer = []string{"-t", "1"}, "1"
-	}
 	s := NewSite(t, SiteOptions{
-		Groups:  matrixGroups,
-		Args:    args,
-		InnConf: map[string]string{"timer": timer, "readerswhenstopped": "true"},
+		Groups: matrixGroups,
+		// Do not allow an automatic flush during setup. Only shorten the
+		// timeout after observing both the owner and the blocked waiter.
+		Args:    []string{"-t", "3600"},
+		InnConf: map[string]string{"timer": "0", "readerswhenstopped": "true"},
 		Etc: map[string]string{
 			"storage.conf": "method timecaf {\n    newsgroups: e2e.expire,e2e.test\n    class: 0\n}\n" +
 				"method tradspool {\n    newsgroups: *\n    class: 1\n}\n",
@@ -1411,16 +1412,56 @@ func timecafExpireoverFlush(t *testing.T, mode string) {
 		case <-time.After(10 * time.Second):
 			t.Fatal("no successful busy-traffic injection")
 		}
+	}
+	owner := timecafLockOwner(t, oldPath)
+	exe, err := os.Readlink(fmt.Sprintf("/proc/%d/exe", owner))
+	if err != nil || exe != filepath.Join(s.Prefix, "bin", "innd") {
+		t.Fatalf("CAF owner %d executable %q (%v), want innd", owner, exe, err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, filepath.Join(s.Prefix, "bin", "expireover"))
+	cmd.Dir, cmd.Env = s.Dir, append(os.Environ(), s.Env...)
+	var out capped
+	cmd.Stdout, cmd.Stderr = &out, &out
+	if err := cmd.Start(); err != nil {
+		t.Fatal(err)
+	}
+	done := make(chan struct{})
+	var waitErr error
+	go func() { waitErr = cmd.Wait(); close(done) }()
+	defer func() { cancel(); <-done }()
+	limit := time.Now().Add(5 * time.Second)
+	for {
+		select {
+		case <-done:
+			t.Fatalf("expireover ended before lock-wait precondition: %v\n%s", waitErr, out.String())
+		default:
+		}
+		if waiter := timecafWaiter(t, oldPath, cmd.Process.Pid); waiter != "" {
+			if current := timecafLockOwner(t, oldPath); current != owner {
+				t.Fatalf("CAF owner changed before trigger: %d -> %d", owner, current)
+			}
+			t.Logf("precondition: innd=%d owns CAF; expireover=%d blocked: %s", owner, cmd.Process.Pid, waiter)
+			break
+		}
+		if time.Now().After(limit) {
+			t.Fatal("expireover did not become a CAF lock waiter within 5s")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	started := time.Now()
+	if mode == "idle" || mode == "busy-other-storage" {
+		s.Ctlinnd(t, "param", "t", "1")
 	} else if mode == "flush" {
 		s.Ctlinnd(t, "flush", "")
 	} else if mode == "pause" || mode == "throttle" {
 		s.Ctlinnd(t, mode, "timecaf flush test")
 		defer s.Ctlinnd(t, "go", "timecaf flush test")
 	}
-	started := time.Now()
-	out, err := runFor(s, 20*time.Second, "expireover")
-	if err != nil {
-		t.Fatalf("expireover with innd writing to the CAF file of an expired article: %v\n%s", err, out)
+	<-done
+	if waitErr != nil {
+		t.Fatalf("expireover after proven CAF contention: %v (deadline %v)\n%s", waitErr, ctx.Err(), out.String())
 	}
 	t.Logf("expireover completed in %s", time.Since(started).Round(time.Millisecond))
 	c := s.Reader(t)
@@ -1432,6 +1473,50 @@ func timecafExpireoverFlush(t *testing.T, mode string) {
 	if got := s.Run(t, "sm", "-R", keptToken); got != wantKept {
 		t.Errorf("non-expired article changed during expiration: got %q, want %q", got, wantKept)
 	}
+}
+
+// Query rather than acquire: only innd's lock may protect the writer.
+func timecafLockOwner(t *testing.T, path string) int32 {
+	t.Helper()
+	f, err := os.OpenFile(path, os.O_RDWR, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+	lock := syscall.Flock_t{Type: syscall.F_WRLCK, Whence: 0}
+	if err := syscall.FcntlFlock(f.Fd(), syscall.F_GETLK, &lock); err != nil {
+		t.Fatal(err)
+	}
+	if lock.Type != syscall.F_WRLCK || lock.Pid <= 0 {
+		t.Fatalf("precondition failed: CAF has no write-lock owner: %+v", lock)
+	}
+	return lock.Pid
+}
+
+func timecafWaiter(t *testing.T, path string, pid int) string {
+	t.Helper()
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	stat := info.Sys().(*syscall.Stat_t)
+	// Linux's device encoding, as printed in /proc/locks.
+	dev := uint64(stat.Dev)
+	major := (dev>>8)&0xfff | (dev>>32)&0xfffff000
+	minor := dev&0xff | (dev>>12)&0xffffff00
+	key := fmt.Sprintf("%02x:%02x:%d", major, minor, stat.Ino)
+	locks, err := os.ReadFile("/proc/locks")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, line := range strings.Split(string(locks), "\n") {
+		f := strings.Fields(line)
+		if len(f) == 9 && f[1] == "->" && f[2] == "POSIX" && f[4] == "WRITE" &&
+			f[5] == strconv.Itoa(pid) && f[6] == key && f[7] == "0" && f[8] == "EOF" {
+			return line
+		}
+	}
+	return ""
 }
 
 func timecafPath(t *testing.T, explanation string) string {
