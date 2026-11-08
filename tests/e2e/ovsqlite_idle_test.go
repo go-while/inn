@@ -3,6 +3,8 @@ package e2e
 import (
 	"encoding/binary"
 	"fmt"
+	"io"
+	"net"
 	"os"
 	"path/filepath"
 	"strings"
@@ -10,28 +12,115 @@ import (
 	"time"
 )
 
-// A stream of read-only client handshakes must not postpone write-idle commit.
+// Send actual read-only IPC requests: ordinary WAL NNTP readers bypass the
+// server entirely, so merely opening many NNTP readers would not prove this.
 func TestOvsqliteIdleWithReaderTraffic(t *testing.T) {
 	s := ovsqliteIdleSite(t, "walmode: true\n")
+	r := s.Reader(t)
+	expect(t, r, 211, "GROUP e2e.test")
+	conn, err := net.DialTimeout("unix", filepath.Join(s.Dir, "run", "ovsqlite.sock"), time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+	// ovsqlite-private.h: hello=0, protocol version=1, OV_READ=1.
+	hello := binary.NativeEndian.AppendUint32(nil, 1)
+	hello = binary.NativeEndian.AppendUint32(hello, 1)
+	if code, err := ovsqliteReadRPC(conn, 0, hello); err != nil || code != 0 {
+		t.Fatalf("read-only hello response %d (%v), want response_ok", code, err)
+	}
+	type pressureResult struct {
+		count  int
+		maxGap time.Duration
+		err    error
+	}
+	stop, ready, done := make(chan struct{}), make(chan struct{}), make(chan pressureResult, 1)
+	go func() {
+		var result pressureResult
+		last := time.Now()
+		defer func() { done <- result }()
+		for {
+			select {
+			case <-stop:
+				return
+			default:
+			}
+			group := "e2e.test"
+			payload := binary.NativeEndian.AppendUint16(nil, uint16(len(group)))
+			payload = append(payload, group...)
+			// request_get_groupinfo=3, response_groupinfo=2.
+			if code, err := ovsqliteReadRPC(conn, 3, payload); err != nil || code != 2 {
+				result.err = fmt.Errorf("get_groupinfo response %d (%v), want response_groupinfo", code, err)
+				return
+			}
+			now := time.Now()
+			if gap := now.Sub(last); gap > result.maxGap {
+				result.maxGap = gap
+			}
+			last = now
+			result.count++
+			if result.count == 1 {
+				close(ready)
+			}
+			time.Sleep(10 * time.Millisecond)
+		}
+	}()
+	defer func() {
+		close(stop)
+		result := <-done
+		t.Logf("read-only IPC requests completed: %d; max response gap %s", result.count, result.maxGap)
+		if result.err != nil || result.count < 10 || result.maxGap >= 200*time.Millisecond {
+			t.Errorf("pressure precondition failed: %+v", result)
+		}
+	}()
+	select {
+	case <-ready:
+	case <-time.After(time.Second):
+		t.Fatal("read-only IPC traffic failed to start")
+	}
 	id := s.Inject(t, "e2e.test", 1)[0]
 	accepted := time.Now()
+	first := expect(t, r, 211, "GROUP e2e.test")
+	if elapsed := time.Since(accepted); elapsed >= 200*time.Millisecond || field(first, 1) != "0" {
+		t.Fatalf("pressure precondition failed: first GROUP after %s is %q; need uncommitted row before grace", elapsed, first)
+	}
 	for n := 0; time.Since(accepted) < 2*time.Second; n++ {
-		c := s.Reader(t)
-		expect(t, c, 223, "STAT %s", id)
-		line := expect(t, c, 211, "GROUP e2e.test")
-		expect(t, c, 205, "QUIT")
-		if n == 0 {
-			t.Logf("first GROUP %s after acceptance: %s", time.Since(accepted), line)
-			if time.Since(accepted) >= 2*time.Second {
-				t.Fatal("first reader too late to distinguish the old transaction delay")
-			}
-		}
+		expect(t, r, 223, "STAT %s", id)
+		line := expect(t, r, 211, "GROUP e2e.test")
 		if line == "211 1 1 1 e2e.test" {
-			t.Logf("visible after %s with %d read-only client connections", time.Since(accepted), n+1)
+			t.Logf("visible after %s with active read-only IPC and %d persistent GROUP polls", time.Since(accepted), n+1)
+			expect(t, r, 205, "QUIT")
 			return
 		}
+		time.Sleep(20 * time.Millisecond)
 	}
 	t.Fatal("reader traffic postponed the idle commit beyond two seconds")
+}
+
+// A small valid-request client for the local native-endian ovsqlite protocol.
+func ovsqliteReadRPC(conn net.Conn, code byte, payload []byte) (byte, error) {
+	if err := conn.SetDeadline(time.Now().Add(time.Second)); err != nil {
+		return 0, err
+	}
+	request := binary.NativeEndian.AppendUint32(nil, uint32(5+len(payload)))
+	request = append(request, code)
+	request = append(request, payload...)
+	if n, err := conn.Write(request); err != nil || n != len(request) {
+		return 0, fmt.Errorf("read-only IPC write %d/%d: %v", n, len(request), err)
+	}
+	var header [4]byte
+	if _, err := io.ReadFull(conn, header[:]); err != nil {
+		return 0, err
+	}
+	size := binary.NativeEndian.Uint32(header[:])
+	if size < 5 || size > 4096 {
+		return 0, fmt.Errorf("unexpected read-only IPC response size %d", size)
+	}
+	response := make([]byte, int(size)-4)
+	if _, err := io.ReadFull(conn, response); err != nil {
+		return 0, err
+	}
+	return response[0], nil
 }
 
 func ovsqliteIdleSite(t *testing.T, conf string) *Site {
