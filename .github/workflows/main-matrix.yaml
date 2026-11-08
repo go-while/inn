@@ -19,8 +19,8 @@
 ##  Runs on a push to this branch, weekly, and by hand (Actions, main-matrix,
 ##  "Run workflow"), where one ref (branch, tag or commit) can be chosen
 ##  instead of main and 2.7.  GitHub runs scheduled workflows only from the
-##  default branch of the repository, so the schedule takes effect only if
-##  this file is there too.
+##  default branch, so main-matrix is the fork's default branch (since
+##  2026-11-08); fork PRs therefore need an explicit base (--base main).
 
 name: main-matrix
 
