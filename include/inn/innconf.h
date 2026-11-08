@@ -218,6 +218,8 @@ struct innconf {
     unsigned long nicenewnews; /* If NEWNEWS command is used, nice to this */
     unsigned long nicennrpd;   /* nnrpd is niced to this */
     unsigned long pauseretrytime; /* Seconds before seeing if pause is ended */
+    unsigned long peerrcvbufsize; /* SO_RCVBUF of peer sockets, 0 = default */
+    unsigned long peersndbufsize; /* SO_SNDBUF of peer sockets, 0 = default */
     unsigned long peertimeout;    /* How long peers can be inactive */
     long rlimitnofile;            /* File descriptor limit to set */
 

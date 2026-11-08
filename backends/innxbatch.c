@@ -446,12 +446,20 @@ main(int ac, char *av[])
     ToServer = fileno(To);
 
 #if defined(SOL_SOCKET) && defined(SO_SNDBUF) && defined(SO_RCVBUF)
-    i = 24 * 1024;
-    if (setsockopt(ToServer, SOL_SOCKET, SO_SNDBUF, (char *) &i, sizeof i) < 0)
-        syswarn("cant setsockopt(SNDBUF)");
-    if (setsockopt(FromServer, SOL_SOCKET, SO_RCVBUF, (char *) &i, sizeof i)
-        < 0)
-        syswarn("cant setsockopt(RCVBUF)");
+    /* Leave the kernel defaults alone unless a size is set in inn.conf. */
+    if (innconf->peersndbufsize > 0) {
+        i = (int) innconf->peersndbufsize;
+        if (setsockopt(ToServer, SOL_SOCKET, SO_SNDBUF, (char *) &i, sizeof i)
+            < 0)
+            syswarn("cant setsockopt(SNDBUF)");
+    }
+    if (innconf->peerrcvbufsize > 0) {
+        i = (int) innconf->peerrcvbufsize;
+        if (setsockopt(FromServer, SOL_SOCKET, SO_RCVBUF, (char *) &i,
+                       sizeof i)
+            < 0)
+            syswarn("cant setsockopt(RCVBUF)");
+    }
 #endif /* defined(SOL_SOCKET) && defined(SO_SNDBUF) && defined(SO_RCVBUF) */
 
     GotInterrupt = false;
