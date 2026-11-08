@@ -17,7 +17,10 @@ yet, and builds and tests each on:
 
 It runs on a push to this branch and by hand (Actions, main-matrix, "Run
 workflow": give one ref such as a tag `inn-2.7.4` instead of main and 2.7, or
-untick the patches to test upstream as it is).
+untick the patches to test upstream as it is).  The `repo` input fetches the
+ref from another repository, e.g. `repo=go-while/inn ref=integration` tests
+the fork's integration branch (upstream main with all open fork PRs merged);
+pushes and the weekly run always test InterNetNews/inn.
 
 ## Patches
 

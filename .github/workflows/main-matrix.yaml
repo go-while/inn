@@ -18,7 +18,11 @@
 ##
 ##  Runs on a push to this branch, weekly, and by hand (Actions, main-matrix,
 ##  "Run workflow"), where one ref (branch, tag or commit) can be chosen
-##  instead of main and 2.7.  GitHub runs scheduled workflows only from the
+##  instead of main and 2.7, and "repo" fetches the ref(s) from another
+##  repository than InterNetNews/inn, e.g. go-while/inn with ref integration
+##  (upstream main with all open fork fixes merged; it has no patches/
+##  directory, so no patches are applied).  Pushes and the weekly run always
+##  test InterNetNews/inn.  GitHub runs scheduled workflows only from the
 ##  default branch, so main-matrix is the fork's default branch (since
 ##  2026-11-08); fork PRs therefore need an explicit base (--base main).
 
@@ -29,8 +33,11 @@ name: main-matrix
     branches: [main-matrix]
   workflow_dispatch:
     inputs:
+      repo:
+        description: Repository to fetch the ref from (owner/name)
+        default: InterNetNews/inn
       ref:
-        description: InterNetNews/inn ref to test (empty = main and 2.7)
+        description: Ref of that repository to test (empty = main and 2.7)
         default: ""
       patches:
         description: Apply the patches in patches/<ref>/ that upstream lacks
@@ -50,7 +57,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: main-matrix-${{ github.ref }}-${{ inputs.ref || 'all' }}-${{ inputs.patches }}-${{ inputs.only || 'all' }}-${{ inputs.macos }}
+  group: main-matrix-${{ github.ref }}-${{ inputs.repo || 'InterNetNews/inn' }}-${{ inputs.ref || 'all' }}-${{ inputs.patches }}-${{ inputs.only || 'all' }}-${{ inputs.macos }}
   cancel-in-progress: true
 
 jobs:
@@ -83,20 +90,26 @@ jobs:
       # One tarball per ref, inn-src-<ref>.tar.gz ("/" in the ref becomes
       # "_"): inn/ is the source tree with configure generated; e2e-distro
       # sits next to it, outside the tree, so that upstream's make
-      # check-manifest does not see it.  (inputs.patches is empty on a push
-      # or a schedule, and an empty value equals false in an expression.)
+      # check-manifest does not see it.  (inputs.patches and inputs.repo are
+      # empty on a push or a schedule, and an empty value equals false in an
+      # expression.)
       - name: Fetch, patch, make the tarballs
         env:
           PATCHES: ${{ github.event_name != 'workflow_dispatch' || inputs.patches }}
           ONLY: ${{ inputs.only }}
+          REPO: ${{ inputs.repo || 'InterNetNews/inn' }}
         run: |
+          if ! printf '%s\n' "$REPO" | grep -Eqx '[A-Za-z0-9._-]+/[A-Za-z0-9._-]+'; then
+            echo "::error::invalid repo \"$REPO\": expected owner/name"
+            exit 1
+          fi
           while read -r ref; do
             safe=$(printf '%s' "$ref" | tr '/' '_')
             rm -rf src && git init -q src
-            git -C src fetch -q --depth 1 https://github.com/InterNetNews/inn.git "$ref"
+            git -C src fetch -q --depth 1 "https://github.com/$REPO.git" "$ref"
             git -C src checkout -q FETCH_HEAD
             {
-              echo "### InterNetNews/inn $ref"
+              echo "### $REPO $ref"
               echo "commit \`$(git -C src rev-parse --short=9 HEAD)\`: $(git -C src log -1 --format=%s)"
               echo
             } >>"$GITHUB_STEP_SUMMARY"
@@ -249,7 +262,8 @@ jobs:
           if-no-files-found: ignore
 
   # The e2e tests of the fork's e2e branch (tests/e2e, Go) against plain
-  # upstream.  They also check bugs that only fork PRs fix; those tests are
+  # upstream (or against the ref of inputs.repo, e.g. go-while/inn
+  # integration).  They also check bugs that only fork PRs fix; those tests are
   # listed in e2e-known-failures/<ref>.txt.  The job fails only when another
   # test fails (a regression upstream, or a new e2e test missing from the
   # list), so a failed weekly run means something to look at.  Listed tests
@@ -266,6 +280,7 @@ jobs:
         ref: ${{ fromJSON(needs.source.outputs.refs) }}
     env:
       REF: ${{ matrix.ref }}
+      REPO: ${{ inputs.repo || 'InterNetNews/inn' }}
     steps:
       - name: Checkout the fork's e2e branch
         uses: actions/checkout@v7
@@ -311,7 +326,7 @@ jobs:
           known="matrix/e2e-known-failures/$(printf '%s' "$REF" | tr '/' '_').txt"
           rc=0
           {
-            echo "### e2e tests of the fork against upstream $REF"
+            echo "### e2e tests of the fork against $REPO $REF"
             echo "(e2e branch $(git -C e2e rev-parse --short=9 HEAD))"
             echo
             if [ ! -f "$log" ]; then
