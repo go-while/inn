@@ -7,6 +7,7 @@ TestCompress
 TestFilterHeadPerl
 TestFilterHeadPython
 TestInnfeedDebugSnapshotFiles
+TestMethodMatrix
 TestNews2mailNoQueue
 TestPeerSocketBuffers
 TestSIGTERMWhileBusy
