@@ -7,7 +7,9 @@ control.ctl - Specify handling of Usenet control messages
 The file I<pathetc>/control.ctl is used to determine what action is taken
 when a control message is received.  It is read by B<controlchan>, which
 is normally invoked as a channel program by B<innd>.  When F<control.ctl>
-is modified, B<controlchan> notices this automatically and reloads it.
+is modified, B<controlchan> notices this automatically and reloads it,
+so nothing needs to be reloaded by hand.  After any changes, you can run
+C<inncheck> to perform basic syntax checks.
 
 If a F<control.ctl.local> file exists in I<pathetc>, it is read by
 B<controlchan> after F<control.ctl> (the resulting behaviour is as

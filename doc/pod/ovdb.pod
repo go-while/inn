@@ -86,7 +86,14 @@ and B<innd> (or B<makehistory>) will create the files as necessary in
 that directory.  Also, make sure the directory is owned by the news user.
 
 Other parameters for configuring ovdb are in the F<ovdb.conf>
-configuration file.  The following parameters can be set in that file:
+configuration file.  Every program that opens the overview database reads
+it at that time: B<innd> at startup, B<nnrpd> each time it is spawned for a
+new connection, and B<ovdb_init>, B<ovdb_monitor> and B<ovdb_server> when
+B<rc.news> starts them.  F<ovdb.conf> cannot be reloaded with C<ctlinnd
+reload>, and C<ctlinnd xexec innd> does not restart B<ovdb_monitor> and
+B<ovdb_server>; to make a change take effect, shut down INN with C<rc.news
+stop> (be sure all B<nnrpd> processes have exited) and start it again
+with B<rc.news>.  The following parameters can be set in that file:
 
 =over 4
 
