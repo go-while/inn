@@ -1,0 +1,15 @@
+# e2e tests of the fork that fail on go-while/inn branch integration-2.7 (upstream 2.7 with the
+# fork's bug fixes meant for 2.7.5), run with repo=go-while/inn ref=integration-2.7, because their
+# fix is a feature excluded from the branch or an upstream main change not in 2.7.  One test name
+# per line.  Derived from 2.7.txt minus the tests whose fix is on the branch.
+TestAuthProgramTimeout
+TestCompress
+TestFilterHeadPerl
+TestFilterHeadPython
+TestInnfeedDebugSnapshotFiles
+TestNews2mailNoQueue
+TestPeerSocketBuffers
+TestSIGTERMWhileBusy
+TestSIGTERMWhileIdle
+TestStartTLSDump
+TestStartTLSLogLevel
