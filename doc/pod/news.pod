@@ -212,6 +212,15 @@ malformed stored Xref records with tradspool and corrupt history records.
 The overview and storage backends also validate more structures before using
 them.  Many thanks to Kevin Bowling for the patches.
 
+=item *
+
+The timecaf storage method now closes its cached CAF writer on a full storage
+flush, and B<innd> flushes storage during its periodic maintenance as well as
+when idle.  This releases the write lock so expiration can remove articles
+from that CAF without waiting for another article to select a different
+file, even when other storage methods keep B<innd> busy.  Expiration can
+still wait until the next flush; this does not add a new timer.
+
 =back
 
 =head1 Changes in 2.7.4 (2026-06-22)
