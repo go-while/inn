@@ -3,6 +3,7 @@ package e2e
 // STARTTLS (RFC 4642) with nnrpd.
 
 import (
+	"context"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
@@ -12,6 +13,9 @@ import (
 	"encoding/pem"
 	"math/big"
 	"net"
+	"os"
+	"os/exec"
+	"path/filepath"
 	"regexp"
 	"slices"
 	"strconv"
@@ -295,4 +299,192 @@ func TestStartTLSDump(t *testing.T) {
 		t.Errorf("tlsloglevel 3: nnrpd logged no hexadecimal dump of the handshake")
 	}
 	t.Logf("%d dump lines checked", rows)
+}
+
+// oldTLSConf lists the protocols nnrpd no longer supports (issue #321) in tlsprotocols, with
+// protos, and lowers OpenSSL's security level, so that the library would negotiate TLS 1.0
+// and 1.1 (OpenSSL 3 refuses their SHA-1 based signatures from level 1 on).
+func oldTLSConf(protos string) map[string]string {
+	return map[string]string{
+		"tlsprotocols": "[ SSLv2 SSLv3 TLSv1 TLSv1.1 " + protos + " ]",
+		"tlsciphers":   `"DEFAULT:@SECLEVEL=0"`,
+	}
+}
+
+// tlsVersions are the client's protocol versions, and whether nnrpd must negotiate them.
+var tlsVersions = []struct {
+	name    string
+	version uint16
+	ok      bool
+}{
+	{"TLS 1.0", tls.VersionTLS10, false},
+	{"TLS 1.1", tls.VersionTLS11, false},
+	{"TLS 1.2", tls.VersionTLS12, true},
+	{"TLS 1.3", tls.VersionTLS13, true},
+}
+
+// tlsHandshake negotiates TLS over conn with a client limited to version and returns the
+// handshake error.
+func tlsHandshake(s *Site, conn net.Conn, version uint16) (*tls.Conn, error) {
+	tc := tls.Client(conn, &tls.Config{RootCAs: s.CertPool, ServerName: "127.0.0.1",
+		MinVersion: version, MaxVersion: version})
+	_ = tc.SetDeadline(time.Now().Add(testkit.Deadline()))
+	err := tc.Handshake()
+	_ = tc.SetDeadline(time.Time{})
+	return tc, err
+}
+
+// nnrpdS runs "nnrpd -S" on a new TCP connection from 127.0.0.1 the way inetd does (with
+// the accepted socket as its standard input and output) and returns the client's end. The
+// cleanup closes it and waits for nnrpd to exit.
+func nnrpdS(tb testing.TB, s *Site) net.Conn {
+	tb.Helper()
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		tb.Fatal(err)
+	}
+	defer ln.Close()
+	conn, err := net.Dial("tcp", ln.Addr().String())
+	if err != nil {
+		tb.Fatal(err)
+	}
+	sc, err := ln.Accept()
+	if err != nil {
+		conn.Close()
+		tb.Fatal(err)
+	}
+	f, err := sc.(*net.TCPConn).File()
+	sc.Close()
+	if err != nil {
+		conn.Close()
+		tb.Fatal(err)
+	}
+	defer f.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), testkit.Deadline())
+	cmd := exec.CommandContext(ctx, filepath.Join(s.Prefix, "bin", "nnrpd"), "-S")
+	cmd.Dir = s.Dir
+	cmd.Env = append(os.Environ(), s.Env...)
+	cmd.Stdin, cmd.Stdout = f, f
+	if err := cmd.Start(); err != nil {
+		cancel()
+		conn.Close()
+		tb.Fatal(err)
+	}
+	tb.Cleanup(func() {
+		conn.Close()
+		_ = cmd.Wait()
+		cancel()
+	})
+	return conn
+}
+
+// waitSyslog waits until nnrpd has logged every message of want after cursor and returns
+// the missing ones. It skips the test when no nnrpd message is readable.
+func waitSyslog(tb testing.TB, s *Site, cursor string, want []string) []string {
+	tb.Helper()
+	limit := time.Now().Add(testkit.Deadline())
+	for {
+		lines := s.ProgramSyslog(tb, "nnrpd", cursor)
+		var missing []string
+		for _, w := range want {
+			if !slices.Contains(lines, w) {
+				missing = append(missing, w)
+			}
+		}
+		if len(missing) == 0 {
+			return nil
+		}
+		if time.Now().After(limit) {
+			if len(lines) == 0 {
+				tb.Skip("no syslog messages of nnrpd readable: is the user in the systemd-journal group?")
+			}
+			tb.Logf("nnrpd messages:\n%s", strings.Join(lines, "\n"))
+			return missing
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+}
+
+// removedNotices are the messages nnrpd logs for the removed protocols of oldTLSConf.
+var removedNotices = []string{
+	"TLS engine: cannot enable SSLv2 - support removed",
+	"TLS engine: cannot enable SSLv3 - support removed",
+	"TLS engine: cannot enable TLSv1 - support removed",
+	"TLS engine: cannot enable TLSv1.1 - support removed",
+}
+
+// TestTLSOldProtocols: with SSLv3, TLSv1 and TLSv1.1 listed in tlsprotocols (and OpenSSL's
+// security level lowered so that the library would accept them), nnrpd still refuses TLS 1.0
+// and 1.1 clients, with STARTTLS and with nnrpd -S, negotiates TLS 1.2 and 1.3, and logs that
+// support for the listed old protocols has been removed (issue #321; SSLv3, TLS 1.0 and TLS
+// 1.1 were enabled when listed).
+func TestTLSOldProtocols(t *testing.T) {
+	s := NewSite(t, SiteOptions{TLS: true, InnConf: oldTLSConf("TLSv1.2 TLSv1.3")})
+	cursor := s.JournalCursor(t)
+	modes := []struct {
+		name string
+		// connect returns a connection on which the TLS negotiation starts at once.
+		connect func(t *testing.T) net.Conn
+		// greeting reads what nnrpd sends first over TLS.
+		greeting func(t *testing.T, c *client.Conn)
+	}{
+		{"STARTTLS", func(t *testing.T) net.Conn {
+			c := s.Reader(t)
+			expect(t, c, 382, "STARTTLS")
+			return c.Conn
+		}, func(*testing.T, *client.Conn) {}},
+		{"nnrpd -S", func(t *testing.T) net.Conn { return nnrpdS(t, s) },
+			func(t *testing.T, c *client.Conn) { status(t, c, 200, "greeting of nnrpd -S") }},
+	}
+	for _, m := range modes {
+		for _, v := range tlsVersions {
+			t.Run(m.name+"/"+v.name, func(t *testing.T) {
+				tc, err := tlsHandshake(s, m.connect(t), v.version)
+				if !v.ok {
+					if err == nil {
+						t.Fatalf("nnrpd negotiated %s (version %x), want the handshake refused",
+							v.name, tc.ConnectionState().Version)
+					}
+					t.Logf("refused as expected: %v", err)
+					return
+				}
+				if err != nil {
+					t.Fatalf("%s handshake: %v", v.name, err)
+				}
+				if got := tc.ConnectionState().Version; got != v.version {
+					t.Errorf("negotiated version %x, want %x", got, v.version)
+				}
+				c := client.New(t, tc)
+				m.greeting(t, c)
+				expect(t, c, 211, "GROUP e2e.test")
+				expect(t, c, 205, "QUIT")
+			})
+		}
+	}
+	if missing := waitSyslog(t, s, cursor, removedNotices); missing != nil {
+		t.Errorf("nnrpd did not log:\n%s", strings.Join(missing, "\n"))
+	}
+}
+
+// TestTLSOnlyOldProtocols: when tlsprotocols lists only removed protocols, nnrpd refuses to
+// initiate TLS and says so: STARTTLS gets 580 and the session goes on without TLS, nnrpd -S
+// sends 400 and closes the connection, and the reason is logged (issue #321; nnrpd
+// negotiated TLS 1.0 and 1.1 before, and no protocol at all with only SSLv2 listed).
+func TestTLSOnlyOldProtocols(t *testing.T) {
+	s := NewSite(t, SiteOptions{TLS: true, InnConf: oldTLSConf("")})
+	cursor := s.JournalCursor(t)
+
+	c := s.Reader(t)
+	expect(t, c, 580, "STARTTLS")
+	expect(t, c, 211, "GROUP e2e.test")
+	expect(t, c, 205, "QUIT")
+
+	// nnrpd -S replies in clear text before any TLS record.
+	sc := client.New(t, nnrpdS(t, s))
+	status(t, sc, 400, "nnrpd -S with no supported protocol")
+
+	want := append([]string{"TLS engine: no supported protocol in tlsprotocols"}, removedNotices...)
+	if missing := waitSyslog(t, s, cursor, want); missing != nil {
+		t.Errorf("nnrpd did not log:\n%s", strings.Join(missing, "\n"))
+	}
 }

@@ -46,6 +46,8 @@ needs the Go standard library:
 | `TestStartTLS` | innd, nnrpd | STARTTLS: 382, TLS with the site's certificate, no STARTTLS in CAPABILITIES afterwards, reading and posting over TLS, 502 for a second STARTTLS (RFC 4642) |
 | `TestAuthinfoRequiresTLS` | innd, nnrpd, ckpasswd | with `require_encryption`, AUTHINFO gets 483 before STARTTLS and works after it |
 | `TestStartTLSWithoutCertificate` | innd, nnrpd | without a certificate, STARTTLS gets 580 and the connection goes on without TLS |
+| `TestTLSOldProtocols` | innd, nnrpd | with SSLv3, TLSv1 and TLSv1.1 in `tlsprotocols` (and OpenSSL's security level at 0), TLS 1.0 and 1.1 clients are refused and TLS 1.2 and 1.3 work, with STARTTLS and with `nnrpd -S` (run inetd-style on an accepted socket), and the removed protocols are logged (#321) |
+| `TestTLSOnlyOldProtocols` | innd, nnrpd | with only removed protocols in `tlsprotocols`, STARTTLS gets 580 and the session goes on, `nnrpd -S` sends 400, and the reason is logged (#321) |
 | `TestCompress` | innd, nnrpd | COMPRESS DEFLATE: 206, no COMPRESS or STARTTLS in CAPABILITIES afterwards, a 3000-line article with dot-stuffed lines posted and read back intact, pipelining, 502 for COMPRESS, STARTTLS and AUTHINFO (RFC 8054) |
 | `TestCompressAfterStartTLS` | innd, nnrpd | COMPRESS DEFLATE on a STARTTLS connection |
 | `TestRnews` | innd, rnews | an rnews batch of two articles reaches innd over its local socket |
