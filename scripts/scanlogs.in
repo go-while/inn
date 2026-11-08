@@ -56,10 +56,11 @@ for F in ${INNFEEDCONF}; do
 done
 NNTPSEND=${MOST_LOGS}/nntpsend.log
 PERLNOCEM=${MOST_LOGS}/perl-nocem.log
+PULLNEWS=${MOST_LOGS}/pullnews.log
 SENDIHAVE=${MOST_LOGS}/send-ihave.log
 SENDUUCP=${MOST_LOGS}/send-uucp.log
 LIVEFILES="${CONTROLBATCH} ${INNFEED} ${NNTPSEND} ${PERLNOCEM} \
-    ${SENDIHAVE} ${SENDUUCP}"
+    ${PULLNEWS} ${SENDIHAVE} ${SENDUUCP}"
 
 ##  Where news.daily places expire output, unless noexplog was used.
 EXPLOG=${MOST_LOGS}/expire.log
@@ -169,13 +170,25 @@ if ${ROTATE}; then
     fi
 
     ##  These are live files, so use link rather than copy.
+    ##  pullnews keeps its log file open, in append mode, and never reopens
+    ##  it: copy that file and truncate the original, like syslog files.
     for F in ${LIVEFILES}; do
         if [ -f ${F} ]; then
             rm -f ${F}.old ${F}.new
-            ln ${F} ${F}.old
-            touch ${F}.new
-            chmod 0660 ${F}.new
-            mv ${F}.new ${F}
+            if [ "${F}" = "${PULLNEWS}" ]; then
+                ##  Only empty it once it is safely copied.
+                if cp ${F} ${F}.old; then
+                    cat /dev/null >${F}
+                else
+                    rm -f ${F}.old
+                    echo "Cannot copy ${F}; not rotated" 1>&2
+                fi
+            else
+                ln ${F} ${F}.old
+                touch ${F}.new
+                chmod 0660 ${F}.new
+                mv ${F}.new ${F}
+            fi
         fi
     done
 
@@ -213,6 +226,13 @@ if ${ROTATE}; then
             ;;
         ${ACTIVEFILE})
             mv ${BASE}.old ${OLD}/${BASE}
+            ;;
+        ${PULLNEWS})
+            ##  Copied and truncated above; without a copy, leave the file
+            ##  where it is rather than move it away from a running pullnews.
+            if [ -f ${F}.old ]; then
+                mv ${F}.old ${OLD}/${BASE}
+            fi
             ;;
         ${UNWANTED_LOG})
             ##  innreport assumes where unwanted.log exists, so leave it.
