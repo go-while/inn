@@ -1780,10 +1780,15 @@ NCcreate(int fd, bool MustAuthorize, bool IsLocal)
     NCclearwip(cp);
     cp->privileged = IsLocal;
 #if defined(SOL_SOCKET) && defined(SO_SNDBUF) && defined(SO_RCVBUF)
-    if (!IsLocal) {
-        i = 24 * 1024;
+    /* Leave the kernel defaults (and receive buffer autotuning) alone unless
+       a size is set in inn.conf. */
+    if (!IsLocal && innconf->peersndbufsize > 0) {
+        i = (int) innconf->peersndbufsize;
         if (setsockopt(fd, SOL_SOCKET, SO_SNDBUF, (char *) &i, sizeof i) < 0)
             syslog(L_ERROR, "%s cant setsockopt(SNDBUF) %m", CHANname(cp));
+    }
+    if (!IsLocal && innconf->peerrcvbufsize > 0) {
+        i = (int) innconf->peerrcvbufsize;
         if (setsockopt(fd, SOL_SOCKET, SO_RCVBUF, (char *) &i, sizeof i) < 0)
             syslog(L_ERROR, "%s cant setsockopt(RCVBUF) %m", CHANname(cp));
     }
