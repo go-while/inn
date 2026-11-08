@@ -45,6 +45,11 @@ install_packages() {
         # Debian GNU/Hurd (debian-ports) has no rsyslog.
         apt-get -qq install -y rsyslog >/dev/null 2>&1 \
             || echo "rsyslog is not available"
+        # Optional, for e2e tests that would otherwise be skipped: the GD
+        # Perl module (innreport graphs), ss(8) (socket buffer sizes) and
+        # the Python headers (innd's Python filter).
+        apt-get -qq install -y libgd-perl iproute2 python3-dev >/dev/null 2>&1 \
+            || echo "some optional packages are not available"
     elif command -v dnf >/dev/null; then
         dnf -q -y install gcc make autoconf bison flex findutils diffutils tar \
             perl perl-devel perl-ExtUtils-Embed perl-libnet openssl-devel \
@@ -164,11 +169,17 @@ build=ok
 check=skipped
 e2e=skipped
 
+# Python filter support only where the Python headers are installed.
+python=
+if command -v python3-config >/dev/null 2>&1; then
+    python=--with-python
+fi
+
 # Build and install INN as the news user: innbind is then not setuid root,
 # which the e2e tests do not need.
 if ! as_news "cd $BUILDDIR/src && ./autogen && ./configure \
         --prefix=$PREFIX --with-sendmail=/usr/sbin/sendmail \
-        --with-perl --with-openssl --with-sqlite3 >$BUILDDIR/configure.log \
+        --with-perl --with-openssl --with-sqlite3 $python >$BUILDDIR/configure.log \
         && make -j$jobs >$BUILDDIR/make.log 2>&1 \
         && make install >$BUILDDIR/install.log 2>&1"; then
     build=FAILED
