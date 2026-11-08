@@ -16,6 +16,7 @@
 
 #include <ctype.h>
 #include <dirent.h>
+#include <errno.h>
 #include <sys/stat.h>
 
 #include "inn/buffer.h"
@@ -42,7 +43,7 @@ dump_index(const char *group)
 {
     struct group_index *index;
 
-    index = tdx_index_open(OV_READ);
+    index = tdx_index_open(false);
     if (index == NULL)
         return;
     if (group == NULL)
@@ -72,7 +73,7 @@ dump_group_index(const char *group)
     struct group_entry *entry;
     struct group_data *data;
 
-    index = tdx_index_open(OV_READ);
+    index = tdx_index_open(false);
     if (index == NULL)
         return;
     entry = tdx_index_entry(index, group);
@@ -109,10 +110,10 @@ dump_overview(const char *group, ARTNUM low, ARTNUM high, bool overchan)
     struct group_entry *entry;
     struct article article;
     struct search *search;
-    char *p;
+    const char *p;
     char datestring[256];
 
-    index = tdx_index_open(OV_READ);
+    index = tdx_index_open(false);
     if (index == NULL)
         return;
     entry = tdx_index_entry(index, group);
@@ -251,15 +252,51 @@ article_list(const char *directory)
     articles = opendir(directory);
     if (articles == NULL)
         sysdie("cannot open directory %s", directory);
-    while ((file = readdir(articles)) != NULL) {
+    for (;;) {
+        /* Reset errno before each call: processing an entry may change
+         * it, and readdir() leaves it alone at the end of the directory. */
+        errno = 0;
+        file = readdir(articles);
+        if (file == NULL)
+            break;
         if (!check_number(file->d_name))
             continue;
         vector_add(list, file->d_name);
+    }
+    /* A failed read must not look like the end of the directory: the
+     * caller rebuilds the overview from the list. */
+    if (errno != 0) {
+        int saved = errno;
+
+        closedir(articles);
+        errno = saved;
+        sysdie("cannot read directory %s", directory);
     }
     closedir(articles);
 
     qsort(list->strings, list->count, sizeof(list->strings[0]), file_compare);
     return list;
+}
+
+
+/*
+**  Return the directory of a newsgroup in a tradspool article spool: the
+**  newsgroup name with all periods changed to slashes, under patharticles.
+**  This is the mapping that tradspool uses when storing articles.  The
+**  caller is responsible for freeing the result.
+*/
+static char *
+spool_path(const char *group)
+{
+    char *dir, *path, *p;
+
+    dir = xstrdup(group);
+    for (p = dir; *p != '\0'; p++)
+        if (*p == '.')
+            *p = '/';
+    path = concat(innconf->patharticles, "/", dir, (char *) 0);
+    free(dir);
+    return path;
 }
 
 
@@ -287,7 +324,8 @@ group_create(const char *group, ARTNUM low, ARTNUM high, char flag)
 **  Rebuild the overview data for a particular group.  Takes a path to a
 **  directory containing all the articles, as individual files, that should be
 **  in that group.  The names of the files should be the article numbers in
-**  the group.
+**  the group.  The directory is read before anything is changed in the
+**  overview, so that a wrong path or group name leaves it alone.
 */
 static void
 group_rebuild(const char *group, const char *path)
@@ -304,7 +342,9 @@ group_rebuild(const char *group, const char *path)
     struct article artdata;
     struct stat st;
 
-    index = tdx_index_open(OV_READ);
+    files = article_list(path);
+
+    index = tdx_index_open(true);
     if (index == NULL)
         die("cannot open group index");
     entry = tdx_index_entry(index, group);
@@ -330,7 +370,6 @@ group_rebuild(const char *group, const char *path)
     free(histpath);
 
     extra = overview_extra_fields(true);
-    files = article_list(path);
 
     info.count = 0;
     info.high = 0;
@@ -400,6 +439,7 @@ group_rebuild(const char *group, const char *path)
         die("cannot finish rebuilding data for group %s", group);
     tdx_data_close(data);
     HISclose(history);
+    tdx_index_close(index);
 }
 
 
@@ -456,6 +496,7 @@ main(int argc, char *argv[])
     char mode = '\0';
     const char *newsgroup = NULL;
     const char *path = NULL;
+    char *spool = NULL;
     ARTNUM artlow = 0;
     ARTNUM arthigh = 0;
 
@@ -532,6 +573,12 @@ main(int argc, char *argv[])
     if (strchr("cgoOR", mode) != NULL && newsgroup == NULL)
         die("group must be specified for -%c", mode);
 
+    /* For -R -, rebuild from the tradspool directory of the group. */
+    if (mode == 'R' && strcmp(path, "-") == 0) {
+        spool = spool_path(newsgroup);
+        path = spool;
+    }
+
     /* Run the specified function. */
     switch (mode) {
     case 'A':
@@ -546,6 +593,7 @@ main(int argc, char *argv[])
         if (getenv(INN_ENV_TESTSUITE) == NULL)
             ensure_news_user_grp(true, true);
         group_rebuild(newsgroup, path);
+        free(spool);
         break;
     case 'c':
         if (getenv(INN_ENV_TESTSUITE) == NULL)
