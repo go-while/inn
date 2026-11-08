@@ -139,8 +139,8 @@ PYartfilter(const ARTDATA *data, char *artBody, long artLen, int lines)
     }
 
     /* ...then the body... */
-    if (artLen && artBody != NULL)
-        PYheaditem[hdrnum] = PYBUFF_FROMMEMORY(artBody, --artLen);
+    if (artBody != NULL)
+        PYheaditem[hdrnum] = PYBUFF_FROMMEMORY(artBody, artLen);
     else
         PYheaditem[hdrnum] = Py_None;
     PyDict_SetItem(PYheaders, PYbodykey, PYheaditem[hdrnum++]);
