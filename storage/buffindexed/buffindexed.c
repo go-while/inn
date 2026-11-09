@@ -403,6 +403,7 @@ ovparse_part_line(char *l)
     ovbuff->next = (OVBUFF *) NULL;
     ovbuff->dirty = 0;
     ovbuff->bitfield = NULL;
+    ovbuff->smc = NULL;
     ovbuff->nextchunk = 1;
 
     if (ovbufftab == (OVBUFF *) NULL)
