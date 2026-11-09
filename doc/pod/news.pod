@@ -224,6 +224,16 @@ the article, the connection is also closed and the other articles are
 retried later.  The response is attributed to the oldest command still
 waiting for a reply, as B<innxmit> already does.
 
+=item *
+
+B<innfeed> now sends a CAPABILITIES command to the remote host once
+connected (and authenticated, if a username and a password are set
+in F<innfeed.conf>).  When the remote host lists its capabilities without
+STREAMING, B<innfeed> no longer tries MODE STREAM and directly offers
+articles with IHAVE.  Remote hosts that do not support CAPABILITIES, or that
+list STREAMING, are fed as before.  This is a first step towards NNTP
+version 2 (RFC 3977) support in B<innfeed>.
+
 =back
 
 =head1 Changes in 2.7.4 (2026-06-22)

@@ -117,6 +117,9 @@
 /* amount we expand buffers on partial reads */
 #define BUFFER_EXPAND_AMOUNT    128
 
+/* maximum size in bytes of the response to CAPABILITIES */
+#define CAPABILITIES_MAX_SIZE   16384
+
 /* minimum number of seconds between log messages for starting
    spooling. i.e. if the connection bounces up and down this will prevent
    frequent logging of the spooling message. 0 turns off this logging. */
