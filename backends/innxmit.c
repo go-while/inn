@@ -122,6 +122,7 @@ static int logRejects = false; /* syslog the 437 responses. */
 #define CANT_CONNECT      "%s connect failed %s"
 #define CANT_AUTHENTICATE "%s authenticate failed %s"
 #define IHAVE_FAIL        "%s ihave failed %s"
+#define POST_FAIL         "%s post failed %s"
 
 #define CANT_FINDIT       "%s can't find %s"
 #define CANT_PARSEIT      "%s can't parse ID %s"
@@ -136,6 +137,7 @@ static bool DoRequeue = true;
 static bool Purging;
 static bool STATprint;
 static bool HeadersFeed;
+static bool PostMode;
 static char *BATCHname;
 static char *BATCHtemp;
 static char *REMhost;
@@ -641,6 +643,103 @@ HeadersLen(ARTHANDLE *art, int *iscmsg)
 
 
 /*
+**  Header fields that a news reader server does not accept in a posted
+**  article (nnrpd rejects the ones it considers to be system header fields),
+**  or that describe the path of the article through other servers and that
+**  the server will set itself.  They are removed in POST mode.
+*/
+static const char *const PostStripped[] = {
+    "Path",
+    "Xref",
+    "Injection-Info",
+    "NNTP-Posting-Host",
+    "NNTP-Posting-Date",
+    "X-Trace",
+    "X-Complaints-To",
+    "Date-Received",
+    "Posting-Version",
+    "Relay-Version",
+    "Also-Control",
+    "Article-Names",
+    "Article-Updates",
+    "See-Also",
+};
+
+
+/*
+**  Return true if the header field starting at line, of length len (without
+**  the line terminator), is one that is removed in POST mode.
+*/
+static bool
+PostStripsHeader(const char *line, size_t len)
+{
+    const char *colon;
+    size_t i, namelen;
+
+    colon = memchr(line, ':', len);
+    if (colon == NULL)
+        return false;
+    namelen = colon - line;
+    for (i = 0; i < ARRAY_SIZE(PostStripped); i++) {
+        if (strlen(PostStripped[i]) == namelen
+            && strncasecmp(line, PostStripped[i], namelen) == 0)
+            return true;
+    }
+    return false;
+}
+
+
+/*
+**  Return a copy of the article in wire format, without the header fields
+**  that must not be sent with POST.  The body is copied as it is.  The
+**  length of the copy is stored in *newlen.  The result must be freed.
+*/
+static char *
+PostArticleData(const ARTHANDLE *art, size_t *newlen)
+{
+    const char *p = art->data;
+    const char *end = art->data + art->len;
+    const char *eol;
+    char *out, *q;
+    size_t len, clen;
+    bool skipping = false;
+
+    out = xmalloc(art->len + 1);
+    q = out;
+    while (p < end) {
+        eol = memchr(p, '\n', end - p);
+        len = (eol != NULL) ? (size_t) (eol - p) + 1 : (size_t) (end - p);
+
+        /* Length of the line without its terminator. */
+        clen = len;
+        if (clen > 0 && p[clen - 1] == '\n')
+            clen--;
+        if (clen > 0 && p[clen - 1] == '\r')
+            clen--;
+
+        /* An empty line ends the headers; a lone dot ends an article which
+         * has no body.  Everything from there on is copied unchanged. */
+        if (clen == 0 || (clen == 1 && *p == '.')) {
+            memcpy(q, p, end - p);
+            q += end - p;
+            break;
+        }
+
+        /* A folded line belongs to the preceding header field. */
+        if (*p != ' ' && *p != '\t')
+            skipping = PostStripsHeader(p, clen);
+        if (!skipping) {
+            memcpy(q, p, len);
+            q += len;
+        }
+        p += len;
+    }
+    *newlen = q - out;
+    return out;
+}
+
+
+/*
 **  Send a whole article to the server.
 **  Called from the takethis(), i.e. when sending a TAKETHIS
 **  and when we get a 335 response to IHAVE.
@@ -675,6 +774,14 @@ REMsendarticle(char *Article, char *MessageID, ARTHANDLE *art)
         }
         if (xwritev(ToServer, vec, 3) < 0)
             return false;
+    } else if (PostMode) {
+        size_t len;
+        char *data = PostArticleData(art, &len);
+        ssize_t r = xwrite(ToServer, data, len);
+
+        free(data);
+        if (r < 0)
+            return false;
     } else if (xwrite(ToServer, art->data, art->len) < 0)
         return false;
     if (GotInterrupt)
@@ -687,7 +794,7 @@ REMsendarticle(char *Article, char *MessageID, ARTHANDLE *art)
     if (CanStream)
         return true; /* streaming mode does not wait for ACK */
 
-    /* What did the remote site say? (IHAVE only) */
+    /* What did the remote site say? (IHAVE and POST only) */
     if (!REMread(buff, (int) sizeof buff)) {
         syswarn("no reply after sending %s (socket timeout?)", Article);
         return false;
@@ -698,6 +805,41 @@ REMsendarticle(char *Article, char *MessageID, ARTHANDLE *art)
         fprintf(stderr, "< %s", buff);
 
     /* Parse the reply. */
+    if (PostMode) {
+        switch (atoi(buff)) {
+        default:
+            warn("unknown reply after %s -- %s", Article, buff);
+            if (DoRequeue)
+                Requeue(Article, MessageID);
+            break;
+        case NNTP_ERR_COMMAND: /* 500 */
+        case NNTP_ERR_ACCESS:  /* 502 */
+            syslog(L_FATAL, GOT_BADCOMMAND, REMhost, MessageID,
+                   REMclean(buff));
+            RequeueRestAndExit(Article, MessageID);
+            /* NOTREACHED */
+        case NNTP_FAIL_TERMINATING: /* 400 */
+        case NNTP_FAIL_ACTION:      /* 403 */
+        case NNTP_FAIL_POST_AUTH:   /* 440 */
+        case NNTP_FAIL_AUTH_NEEDED: /* 480 */
+            /* The server cannot take articles at the moment, and the next
+             * ones would get the same answer; keep this one for later. */
+            syslog(L_NOTICE, POST_FAIL, REMhost, REMclean(buff));
+            return false;
+        case NNTP_OK_POST: /* 240 */
+            STATaccepted++;
+            STATacceptedsize += (double) art->len;
+            break;
+        case NNTP_FAIL_POST_REJECT: /* 441: also a duplicate */
+            if (logRejects)
+                syslog(L_NOTICE, REJECTED, REMhost, MessageID, Article,
+                       REMclean(buff));
+            STATrejected++;
+            STATrejectedsize += (double) art->len;
+            break;
+        }
+        return true;
+    }
     switch (atoi(buff)) {
     default:
         warn("unknown reply after %s -- %s", Article, buff);
@@ -1023,7 +1165,7 @@ strlisten(void)
 static void
 Usage(void)
 {
-    die("Usage: innxmit [-acdHlprs] [-t#] [-T#] host file");
+    die("Usage: innxmit [-acdHlpRrs] [-t#] [-T#] host file");
 }
 
 
@@ -1162,7 +1304,7 @@ main(int ac, char *av[])
     umask(NEWSUMASK);
 
     /* Parse JCL. */
-    while ((i = getopt(ac, av, "acdHlpP:rst:T:v")) != EOF)
+    while ((i = getopt(ac, av, "acdHlpP:rRst:T:v")) != EOF)
         switch (i) {
         default:
             Usage();
@@ -1192,6 +1334,9 @@ main(int ac, char *av[])
         case 'r':
             DoRequeue = false;
             break;
+        case 'R':
+            PostMode = true;
+            break;
         case 's':
             TryStream = false;
             break;
@@ -1211,6 +1356,13 @@ main(int ac, char *av[])
     /* Parse arguments; host and filename. */
     if (ac != 2)
         Usage();
+
+    /* POST is a lock-step command: no streaming, and no header-only feed. */
+    if (PostMode) {
+        if (HeadersFeed)
+            die("-H and -R cannot be used together");
+        TryStream = false;
+    }
     REMhost = av[0];
     BATCHname = av[1];
 
@@ -1519,6 +1671,67 @@ main(int ac, char *av[])
                 }
             }
             continue; /* next article */
+        }
+        if (PostMode) {
+            /* The article is posted as it is, with its Message-ID header
+             * field (if the server already has it, it refuses it). */
+            static char POST[] = "POST";
+
+            if (!REMwrite(POST, (int) strlen(POST), false)) {
+                syswarn("cannot send POST");
+                article_free(art);
+                RequeueRestAndExit(Article, MessageID);
+            }
+            STAToffered++;
+            if (Debug)
+                fprintf(stderr, "> %s\n", POST);
+            if (GotInterrupt)
+                Interrupted(Article, MessageID);
+
+            /* Is the server ready to take it? */
+            if (!REMread(buff, (int) sizeof buff)) {
+                syswarn("no reply to POST (socket timeout?)");
+                article_free(art);
+                RequeueRestAndExit(Article, MessageID);
+            }
+            if (GotInterrupt)
+                Interrupted(Article, MessageID);
+            if (Debug)
+                fprintf(stderr, "< %s", buff);
+
+            switch (atoi(buff)) {
+            default:
+                warn("unknown reply to POST for %s -- %s", Article, buff);
+                if (DoRequeue)
+                    Requeue(Article, MessageID);
+                break;
+            case NNTP_ERR_COMMAND: /* 500 */
+            case NNTP_ERR_ACCESS:  /* 502 */
+                /* The receiving server does not know POST or does not
+                 * allow it to us, no point in continuing. */
+                syslog(L_FATAL, GOT_BADCOMMAND, REMhost, MessageID,
+                       REMclean(buff));
+                article_free(art);
+                RequeueRestAndExit(Article, MessageID);
+                /* NOTREACHED */
+            case NNTP_FAIL_TERMINATING: /* 400 */
+            case NNTP_FAIL_ACTION:      /* 403 */
+            case NNTP_FAIL_POST_AUTH:   /* 440 */
+            case NNTP_FAIL_AUTH_NEEDED: /* 480 */
+                /* Posting is not possible now, nor for the next articles. */
+                syslog(L_NOTICE, POST_FAIL, REMhost, REMclean(buff));
+                article_free(art);
+                RequeueRestAndExit(Article, MessageID);
+                /* NOTREACHED */
+            case NNTP_CONT_POST: /* 340 */
+                if (!REMsendarticle(Article, MessageID, art)) {
+                    article_free(art);
+                    RequeueRestAndExit(Article, MessageID);
+                }
+                break;
+            }
+            article_free(art);
+            continue;
         }
         snprintf(buff, sizeof(buff), "IHAVE %s", MessageID);
         if (!REMwrite(buff, (int) strlen(buff), false)) {
