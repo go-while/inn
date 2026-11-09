@@ -1,0 +1,285 @@
+=head1 NAME
+
+overview - Overview API of the InterNetNews storage library
+
+=head1 SYNOPSIS
+
+    #include <inn/overview.h>
+
+    enum {
+        OVERVIEW_SUBJECT = 0,
+        OVERVIEW_FROM,
+        OVERVIEW_DATE,
+        OVERVIEW_MESSAGE_ID,
+        OVERVIEW_REFERENCES,
+        OVERVIEW_BYTES,
+        OVERVIEW_LINES,
+        OVERVIEW_MAX
+    };
+
+    #define OV_READ  1
+    #define OV_WRITE 2
+
+    struct overview;
+
+    struct overview_group {
+        ARTNUM high;
+        ARTNUM low;
+        ARTNUM count;
+        char flag;
+    };
+
+    struct overview_data {
+        ARTNUM number;
+        const char *overview;
+        size_t overlen;
+        TOKEN token;
+        time_t arrived;
+        time_t expires;
+    };
+
+    struct overview_config {
+        int mode;
+        bool sorted;
+        bool persistent;
+        bool cutoff;
+    };
+
+    struct overview_expire {
+        FILE *rmfile;
+        time_t now;
+        bool usepost;
+        bool quiet;
+        bool keepcross;
+        bool purgecross;
+        bool ignoreselfexpire;
+        bool statall;
+        struct history *history;
+        long processed;
+        long dropped;
+        long indexdropped;
+    };
+
+    struct overview *overview_open(int mode);
+
+    void overview_close(struct overview *overview);
+
+    bool overview_group(struct overview *overview, const char *group,
+                        struct overview_group *stats);
+
+    bool overview_group_add(struct overview *overview, const char *group,
+                            struct overview_group *stats);
+
+    bool overview_group_delete(struct overview *overview,
+                               const char *group);
+
+    bool overview_add(struct overview *overview, const char *group,
+                      struct overview_data *data);
+
+    bool overview_add_xref(struct overview *overview, const char *xref,
+                           struct overview_data *data);
+
+    bool overview_cancel(struct overview *overview, const char *group,
+                         ARTNUM number);
+
+    bool overview_cancel_xref(struct overview *overview, TOKEN token);
+
+    void *overview_search_open(struct overview *overview,
+                               const char *group, ARTNUM low,
+                               ARTNUM high);
+
+    bool overview_search(struct overview *overview, void *handle,
+                         struct overview_data *data);
+
+    void overview_search_close(struct overview *overview, void *handle);
+
+    bool overview_token(struct overview *overview, const char *group,
+                        ARTNUM number, TOKEN *token);
+
+    bool overview_expire(struct overview *overview, const char *group,
+                         ARTNUM *low, struct overview_expire *data);
+
+    void overview_config_get(struct overview *overview,
+                             struct overview_config *config);
+
+    bool overview_config_set(struct overview *overview,
+                             struct overview_config *config);
+
+    float overview_free_space(struct overview *overview);
+
+    const struct cvector *overview_fields(void);
+
+    struct vector *overview_extra_fields(bool hidden);
+
+    struct buffer *overview_build(ARTNUM number, const char *article,
+                                  size_t length,
+                                  const struct vector *extra,
+                                  struct buffer *overview);
+
+    bool overview_check(const char *data, size_t length, ARTNUM article);
+
+    int overview_index(const char *field, const struct vector *extra);
+
+    struct cvector *overview_split(const char *line, size_t length,
+                                   ARTNUM *number,
+                                   struct cvector *vector);
+
+    char *overview_get_standard_header(const struct cvector *vector,
+                                       unsigned int element);
+
+    char *overview_get_extra_header(const struct cvector *vector,
+                                    const char *header);
+
+=head1 DESCRIPTION
+
+These functions, part of the I<libinnstorage> library, store and retrieve
+overview data.  They pass the calls to the overview method set by
+I<ovmethod> in F<inn.conf> (buffindexed, ovdb, ovsqlite or tradindexed).
+They are a newer interface to the B<OV*> functions documented in
+libinnstorage(3), which they call.  The second part of the API contains
+utility functions to build, check and parse overview data, independently
+of the overview method.
+
+=head2 Overview method interface
+
+B<overview_open> opens the overview method and returns an opaque handle
+to pass to all the other functions.  I<mode> is C<OV_READ>, C<OV_WRITE>,
+or both combined with a bitwise or.  It reads F<inn.conf> first if it was
+not already read.  It returns C<NULL> and logs a warning if
+I<enableoverview> is false, if I<ovmethod> is not set or unknown, or if
+the overview method could not be opened.
+
+B<overview_close> closes the overview method and frees I<overview>.  It
+does nothing if I<overview> is C<NULL>.
+
+B<overview_group> fills I<stats> with the high and low water marks, the
+number of articles and the status flag of I<group>.  It returns false if
+the group is not found or on error.
+
+B<overview_group_add> adds I<group> to the overview database, with the
+water marks and flag given in I<stats> (I<count> is ignored).  It must be
+called before storing any article in that group.  B<overview_group_delete>
+removes I<group>; its overview data is generally purged at once.  Both
+return false on error.
+
+B<overview_add> stores the overview data of one article in I<group>.
+I<data> gives the article number, the storage token, the arrival and
+expiration times, and the overview data (I<overview>, of length
+I<overlen>).  The overview data must not contain the article number nor
+the final CRLF: B<overview_add> prepends the article number and a tab,
+and appends CRLF.  It must be called for every newsgroup in which the
+article is stored.  It returns false on error.
+
+B<overview_add_xref> does the same for every newsgroup and article number
+listed in I<xref>, the body of an Xref header field without the leading
+server name.  The article number in I<data> is set for each newsgroup.
+Invalid entries are silently skipped.  It returns true only if the data
+was stored in every newsgroup, without saying which one failed.
+
+B<overview_cancel> makes the overview data of article I<number> in
+I<group> unavailable to searches.  B<overview_cancel_xref> does it in all
+the newsgroups of the article identified by I<token>.  It retrieves the
+headers of the article from the storage manager to find its Xref header
+field, so it must be called before the article is removed from the
+storage manager.  It returns false if the article cannot be retrieved or
+has no Xref header field, and true otherwise, even if the overview data
+was not found in some newsgroups.
+
+B<overview_search_open> starts a search for the articles of I<group>
+whose numbers are between I<low> and I<high>, and returns a handle, or
+C<NULL> on error.  Even to retrieve a single article, a search must be
+opened.  Each call to B<overview_search> fills I<data> with the next
+article and returns true, or returns false when there are no more
+articles.  The I<expires> field is always set to C<0>, and the overview
+data returned includes the article number and the final CRLF.  This data
+may be overwritten by the next call to B<overview_search>, unless
+I<persistent> is true in the configuration returned by
+B<overview_config_get>.  B<overview_search_close> ends the search and
+frees I<handle>.
+
+B<overview_token> stores in I<token> the storage token of article
+I<number> in I<group>, and returns false if it is not found.
+
+B<overview_expire> expires the overview data of I<group> and stores the
+new low water mark in I<low>.  It uses the I<history> field of I<data> to
+check whether articles are still present in the spool (unless
+I<groupbaseexpiry> is set in F<inn.conf>), and adds the number of
+articles processed, articles removed and overview entries removed to the
+I<processed>, I<dropped> and I<indexdropped> fields, which the caller
+should initialize to C<0>.  The other fields of I<data> are currently not
+used by B<overview_expire>: options such as using the posting date are
+set with B<OVctl> (see libinnstorage(3)).  It returns false on error.
+
+B<overview_config_get> fills I<config> with the mode given to
+B<overview_open>, whether the overview method is faster when given data
+sorted by newsgroup (I<sorted>, used when rebuilding overview), whether
+search results stay valid until the search is closed (I<persistent>), and
+whether overview data for articles below the low water mark is ignored
+(I<cutoff>).  B<overview_config_set> can only change I<cutoff>; it
+returns the status of the overview method.
+
+B<overview_free_space> returns the free space of the overview method as a
+percentage, or C<-1> if the method has no such notion (only buffindexed
+reports it at present).
+
+=head2 Overview data utilities
+
+The overview data of an article is a line of tab-separated fields: the
+article number, the seven standard fields (Subject, From, Date,
+Message-ID, References, Bytes and Lines, whose positions are given by the
+C<OVERVIEW_*> constants), then the extra fields, each as the header field
+name, a colon, a space and its value.  The first extra field is always
+Xref, followed by the fields listed in I<extraoverviewadvertised> and
+I<extraoverviewhidden> in F<inn.conf>.
+
+B<overview_fields> returns the names of the seven standard fields.  The
+vector is allocated once and must not be freed.
+
+B<overview_extra_fields> returns a new vector with the names of the extra
+fields: Xref and I<extraoverviewadvertised>, plus
+I<extraoverviewhidden> if I<hidden> is true.  The caller must free it
+with B<vector_free>.
+
+B<overview_build> builds the overview data of article I<number> from
+I<article>, in wire format, of I<length> bytes.  I<extra> lists the extra
+fields to include (or is C<NULL>).  Bytes is set to I<length>.  Tabs, CR,
+LF and nul characters in header field bodies are replaced by spaces, and
+folding CRLFs are removed.  If an article has several Xref header fields,
+the last one is used.  The result, ending with CRLF, is stored in
+I<overview>, or in a new buffer if I<overview> is C<NULL>, which is
+returned.
+
+B<overview_check> returns true if I<data>, of I<length> bytes, looks like
+valid overview data for article I<article>: at least eight fields, the
+right article number, a numeric Bytes field, no CR or LF inside the
+fields, and extra fields in the "name: value" form.  The extra fields are
+not compared with the ones configured.
+
+B<overview_index> returns the position of I<field> (case-insensitive) in
+the overview data, counting from C<0> for Subject, given the extra fields
+in I<extra>, or C<-1> if it is not part of the overview data.
+
+B<overview_split> splits I<line>, of I<length> bytes, into its fields.
+If I<number> is not C<NULL>, the article number is stored in it.  The
+returned vector (I<vector> if not C<NULL>, otherwise a new one) points
+into I<line>: element I<n> is field I<n> after the article number, and
+its length is C<strings[n+1] - strings[n] - 1>.  A last element is added
+past the end of the last field so that this works for every field; it
+assumes that I<line> ends with CRLF.
+
+B<overview_get_standard_header> returns a copy of the standard field
+I<element> (one of the C<OVERVIEW_*> constants) from a vector returned by
+B<overview_split>, or C<NULL> with a warning if I<element> is out of
+range.  B<overview_get_extra_header> returns a copy of the value of the
+extra field I<header>, or C<NULL> if it is not present.  The caller must
+free the returned strings.
+
+=head1 HISTORY
+
+The overview API was written by Russ Allbery in 2004.
+
+=head1 SEE ALSO
+
+inn.conf(5), libinn(3), libinnstorage(3).
+
+=cut

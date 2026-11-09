@@ -200,6 +200,7 @@ doc/man/libinn_uwildmat.3             Manpage for uwildmat library routine
 doc/man/libinnauth.3                  Manpage for authprogs utility routines
 doc/man/libinnhist.3                  Manpage for history API library routines
 doc/man/libinnstorage.3               Manpage for storage API library routines
+doc/man/libinnstorage_overview.3      Manpage for overview API
 doc/man/mailpost.8                    Manpage for mailpost frontend
 doc/man/makedbz.8                     Manpage for makedbz
 doc/man/makehistory.8                 Manpage for makehistory
@@ -327,6 +328,7 @@ doc/pod/libinn_uwildmat.pod           Master file for libinn_uwildmat.3
 doc/pod/libinnauth.pod                Master file for libinnauth.3
 doc/pod/libinnhist.pod                Master file for libinnhist.3
 doc/pod/libinnstorage.pod             Master file for libinnstorage.3
+doc/pod/libinnstorage_overview.pod    Master file for libinnstorage_overview.3
 doc/pod/makedbz.pod                   Master file for makedbz.8
 doc/pod/makehistory.pod               Master file for makehistory.8
 doc/pod/mod-active.pod                Master file for mod-active.8

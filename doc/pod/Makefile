@@ -17,6 +17,7 @@ MAN1	= ../man/convdate.1 ../man/fastrm.1 ../man/gencancel.1 \
 MAN3	= ../man/libinn.3 ../man/libinn_clientlib.3 ../man/libinn_dbz.3 \
 	../man/libinn_inndcomm.3 \
 	../man/libinnauth.3 ../man/libinnhist.3 ../man/libinnstorage.3 \
+	../man/libinnstorage_overview.3 \
 	../man/libinn_list.3 ../man/libinn_qio.3 \
 	../man/libinn_tst.3 ../man/libinn_uwildmat.3
 
@@ -96,6 +97,8 @@ maintclean: distclean
 ../man/libinnauth.3:	libinnauth.pod		; $(POD2MAN) -s 3 $? > $@
 ../man/libinnhist.3:	libinnhist.pod		; $(POD2MAN) -s 3 $? > $@
 ../man/libinnstorage.3:	libinnstorage.pod	; $(POD2MAN) -s 3 $? > $@
+../man/libinnstorage_overview.3: libinnstorage_overview.pod
+	$(POD2MAN) -s 3 $? > $@
 ../man/libinn_clientlib.3: libinn_clientlib.pod	; $(POD2MAN) -s 3 $? > $@
 ../man/libinn_dbz.3:	libinn_dbz.pod		; $(POD2MAN) -s 3 $? > $@
 ../man/libinn_inndcomm.3: libinn_inndcomm.pod	; $(POD2MAN) -s 3 $? > $@
