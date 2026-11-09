@@ -1,0 +1,260 @@
+=head1 NAME
+
+innshellvars, innshellvars.tcl - Variables for INN shell and Tcl scripts
+
+=head1 SYNOPSIS
+
+In a Bourne shell script:
+
+    . <pathnews>/lib/innshellvars
+
+In a Tcl script:
+
+    source <pathnews>/lib/innshellvars.tcl
+
+=head1 DESCRIPTION
+
+B<innshellvars> and B<innshellvars.tcl> set up the variables that an INN
+script written in Bourne shell or Tcl might need: all the parameters of
+F<inn.conf>, the version of INN, and other useful variables (directories,
+files, programs, masks and parameters chosen at build time).  They also
+set some environment variables and the umask.  They are installed in
+I<pathnews>/lib, or in the directory given to B<configure> with
+B<--libdir>.
+
+Perl scripts should use the INN::Config(3pm) module, which provides the
+same variables.  A legacy F<innshellvars.pl> is still installed next to
+B<innshellvars> for old Perl scripts; it sets the same variables in the
+C<inn> package.
+
+The shell and Perl scripts shipped with INN load B<innshellvars> or
+INN::Config automatically: when INN is built, their second line is
+replaced by the code that loads it.  See "Scripts" in F<HACKING> for
+details.  Your own scripts have to load it themselves, as shown in the
+SYNOPSIS.
+
+=head1 VARIABLES
+
+=head2 Parameters of inn.conf
+
+All the parameters of F<inn.conf> are set by running C<innconfval -s> or
+C<innconfval -t>; see innconfval(1) for the exact format.  In
+B<innshellvars>, the variable name is the parameter name in capitals, and
+the variable is exported (for instance C<$PATHBIN>, C<$PATHETC>,
+C<$OVMETHOD>).  In B<innshellvars.tcl>, the variable name is the parameter
+name with C<inn_> prepended (for instance C<$inn_pathbin>).
+
+The version of INN is in C<$VERSION> (shell) or C<$inn_version> (Tcl).
+
+=head2 Other variables
+
+The following variables are set in addition.  The names below are the
+shell ones.  In Tcl, the name is in lowercase with C<inn_> prepended (for
+instance C<$inn_newsbin> for C<$NEWSBIN>), except for
+C<$do_dbz_tagged_hash> which has no prefix.  In INN::Config and
+F<innshellvars.pl>, the name is in lowercase.
+
+Directories:
+
+=over 4
+
+=item NEWSHOME, SPOOLDIR, MOST_LOGS
+
+I<pathnews>, I<pathspool> and I<pathlog>.  These three variables are
+exported.
+
+=item NEWSBIN, NEWSETC, NEWSLIB, INNDDIR, LOCKS
+
+I<pathbin>, I<pathetc>, the directory where B<innshellvars> is installed,
+and I<pathrun> (for the last two).  These variables are exported.
+
+=item ARCHIVEDIR, SPOOL, BATCH, INCOMING, OVERVIEWDIR
+
+I<patharchive>, I<patharticles>, I<pathoutgoing>, I<pathincoming> and
+I<pathoverview>.
+
+=item SPOOLNEWS, BADNEWS
+
+I<pathincoming> and its F<bad> subdirectory.
+
+=item CONTROLPROGS
+
+I<pathcontrol>.
+
+=item NEWSLBIN
+
+I<pathnews>/local, a directory for local programs.  It is exported and
+put first in PATH.
+
+=item TMPDIR, SPOOLTEMP
+
+I<pathtmp>.  TMPDIR is exported.
+
+=item TEMPSOCK, TEMPSOCKDIR
+
+A shell pattern matching the names of the temporary sockets created by
+B<ctlinnd>, and the directory where they are created (I<pathrun>).
+
+=back
+
+Files:
+
+=over 4
+
+=item ACTIVE, ACTIVETIMES, NEWACTIVE, OLDACTIVE, NEWSGROUPS, HISTORY
+
+F<active>, F<active.times>, F<active.tmp>, F<active.old> and
+F<newsgroups> in I<pathdb>, and F<history> in I<pathhistory>.
+
+=item CTLFILE, CTLWATCH, EXPIRECTL, LOCALGROUPS, NEWSFEEDS
+
+F<control.ctl>, F<innwatch.ctl>, F<expire.ctl>, F<localgroups> and
+F<newsfeeds> in I<pathetc>.
+
+=item PATH_MOTD_INND, PATH_MOTD_NNRPD, PATH_MOTD
+
+F<motd.innd> and F<motd.nnrpd> in I<pathetc>; PATH_MOTD is the same as
+PATH_MOTD_NNRPD.
+
+=item ERRLOG, LOG
+
+F<errlog> and F<news> in I<pathlog>.
+
+=item PERL_STARTUP_INND, PERL_FILTER_INND, PERL_FILTER_NNRPD
+
+F<startup_innd.pl>, F<filter_innd.pl> and F<filter_nnrpd.pl> in
+I<pathfilter>.
+
+=item PYTHON_FILTER_INND, PATH_PYTHON_INN_MODULE
+
+F<filter_innd.py> and F<INN.py> in I<pathfilter>.
+
+=item PATH_TCL_STARTUP, PATH_TCL_FILTER
+
+F<startup.tcl> and F<filter.tcl> in I<pathfilter>.
+
+=item DAILY
+
+The lock file used by B<news.daily>, F<LOCK.news.daily> in I<pathrun>.
+
+=item NEWSCONTROL, NNTPCONNECT, SERVERPID
+
+The control socket of B<innd> (F<control>), its local NNTP socket
+(F<nntpin>) and its PID file (F<innd.pid>), in I<pathrun>.
+
+=item INNWSTATUS, WATCHPID
+
+The status file and the PID file of B<innwatch> (F<innwatch.status> and
+F<innwatch.pid>), in I<pathrun>.
+
+=back
+
+Programs:
+
+=over 4
+
+=item INNCONFVAL, INND, INNDF, INNWATCH, INEWS, RNEWS
+
+The paths to these INN programs in I<pathbin>.
+
+=item AWK, EGREP, PERL, SED, SORT
+
+The paths to these programs, as found by B<configure>.
+
+=item GPGV, GPG, PGP
+
+The paths to B<gpgv>, B<gpg> and B<pgp>, as found by B<configure> (empty
+if not found).
+
+=item GETFTP, GETHTTP
+
+The programs used to download files with FTP and HTTP.  If no suitable
+program is found by B<configure>, they point to simpleftp(1).
+
+=item UUSTAT, UUX
+
+The paths to these UUCP programs, as found by B<configure>.
+
+=item BZIP2, COMPRESS, GZIP, UNCOMPRESS
+
+The paths to these compression programs, as found by B<configure>.
+
+=item LOG_COMPRESS, Z
+
+The program used to compress log files, and the extension of the
+compressed files (for instance C<.gz>), as chosen with the
+B<--with-log-compress> option of B<configure>.
+
+=back
+
+Other values:
+
+=over 4
+
+=item NEWSMASTER, NEWSUSER, NEWSGROUP
+
+The address of the news administrator, set at build time, and the user
+and group INN runs as (I<runasuser> and I<runasgroup> in F<inn.conf>).
+
+=item FILEMODE, INEWSMODE, RNEWSMODE
+
+The modes used for article files and for the B<inews> and B<rnews>
+programs, chosen at build time.
+
+=item UMASK
+
+The umask of the news system, chosen with the B<--with-news-umask> option
+of B<configure>.  The umask of the script is also set to this value.
+
+=item DO_DBZ_TAGGED_HASH
+
+C<DO> if INN was built with B<--enable-tagged-hash>, C<DONT> otherwise.
+
+=item GPG_HAS_ALLOW_WEAK_DIGEST_ALGOS_FLAG
+
+C<1> if B<gpg> supports the B<--allow-weak-digest-algos> flag, C<0>
+otherwise.
+
+=item SYSLOG_FACILITY
+
+The syslog facility used by INN, in lowercase and without the C<LOG_>
+prefix (for instance C<news>).
+
+=back
+
+=head2 Environment
+
+Besides the exported variables mentioned above, B<innshellvars> sets
+LC_CTYPE to C<C>, puts I<pathnews>/local and I<pathbin> before the
+current PATH and F</bin> and F</usr/bin> after it, and sets DB_HOME to
+I<pathoverview> when I<ovmethod> is C<ovdb>.  HOME is not changed.
+
+=head1 LOCAL VARIABLES
+
+At the end of its run, B<innshellvars> loads F<innshellvars.local> from
+I<pathetc> if that file exists and is executable.  It is read with the
+C<.> command, in the same shell, so it can add variables or change the
+ones set before.  Likewise, B<innshellvars.tcl> loads
+F<innshellvars.tcl.local> with C<source>, and INN::Config and
+F<innshellvars.pl> load F<innshellvars.pl.local> with C<do>.  Samples of
+these three files are installed in I<pathetc>.
+
+For instance, this F<innshellvars.local> makes a site-specific directory
+available to all the shell scripts loading B<innshellvars>:
+
+    MYSITEDIR=/usr/local/news/site
+    export MYSITEDIR
+
+Do not forget to make the file executable, or it will be ignored.
+
+=head1 HISTORY
+
+B<innshellvars> and B<innshellvars.tcl> were written by James Brister
+<brister@vix.com> for InterNetNews in 1996.  Support for the F<.local>
+files was added in S<INN 2.5.3>.
+
+=head1 SEE ALSO
+
+INN::Config(3pm), inn.conf(5), innconfval(1).
+
+=cut

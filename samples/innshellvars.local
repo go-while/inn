@@ -7,5 +7,8 @@
 
 ##  Defining or redefining VARIABLE will allow using
 ##  $VARIABLE with the corresponding value in a script
-##  calling innshellvars.
-#VARIABLE = 'test'
+##  calling innshellvars.  Export it if programs started
+##  by that script also need it.
+##  See innshellvars(3) for the variables already set.
+#VARIABLE='test'
+#export VARIABLE

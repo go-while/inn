@@ -286,7 +286,7 @@ for compatibility reasons with old Perl scripts not shipped with INN.
 It was used by versions of INN anterior to 2.5.0.  The corresponding
 scripts for Shell and Tcl are, however, still in use: F<innshellvars>
 and F<innshellvars.tcl>.  They offer the same capabilities as this
-module.
+module, and the variables they set are listed in innshellvars(3).
 
 =head1 HISTORY
 
@@ -296,6 +296,6 @@ module by Julien Élie in 2007.
 
 =head1 SEE ALSO
 
-inn.conf(5), innconfval(1), perl(1).
+inn.conf(5), innconfval(1), innshellvars(3), perl(1).
 
 =cut

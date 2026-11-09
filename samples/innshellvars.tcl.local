@@ -8,4 +8,5 @@
 ##  Defining or redefining variable will allow using
 ##  $variable with the corresponding value during the run
 ##  of innshellvars.tcl.
+##  See innshellvars(3) for the variables already set.
 #set variable "test"
