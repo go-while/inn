@@ -69,13 +69,42 @@ It invokes B<bzip2> and should be used for batches compressed with B<bzip2>.
 =item B<c7unbatch>
 
 It undoes an ASCII encoding to recover the original binary compressed stream
-and then decompresses it as explained above.
+and then decompresses it as explained above.  It runs B<decode> and then
+C<gzip -d> (or C<compress -d> if B<gzip> was not found when INN was built).
+See L<"SEVEN-BIT BATCHES"> below.
 
 =item B<gunbatch>
 
 It invokes B<gzip> and should be used for batches compressed with B<gzip>.
 
 =back
+
+=head1 SEVEN-BIT BATCHES
+
+Compressed batches are binary data.  For the rare links that cannot carry
+8-bit data, INN provides a 7-bit encoding and two filters, B<encode> and
+B<decode>, installed in I<pathbin>/rnews.libexec.  Both read standard input,
+write standard output and take no options.
+
+B<encode> writes its input using only the printable characters from space
+(C<0x20>) to C<z> (C<0x7A>), without any newline.  The output is about 23%
+larger than the input.  B<decode> does the reverse.  It exits with a
+"bad data" error if its input contains any other character, newlines
+included.
+
+To send such batches, compress the batch, encode it, and start it with a
+C<#! c7unbatch> line.  For instance, with the B<-p> flag of batcher(8):
+
+    ( echo '#! c7unbatch' ; compress -c \
+        | <pathbin>/rnews.libexec/encode ) | uux - -r -z %s!rnews
+
+The receiving B<rnews> then runs B<c7unbatch>.  Use B<compress> rather than
+B<gzip> if the receiving site might not have B<gzip>.  Note that
+B<c7unbatch> runs B<decode> without a path, so I<pathbin>/rnews.libexec
+must be in the PATH of B<rnews> on the receiving site.
+
+This encoding comes from B News 2.11.  It is obsolete and only useful
+with old systems, as today's transports, UUCP included, are 8-bit clean.
 
 =head1 OPTIONS
 
