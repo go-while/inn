@@ -56,7 +56,7 @@ needs the Go standard library:
 | `TestInnxmitDeferred` | innd, innxmit | a 436 requeues the rest of the batch, the next run sends it |
 | `TestInnfeedStreaming` | innd, innfeed | new articles reach the peer through innfeed |
 | `TestInnfeedIHAVEFallback` | innd, innfeed | innfeed falls back to IHAVE |
-| `TestInnfeedSyntaxError` | innd, innfeed | a peer that answers the CHECK (streaming) or IHAVE of one article with 500 or 501 and no Message-ID gets that article once, not again after each reconnect, and the other articles still reach it (#40) |
+| `TestInnfeedSyntaxError` | innd, innfeed | a peer that answers the CHECK (streaming) or IHAVE of one article with 500 or 501 and no Message-ID gets that article once, not again after each reconnect, and the other articles still reach it, also with several CHECK and TAKETHIS commands in flight and after a 501 to TAKETHIS whose article the peer does not read (#40) |
 | `TestInnfeedDebugSnapshotFiles` | innd, innfeed, inncheck | innfeed.conf's debug-file turns on debugging and SIGINT writes the snapshot to snapshot-file (issue #315) |
 | `TestGetlist` | getlist | LIST ACTIVE and LIST NEWSGROUPS of a remote server, with patterns |
 | `TestNews2mailSenders` | innd, news2mail | a crosspost to groups gatewayed to several mailing-lists is mailed once per envelope-from address of `news2mail.cf`, to the lists using it (#116, #188) |
