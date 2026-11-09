@@ -120,6 +120,13 @@ data handling.  Reader tracking and virtualhost permission state, batch
 error cleanup, and file-list growth in expiration tools were also corrected.
 Many thanks to Kevin Bowling for the patches.
 
+=item *
+
+INN no longer ships its own replacement for B<snprintf> and B<vsnprintf>.
+A C99-conforming implementation is now required of the system C library, and
+B<configure> fails when it finds a missing or broken one.  Such systems
+had become very rare, and the replacement was not otherwise maintained.
+
 =back
 
 =head1 Changes in 2.7.5 (not yet released)

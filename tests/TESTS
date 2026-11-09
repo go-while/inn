@@ -50,7 +50,6 @@ lib/readin
 lib/reallocarray
 lib/reservedfd
 lib/setenv
-lib/snprintf
 lib/strlcat
 lib/strlcpy
 lib/tst
