@@ -153,6 +153,10 @@ default is C<60>.
 Note that the time interval given by B<-X> is set to C<0> by default,
 that is to say no control is done on the number of connections.
 
+These flags limit the rate of new connections, not the number of
+simultaneous connections from a host.  See "LIMITING CONNECTIONS PER
+HOST" in nnrpd(8) for a way to limit the latter for readers.
+
 =item B<-i> I<count>
 
 B<innd> normally allows a maximum number of concurrent NNTP connections
