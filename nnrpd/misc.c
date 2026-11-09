@@ -87,22 +87,30 @@ PERMartok(void)
 #ifdef DO_PYTHON
     if (PY_use_dynamic) {
         char *reply;
+        bool hookdefined = true;
 
-        /* Authorize user at a Python authorization module. */
-        if (PY_dynamic(PERMuser, p, false, &reply) < 0) {
-            syslog(L_NOTICE, "PY_dynamic(): authorization skipped due to no "
-                             "Python dynamic method defined");
-        } else {
-            if (reply != NULL) {
-                syslog(L_TRACE,
-                       "PY_dynamic() returned a refuse string for user %s at "
-                       "%s who wants to read %s: %s",
-                       PERMuser, Client.host, p, reply);
-                free(reply);
-                return false;
+        /* Authorize user at a Python authorization module, once per
+         * newsgroup of the article (as for posting).  As with PERMmatch(),
+         * if the user can read the article in one newsgroup, then the
+         * user can read it, period. */
+        for (grp = grplist; *grp != NULL; grp++) {
+            if (PY_dynamic(PERMuser, *grp, false, &reply) < 0) {
+                syslog(L_NOTICE,
+                       "PY_dynamic(): authorization skipped due to no "
+                       "Python dynamic method defined");
+                hookdefined = false;
+                break;
             }
-            return true;
+            if (reply == NULL)
+                return true;
+            syslog(L_TRACE,
+                   "PY_dynamic() returned a refuse string for user %s at "
+                   "%s who wants to read %s: %s",
+                   PERMuser, Client.host, *grp, reply);
+            free(reply);
         }
+        if (hookdefined)
+            return false;
     }
 #endif /* DO_PYTHON */
 

@@ -525,7 +525,9 @@ post.  Connection attributes are passed in the I<attributes> dictionary.
 Returns C<None> to grant access, or a non-empty string encoded in UTF-8
 (which will be reported back to the client in response to GROUP or POST,
 and in any case logged in news logs files for all relevant NNTP commands)
-otherwise.
+otherwise.  When a reader requests an article by its Message-ID, the method
+is called for each newsgroup of the article (as listed in its Xref header
+field), and the article is sent if access is granted for at least one of them.
 
 =item dynamic_close(I<self>)
 
