@@ -180,6 +180,259 @@ func TestInnxmitDeferred(t *testing.T) {
 	}
 }
 
+// postArticle returns the lines of a native article for innxmit -R, as innd stores it after
+// a local posting: with the header fields a reader server refuses or sets itself (some of
+// them folded), a folded kept field, and a body with a line that needs dot-stuffing.
+func postArticle(id, subject string) []string {
+	return []string{
+		"Path: e2e.local!e2e.local.POSTED.client.example!not-for-mail",
+		"From: E2E Test <e2e@example.invalid>",
+		"Newsgroups: e2e.test,e2e.other",
+		"Subject: " + subject,
+		"Date: Mon, 02 Nov 2026 10:00:00 +0000",
+		"Message-ID: " + id,
+		"References: <first@example.invalid>",
+		" <second@example.invalid>",
+		"Injection-Date: Mon, 02 Nov 2026 10:00:01 +0000",
+		"Injection-Info: e2e.local; posting-host=\"192.0.2.1\";",
+		" logging-data=\"1234\"; mail-complaints-to=\"abuse@example.invalid\"",
+		"NNTP-Posting-Host: 192.0.2.1",
+		"NNTP-Posting-Date: Mon, 02 Nov 2026 10:00:01 +0000",
+		"X-Trace: abcdef",
+		"\tghijkl",
+		"X-Complaints-To: abuse@example.invalid",
+		"Xref: e2e.local e2e.test:12 e2e.other:3",
+		"X-Kept: yes",
+		"",
+		"first line of " + id,
+		".a line starting with a dot",
+		"last line",
+	}
+}
+
+// postBatch writes the articles of ids into the site and the batch file "fake" with
+// "path id" lines, and returns the lines of each article as innxmit reads them.
+func (s *Site) postBatch(tb testing.TB, ids ...string) [][]string {
+	tb.Helper()
+	var batch strings.Builder
+	var arts [][]string
+	for i, id := range ids {
+		lines := postArticle(id, fmt.Sprintf("post %d", i+1))
+		path := filepath.Join(s.Dir, fmt.Sprintf("post-%d.art", i+1))
+		if err := os.WriteFile(path, []byte(strings.Join(lines, "\n")+"\n"), 0o644); err != nil {
+			tb.Fatal(err)
+		}
+		fmt.Fprintf(&batch, "%s %s\n", path, id)
+		arts = append(arts, lines)
+	}
+	if err := os.WriteFile(filepath.Join(s.Dir, "spool", "outgoing", "fake"), []byte(batch.String()), 0o644); err != nil {
+		tb.Fatal(err)
+	}
+	return arts
+}
+
+// postedStripped lists the header fields innxmit -R removes from postArticle.
+var postedStripped = []string{
+	"Path", "Injection-Info", "NNTP-Posting-Host", "NNTP-Posting-Date",
+	"X-Trace", "X-Complaints-To", "Xref",
+}
+
+// checkPosted checks that wire (the lines of an article the server received, dot-stuffed)
+// is the article lines without the stripped header fields and their continuation lines,
+// and with an unchanged body.
+func checkPosted(t *testing.T, wire, lines []string) {
+	t.Helper()
+	wire = slices.DeleteFunc(slices.Clone(wire), func(l string) bool { return l == "." })
+	head, body := split(lines)
+	var want []string
+	skip := false
+	for _, l := range head {
+		if l[0] != ' ' && l[0] != '\t' {
+			name, _, _ := strings.Cut(l, ":")
+			skip = slices.Contains(postedStripped, name)
+		}
+		if !skip {
+			want = append(want, l)
+		}
+	}
+	want = append(want, "")
+	for _, l := range body {
+		if strings.HasPrefix(l, ".") {
+			l = "." + l
+		}
+		want = append(want, l)
+	}
+	if !slices.Equal(wire, want) {
+		t.Errorf("server received:\n%s\nwant:\n%s", strings.Join(wire, "\n"), strings.Join(want, "\n"))
+	}
+}
+
+// postServer starts a fake reader server that serves st.
+func postServer(tb testing.TB, st *fakeserver.Store, o fakeserver.StoreOptions, f fakeserver.Faults) *fakeserver.Server {
+	tb.Helper()
+	return fakeserver.New(tb, fakeserver.Options{Store: st, StoreOpts: o, Faults: f})
+}
+
+// TestInnxmitPost: innxmit -R posts a batch to a reader server that needs AUTHINFO (from
+// passwd.nntp), with POST and without MODE STREAM and IHAVE. The header fields a reader
+// server refuses or sets itself (Path, Xref, Injection-Info, NNTP-Posting-*, X-Trace,
+// X-Complaints-To, with their folded lines) are removed, the others and the body are
+// unchanged. An article the server has already (441) is dropped from the batch.
+func TestInnxmitPost(t *testing.T) {
+	st := fakeserver.NewStore()
+	srv := postServer(t, st, fakeserver.StoreOptions{User: "feeder", Pass: "secret"}, fakeserver.Faults{})
+	s := NewSite(t, SiteOptions{
+		Newsfeeds: xmitFeeds,
+		Etc:       map[string]string{"passwd.nntp": "127.0.0.1:feeder:secret\n"},
+	})
+	ids := []string{msgID(t), msgID(t), msgID(t)}
+	arts := s.postBatch(t, ids...)
+	// The server holds the second article already.
+	st.AddArticle("e2e.test", fakeserver.Article{MessageID: ids[1], Headers: []string{"Message-ID: " + ids[1]}, Body: []string{"old"}})
+
+	s.innxmit(t, srv, "-R", "-l")
+
+	posted := srv.Articles()
+	if len(posted) != 3 {
+		t.Fatalf("server received %d articles, want 3 (counts %v)", len(posted), srv.Counts())
+	}
+	checkPosted(t, posted[0], arts[0])
+	checkPosted(t, posted[2], arts[2])
+	if n := srv.Count("POST"); n != 3 {
+		t.Errorf("POST sent %d times, want 3 (counts %v)", n, srv.Counts())
+	}
+	if n := srv.Count("IHAVE") + srv.Count("MODE") + srv.Count("CHECK") + srv.Count("TAKETHIS"); n != 0 {
+		t.Errorf("IHAVE, MODE, CHECK or TAKETHIS sent %d times in POST mode (counts %v)", n, srv.Counts())
+	}
+	if n := srv.Count("AUTHINFO"); n != 2 {
+		t.Errorf("AUTHINFO sent %d times, want 2 (counts %v)", n, srv.Counts())
+	}
+	for _, id := range []string{ids[0], ids[2]} {
+		if _, _, ok := st.ByMessageID(id); !ok {
+			t.Errorf("%s is not on the server", id)
+		}
+	}
+	if b := s.batch(t, "fake"); len(b) != 0 {
+		t.Errorf("batch file after innxmit: %q, want the posted and the refused article dropped", b)
+	}
+}
+
+// TestInnxmitPostDeferred: a 440 to POST (posting is not possible now) makes innxmit keep that
+// article and the rest of the batch and exit 1; the next run posts them.
+func TestInnxmitPostDeferred(t *testing.T) {
+	st := fakeserver.NewStore()
+	down := postServer(t, st, fakeserver.StoreOptions{}, fakeserver.Faults{
+		Override:      map[string][]string{"POST": {"440 Posting not allowed"}},
+		OverrideFrom:  map[string]int{"POST": 2},
+		OverrideTimes: map[string]int{"POST": 1},
+	})
+	up := postServer(t, st, fakeserver.StoreOptions{}, fakeserver.Faults{})
+	s := NewSite(t, SiteOptions{Newsfeeds: xmitFeeds})
+	ids := []string{msgID(t), msgID(t), msgID(t)}
+	s.postBatch(t, ids...)
+
+	out, err := s.TryRun("innxmit", "-P", strconv.Itoa(down.Port()), "-R", "127.0.0.1", "fake")
+	if err == nil {
+		t.Errorf("first run: innxmit exited 0 after a 440, want 1\n%s", out)
+	}
+	if _, _, ok := st.ByMessageID(ids[0]); !ok {
+		t.Errorf("first run: %s was not posted", ids[0])
+	}
+	left := strings.Join(s.batch(t, "fake"), "\n")
+	if strings.Contains(left, ids[0]) || !strings.Contains(left, ids[1]) || !strings.Contains(left, ids[2]) {
+		t.Fatalf("batch file after the first run:\n%s\nwant %s and %s requeued", left, ids[1], ids[2])
+	}
+
+	s.innxmit(t, up, "-R")
+	for _, id := range ids {
+		if _, _, ok := st.ByMessageID(id); !ok {
+			t.Errorf("second run: %s is not on the server", id)
+		}
+	}
+	if n := len(st.Posted()); n != 3 {
+		t.Errorf("server holds %d posted articles, want 3", n)
+	}
+	if b := s.batch(t, "fake"); len(b) != 0 {
+		t.Errorf("batch file after the second run: %q", b)
+	}
+}
+
+// TestInnxmitPostNoAuth: a server that wants AUTHINFO and has no entry in passwd.nntp answers
+// 480 to POST: innxmit stops with the batch file untouched.
+func TestInnxmitPostNoAuth(t *testing.T) {
+	st := fakeserver.NewStore()
+	srv := postServer(t, st, fakeserver.StoreOptions{User: "feeder", Pass: "secret"}, fakeserver.Faults{})
+	s := NewSite(t, SiteOptions{Newsfeeds: xmitFeeds})
+	ids := []string{msgID(t), msgID(t)}
+	s.postBatch(t, ids...)
+	before := s.ReadFile(t, "spool/outgoing/fake")
+
+	out, err := s.TryRun("innxmit", "-P", strconv.Itoa(srv.Port()), "-R", "127.0.0.1", "fake")
+	if err == nil {
+		t.Errorf("innxmit exited 0 after a 480\n%s", out)
+	}
+	if n := len(st.Posted()); n != 0 {
+		t.Errorf("server holds %d posted articles, want 0", n)
+	}
+	if n := srv.Count("POST"); n != 1 {
+		t.Errorf("POST sent %d times, want 1 (counts %v)", n, srv.Counts())
+	}
+	if after := s.ReadFile(t, "spool/outgoing/fake"); after != before {
+		t.Errorf("batch file changed:\n%s\nwas:\n%s", after, before)
+	}
+}
+
+// TestNntpsendPost: nntpsend -R, on its command line or in the fourth field of nntpsend.ctl,
+// runs innxmit -R: the articles innd spooled reach a reader server with POST, without the
+// Path and Xref header fields innd gave them.
+func TestNntpsendPost(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		args func(port int) []string
+		ctl  func(port int) string
+	}{
+		{"commandline", func(port int) []string {
+			return []string{"-R", "-P", strconv.Itoa(port), "fake", "127.0.0.1"}
+		}, nil},
+		{"ctlfile", func(int) []string { return nil }, func(port int) string {
+			return fmt.Sprintf("fake:127.0.0.1:10m:-R -P%d\n", port)
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			st := fakeserver.NewStore()
+			srv := postServer(t, st, fakeserver.StoreOptions{}, fakeserver.Faults{})
+			s := NewSite(t, SiteOptions{Newsfeeds: xmitFeeds})
+			if tc.ctl != nil {
+				s.WriteEtc(t, "nntpsend.ctl", tc.ctl(srv.Port()))
+			}
+			ids := s.Inject(t, "e2e.test", 2)
+			s.flushBatch(t, "fake")
+			out := s.Run(t, "nntpsend", tc.args(srv.Port())...)
+			// nntpsend writes to pathlog/nntpsend.log, innxmit runs in the background of it.
+			log, _ := os.ReadFile(filepath.Join(s.Dir, "log", "nntpsend.log"))
+			posted := srv.Articles()
+			if len(posted) != 2 {
+				t.Fatalf("server received %d articles, want 2 (counts %v)\n%s\n%s", len(posted), srv.Counts(), out, log)
+			}
+			for i, a := range posted {
+				for _, l := range a {
+					if strings.HasPrefix(l, "Path:") || strings.HasPrefix(l, "Xref:") {
+						t.Errorf("article %d has %q", i+1, l)
+					}
+				}
+			}
+			if n := srv.Count("POST"); n != 2 || srv.Count("IHAVE")+srv.Count("TAKETHIS") != 0 {
+				t.Errorf("commands sent: %v, want 2 POST only", srv.Counts())
+			}
+			for _, id := range ids {
+				if _, _, ok := st.ByMessageID(id); !ok {
+					t.Errorf("%s is not on the server\n%s", id, log)
+				}
+			}
+		})
+	}
+}
+
 // innfeedSite starts a site whose innfeed feeds every article to the fake peer.
 func innfeedSite(tb testing.TB, peer *fakeserver.Server) *Site {
 	tb.Helper()

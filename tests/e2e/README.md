@@ -54,6 +54,10 @@ needs the Go standard library:
 | `TestInnxmitIHAVEFallback` | innd, innxmit | a peer that refuses MODE STREAM gets IHAVE |
 | `TestInnxmitRefused` | innd, innxmit | articles the peer has or rejects are dropped from the batch |
 | `TestInnxmitDeferred` | innd, innxmit | a 436 requeues the rest of the batch, the next run sends it |
+| `TestInnxmitPost` | innxmit | `innxmit -R` posts a batch with POST (AUTHINFO from passwd.nntp, no MODE STREAM or IHAVE) to a reader server; Path, Xref, Injection-Info, NNTP-Posting-*, X-Trace and X-Complaints-To (folded lines too) are removed, the other header fields and the body arrive unchanged; a 441 drops the article (#45) |
+| `TestInnxmitPostDeferred` | innxmit | a 440 to POST requeues that article and the rest of the batch, the next run posts them (#45) |
+| `TestInnxmitPostNoAuth` | innxmit | a 480 to POST (no passwd.nntp entry) stops innxmit and leaves the batch file untouched (#45) |
+| `TestNntpsendPost` | innd, nntpsend, innxmit | `nntpsend -R`, on the command line or in nntpsend.ctl, posts the articles innd spooled, without their Path and Xref (#45) |
 | `TestInnfeedStreaming` | innd, innfeed | new articles reach the peer through innfeed |
 | `TestInnfeedIHAVEFallback` | innd, innfeed | innfeed falls back to IHAVE |
 | `TestInnfeedDebugSnapshotFiles` | innd, innfeed, inncheck | innfeed.conf's debug-file turns on debugging and SIGINT writes the snapshot to snapshot-file (issue #315) |
