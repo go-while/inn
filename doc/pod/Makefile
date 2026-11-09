@@ -18,7 +18,7 @@ MAN3	= ../man/libinn.3 ../man/libinn_clientlib.3 ../man/libinn_dbz.3 \
 	../man/libinn_inndcomm.3 \
 	../man/libinnauth.3 ../man/libinnhist.3 ../man/libinnstorage.3 \
 	../man/libinn_list.3 ../man/libinn_qio.3 \
-	../man/libinn_tst.3 ../man/libinn_uwildmat.3
+	../man/libinn_tst.3 ../man/libinn_uwildmat.3 ../man/innshellvars.3
 
 MAN5	= ../man/active.5 ../man/active.times.5 ../man/buffindexed.conf.5 \
 	../man/control.ctl.5 ../man/cycbuff.conf.5 ../man/distrib.pats.5 \
@@ -103,6 +103,7 @@ maintclean: distclean
 ../man/libinn_qio.3:	libinn_qio.pod		; $(POD2MAN) -s 3 $? > $@
 ../man/libinn_tst.3:	libinn_tst.pod		; $(POD2MAN) -s 3 $? > $@
 ../man/libinn_uwildmat.3: libinn_uwildmat.pod	; $(POD2MAN) -s 3 $? > $@
+../man/innshellvars.3:	innshellvars.pod	; $(POD2MAN) -s 3 $? > $@
 
 ../man/active.5:	active.pod		; $(POD2MAN) -s 5 $? > $@
 ../man/active.times.5:	active.times.pod	; $(POD2MAN) -s 5 $? > $@
