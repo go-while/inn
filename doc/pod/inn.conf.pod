@@ -953,9 +953,10 @@ but self-expiring storage methods like CNFS will wrap anyway and remove
 articles in the same order they have arrived).  This is a boolean value and
 the default is false.
 
-See F<doc/FAQ> (subject 6.4) for an example of use of this parameter
-when feeding all articles on a server to another server, keeping their
-chronological ordering.
+See F<doc/FAQ> (subject 6.15) for how to set up such a slave server, and
+subject 6.4 for an example of use of this parameter when feeding all
+articles on a server to another server, keeping their chronological
+ordering.
 
 =back
 

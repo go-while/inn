@@ -89,6 +89,7 @@ Subject: Contents
     6.12. Run innd and nnrpd on separate ports
     6.13. Back up and restore an INN installation
     6.14. Find external feeds and set up peering
+    6.15. Replicate a server with the same article numbers
 
 (Note that some numbers have been skipped.  When questions are removed,
 the remaining questions are not renumbered to avoid breaking links in
@@ -1624,3 +1625,70 @@ files.
 
 If you need importing old articles, you may want to use pullnews.  See its
 manual page for more information about how to use it.
+
+------------------------------
+
+Subject: 6.15. Replicate a server with the same article numbers
+
+You may want two or more reading servers that show the same articles
+under the same article numbers, so that clients can use any of them (for
+instance behind a load balancer) without getting confused.  INN supports
+this with the xrefslave parameter in inn.conf.  One server, the master,
+receives news and assigns article numbers as usual.  The other servers,
+the slaves, are fed only by the master and take the article numbers from
+the Xref header field that the master added to each article.
+
+On each slave, set in inn.conf:
+
+    xrefslave: true
+    nnrpdposthost: <name of the master>
+
+xrefslave makes the slave use the numbers in the Xref header field of
+incoming articles.  An article without an Xref header field, or whose
+Xref header field names none of the newsgroups carried by the slave, is
+rejected.  nnrpdposthost makes nnrpd on the slave hand locally posted
+articles to the master, so that they get their numbers there and come
+back to the slave through the normal feed.
+
+nnrpd sends these articles to the master with IHAVE, so the slave should
+also be listed in incoming.conf on the master (and the master in
+passwd.nntp on the slave if it asks for authentication).
+
+You may also set pathhost on the slave to the same value as on the
+master.  The Path header field of articles coming from the master then
+already starts with that name, so the slave does not add its own name:
+articles look exactly the same on both servers.
+
+Both servers must carry the same newsgroups: an article is not filed in
+a newsgroup that does not exist on the slave.  Either let both servers
+process the same control messages, or synchronize the slave's active
+file from the master with actsync.
+
+On the master, feed the slave with all the newsgroups it carries.  The
+master should send articles in the order it received them, so that the
+history of the slave stays chronologically ordered: expiration on the
+slave is based on arrival time (see the description of xrefslave in
+inn.conf for the details).  With innfeed, use a single connection to the
+slave in innfeed.conf:
+
+    peer slave {
+        ip-name: slave.example.com
+        max-connections: 1
+    }
+
+Articles that cannot be sent at once (for instance when the slave is down
+or deferred them) are sent later, so they can still arrive out of order.
+This does not change their article numbers, which always come from the
+Xref header field, but it affects the order in which they expire.
+
+Any filtering should be done on the master.  If the slave rejects an
+article (because of its own filters or its artcutoff setting), it does
+not have it; clients then see a missing number on the slave that exists
+on the master.
+
+Since the slave only receives articles from the master, which already
+refuses duplicates, /remember/ in expire.ctl on the slave can be set to 0
+to keep its history smaller.
+
+To set up a slave from an existing server, with all its articles, see
+section 6.4 above.
