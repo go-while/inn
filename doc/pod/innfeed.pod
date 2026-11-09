@@ -207,7 +207,10 @@ The number of articles which were sent to the remote host and accepted by it.
 The number of articles offered to the host that it indicated it did not
 want because it had already seen the message-ID.  The remote host indicates
 this by sending a 435 response to an IHAVE command or a 438 response to
-a CHECK command.
+a CHECK command.  Articles to which the remote host answered a CHECK or IHAVE
+command with a 500 or 501 response (for instance because it does not agree
+about the syntax of the message-ID) are counted here too; B<innfeed> drops
+them and logs a warning with their message-ID.
 
 =item rejected
 
@@ -216,6 +219,8 @@ it determined either that it already had the article or it did not want it
 because of the article's Newsgroups or Distribution header fields, etc.
 The remote host indicates that it is rejecting the article by sending a
 437 or 439 response after B<innfeed> sent the entire article.
+A 500 or 501 response to a TAKETHIS command or to the body of an IHAVE
+command is counted here too.
 
 =item missing
 
