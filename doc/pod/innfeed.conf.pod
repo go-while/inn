@@ -539,6 +539,15 @@ articles usually get pulled into memory (see the description of I<use-mmap>).
 This key requires a boolean value.  Its default value is true.  It defines
 whether streaming commands are used to transmit articles to the peers.
 
+Once connected (and authenticated, if I<username> and I<password> are set),
+B<innfeed> sends a CAPABILITIES command.  If the peer lists its capabilities
+and STREAMING is not among them, the peer does not support the streaming
+commands, so B<innfeed> does not send MODE STREAM and uses IHAVE.  If the
+peer lists STREAMING, or does not know CAPABILITIES (as news servers which
+do not implement RFC 3977 answer with a 500 response code), B<innfeed> sends
+MODE STREAM as before, and uses the streaming commands if the peer accepts
+it and this key is true.
+
 =item I<no-check-high>
 
 This key requires a floating-point number which must be in the range

@@ -13,10 +13,13 @@ B<innfeed> [B<-ChmMvxyz>] [B<-a> I<spool-dir>] [B<-b> I<directory>]
 
 B<innfeed> implements the NNTP protocol for transferring news between
 computers.  It handles the standard IHAVE protocol as well as the
-CHECK/TAKETHIS streaming extension.  B<innfeed> can feed any number of
-remote hosts at once and will open multiple connections to each host if
-configured to do so.  The only limitations are the process limits for open
-file descriptors and memory.
+CHECK/TAKETHIS streaming extension.  It asks the remote host for its
+capabilities and does not try the streaming extension with a host whose
+list of capabilities does not mention it (see the I<streaming> key in
+innfeed.conf(5)).  B<innfeed> can feed any number of remote hosts at once
+and will open multiple connections to each host if configured to do so.
+The only limitations are the process limits for open file descriptors and
+memory.
 
 As an alternative to using NNTP, INN may also be fed to an IMAP server.
 This is done by using an executable called B<imapfeed>, which is identical
