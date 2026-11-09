@@ -212,6 +212,151 @@ func TestInnfeedIHAVEFallback(t *testing.T) {
 	}
 }
 
+// syntaxPeer is a fake transit peer that cannot accept the one article whose Message-ID
+// contains "POISON": it answers a CHECK or IHAVE of it with code (500 or 501) and no
+// Message-ID, as servers that disagree about the Message-ID syntax do. It counts the offers
+// of every article and records the ones it accepts.
+type syntaxPeer struct {
+	code   string
+	stream bool
+	mu     sync.Mutex
+	offers map[string]int
+	got    []string
+}
+
+func (p *syntaxPeer) offered(id string) int {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.offers[id]
+}
+
+func (p *syntaxPeer) accepted(ids ...string) bool {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	for _, id := range ids {
+		if !slices.Contains(p.got, id) {
+			return false
+		}
+	}
+	return true
+}
+
+func (p *syntaxPeer) handle(c *fakeserver.Conn, line string) ([]string, bool) {
+	verb, arg, _ := strings.Cut(line, " ")
+	switch strings.ToUpper(verb) {
+	case "CAPABILITIES":
+		r := []string{"101 capability list follows", "VERSION 2", "IHAVE"}
+		if p.stream {
+			r = append(r, "STREAMING")
+		}
+		return append(r, "."), false
+	case "MODE":
+		if p.stream && strings.EqualFold(arg, "STREAM") {
+			return []string{"203 streaming ok"}, false
+		}
+		return []string{"501 Unknown MODE variant"}, false
+	case "CHECK", "IHAVE":
+		isCheck := strings.EqualFold(verb, "CHECK")
+		if isCheck != p.stream {
+			return []string{"500 unknown command"}, false
+		}
+		p.mu.Lock()
+		p.offers[arg]++
+		p.mu.Unlock()
+		if strings.Contains(arg, "POISON") {
+			return []string{p.code + " syntax error"}, false
+		}
+		if isCheck {
+			return []string{"238 " + arg}, false
+		}
+		if err := c.WriteLines("335 send it"); err != nil {
+			return nil, true
+		}
+		if _, err := c.ReadDotBlock(); err != nil {
+			return nil, true
+		}
+		p.mu.Lock()
+		p.got = append(p.got, arg)
+		p.mu.Unlock()
+		return []string{"235 ok"}, false
+	case "TAKETHIS":
+		if _, err := c.ReadDotBlock(); err != nil {
+			return nil, true
+		}
+		p.mu.Lock()
+		p.got = append(p.got, arg)
+		p.mu.Unlock()
+		return []string{"239 " + arg}, false
+	case "QUIT":
+		return []string{"205 bye"}, true
+	}
+	return []string{"500 unknown command"}, false
+}
+
+// TestInnfeedSyntaxError: a peer answers the CHECK (streaming) or IHAVE of one article with
+// 500 or 501, without a Message-ID (#40). innfeed must drop that article instead of
+// offering it again after every reconnect, and the other articles must get through.
+func TestInnfeedSyntaxError(t *testing.T) {
+	for _, stream := range []bool{true, false} {
+		for _, code := range []string{"501", "500"} {
+			mode := "IHAVE"
+			if stream {
+				mode = "streaming"
+			}
+			t.Run(mode+"/"+code, func(t *testing.T) {
+				p := &syntaxPeer{code: code, stream: stream, offers: map[string]int{}}
+				srv := fakeserver.New(t, fakeserver.Options{Handler: fakeserver.LineHandler(p.handle)})
+				s := NewSite(t, SiteOptions{
+					Newsfeeds: "ME:*::\ninnfeed!:!*:Tc,Wnm*:@bindir@/innfeed\nfake:*:Tm:innfeed!\n",
+					Etc: map[string]string{"innfeed.conf": fmt.Sprintf(
+						"initial-reconnect-time: 1\nmax-reconnect-time: 1\nbacklog-rotate-period: 1\nbacklog-ckpt-period: 1\n"+
+							"peer fake {\n    ip-name: \"127.0.0.1\"\n    port-number: %d\n    max-connections: 1\n}\n",
+						srv.Port())},
+				})
+				ids := make([]string, 5)
+				for i := range ids {
+					ids[i] = msgID(t)
+				}
+				poison := strings.Replace(msgID(t), "<", "<POISON.", 1)
+				ids[2] = poison
+				pc := s.Peer(t)
+				for i, id := range ids {
+					expect(t, pc, 335, "IHAVE %s", id)
+					send(t, pc, wire(newArticle(id, "e2e.test", fmt.Sprintf("syntax %d", i+1), "body of "+id)))
+					status(t, pc, 235, "IHAVE "+id)
+				}
+				expect(t, pc, 205, "QUIT")
+
+				waitFor(t, 30*time.Second, "innfeed to offer the article", func() bool { return p.offered(poison) > 0 })
+				// After a 500 all connections sleep and innfeed keeps the articles that were
+				// in flight in its backlog, which it only reads when a connection has done a
+				// transfer. A later article provides it.
+				time.Sleep(3 * time.Second)
+				trigger := msgID(t)
+				pc = s.Peer(t)
+				expect(t, pc, 335, "IHAVE %s", trigger)
+				send(t, pc, wire(newArticle(trigger, "e2e.test", "syntax trigger", "body of "+trigger)))
+				status(t, pc, 235, "IHAVE "+trigger)
+				expect(t, pc, 205, "QUIT")
+
+				others := slices.Concat(ids[:2], ids[3:], []string{trigger})
+				waitFor(t, 30*time.Second, "the other articles to reach the peer", func() bool { return p.accepted(others...) })
+				// Give innfeed the time for a few reconnects (1 second each) in which it would
+				// offer the article again, and stop early if it does.
+				for end := time.Now().Add(5 * time.Second); time.Now().Before(end) && p.offered(poison) == 1; {
+					time.Sleep(100 * time.Millisecond)
+				}
+				if n := p.offered(poison); n != 1 {
+					t.Errorf("the article that got %s was offered %d times, want once and then dropped", code, n)
+				}
+				if p.accepted(poison) {
+					t.Errorf("the peer accepted the article it answers %s for", code)
+				}
+			})
+		}
+	}
+}
+
 // TestInnfeedDebugSnapshotFiles: the debug-file and snapshot-file keys of innfeed.conf name
 // the file whose presence turns on debugging and the file SIGINT writes a snapshot to, so
 // that several innfeed instances do not share innfeed.debug and innfeed.snapshot (issue
