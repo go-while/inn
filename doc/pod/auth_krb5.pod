@@ -33,6 +33,8 @@ principal received from B<nnrpd> and authentication will be done against
 that principal instead of the base principal.  In other words, a principal
 like C<user>, when passed to B<auth_krb5> invoked with C<-i nntp>, will be
 transformed into C<user/nntp> before attempting Kerberos authentication.
+A username that already contains a C</> is rejected when this option is
+given, because the resulting principal would have several instances.
 
 Since giving one's password to B<nnrpd> is not as secure as normal
 Kerberos authentication, this option supports a configuration where all
@@ -68,12 +70,6 @@ gaining access to the news server via it.  However, this is also something
 that people may wish to do under some circumstances, so there should be a
 better way of handling it (such as, perhaps, a list of acceptable realms
 or a B<-r> flag specifying the realm in which to attempt authentication).
-
-It's not clear the right thing to do when the username passed in contains
-a C</> and B<-i> was also given.  Right now, B<auth_krb5> will create a
-malformed Kerberos principal with multiple instances and attempt to
-authenticate against it, which will fail but perhaps not with the best
-error message.
 
 =head1 HISTORY
 

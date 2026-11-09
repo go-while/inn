@@ -212,6 +212,13 @@ malformed stored Xref records with tradspool and corrupt history records.
 The overview and storage backends also validate more structures before using
 them.  Many thanks to Kevin Bowling for the patches.
 
+=item *
+
+B<auth_krb5> now rejects with a clear message a username containing a C</>
+when its B<-i> option is given, instead of building a malformed Kerberos
+principal with several instances and letting the authentication fail with
+an obscure error.
+
 =back
 
 =head1 Changes in 2.7.4 (2026-06-22)

@@ -7,7 +7,8 @@
 **  This program takes a username and password pair from nnrpd and checks
 **  their validity against a Kerberos KDC by attempting to obtain a TGT.
 **  With the -i <instance> command line option, appends /<instance> to
-**  the username prior to authentication.
+**  the username prior to authentication; a username that already contains
+**  a / is then rejected.
 **
 **  Special thanks to Von Welch <vwelch@vwelch.com> for giving me the initial
 **  code on which the Kerberos V authentication is based many years ago, and
@@ -234,6 +235,12 @@ main(int argc, char *argv[])
     /* May need to prepend instance name if -i option was given. */
     if (argc > 1) {
         if (argc == 3 && strcmp(argv[1], "-i") == 0) {
+            /* The instance is the only component allowed to differ, so
+               a username with its own instance would build a principal
+               with several instances (or one that is not the one the
+               administrator restricted logins to). */
+            if (strchr(authinfo->username, '/') != NULL)
+                die("username contains /, not allowed with -i");
             xasprintf(&new_user, "%s/%s", authinfo->username, argv[2]);
             free(authinfo->username);
             authinfo->username = new_user;
