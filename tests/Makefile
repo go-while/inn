@@ -32,7 +32,7 @@ TESTS	= authprogs/ident.t expire/tombstone.t expire/tombstone-hisexpire.t \
 	lib/network/client.t lib/network/server.t \
 	lib/pread.t lib/pwrite.t lib/qio.t lib/readin.t lib/reallocarray.t \
 	lib/reservedfd.t \
-	lib/setenv.t lib/snprintf.t lib/strlcat.t \
+	lib/setenv.t lib/strlcat.t \
 	lib/strlcpy.t lib/tst.t lib/uwildmat.t lib/vector.t lib/wire.t \
 	lib/xwrite.t nnrpd/auth-ext.t overview/api.t overview/buffindexed.t \
 	overview/ovsqlite.t overview/tdx-group.t overview/tradindexed.t \
@@ -295,12 +295,6 @@ lib/setenv.o: ../lib/setenv.c
 
 lib/setenv.t: lib/setenv.o lib/setenv-t.o tap/basic.o $(LIBINN)
 	$(LINK) lib/setenv.o lib/setenv-t.o tap/basic.o $(LIBINN)
-
-lib/snprintf.o: ../lib/snprintf.c
-	$(CC) $(CFLAGS) -DTESTING -c -o $@ ../lib/snprintf.c
-
-lib/snprintf.t: lib/snprintf.o lib/snprintf-t.o tap/basic.o $(LIBINN)
-	$(LINK) lib/snprintf.o lib/snprintf-t.o tap/basic.o $(LIBINN)
 
 lib/strlcat.o: ../lib/strlcat.c
 	$(CC) $(CFLAGS) -DTESTING -c -o $@ ../lib/strlcat.c
