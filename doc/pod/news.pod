@@ -218,10 +218,11 @@ B<innfeed> no longer retries forever an article that the remote host
 answered with a 500 or 501 response code to IHAVE, CHECK or TAKETHIS (for
 instance because it disagrees about the syntax of the message-ID).  The
 article is dropped and a warning with its message-ID is logged.  After a
-500 response, which means the command is not understood at all, the
-connection is also closed and the other articles are retried later.  The
-response is attributed to the oldest command still waiting for a reply, as
-B<innxmit> already does.
+500 response, which means the command is not understood at all, and after
+a 501 response to TAKETHIS, after which the remote host may not have read
+the article, the connection is also closed and the other articles are
+retried later.  The response is attributed to the oldest command still
+waiting for a reply, as B<innxmit> already does.
 
 =back
 

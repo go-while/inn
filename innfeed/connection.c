@@ -3346,10 +3346,14 @@ cxnIdle(Connection cxn)
  * oldest command still waiting for its reply.  If the response does carry a
  * known Message-ID, that one is used.
  *
- * After a 501 the connection is fine.  A 500 means the remote does not
- * know the command at all (a reader server, a misconfigured peer), so
- * nothing else will be accepted on this connection either; the other
- * articles are given back to the Host and the connection is reset.
+ * After a 501 to CHECK, IHAVE or the IHAVE-body the connection is fine.
+ * A 500 means the remote does not know the command at all (a reader server,
+ * a misconfigured peer), so nothing else will be accepted on this connection
+ * either.  After a 501 to TAKETHIS, we cannot tell whether the remote read
+ * the article that followed the command; if it did not, it answers each of
+ * its lines, and these answers would be taken for the replies to the next
+ * commands.  In these two cases, the other articles are given back to the
+ * Host and the connection is reset.
  */
 static void
 processResponseSyntax(Connection cxn, unsigned int code, char *response)
@@ -3358,7 +3362,7 @@ processResponseSyntax(Connection cxn, unsigned int code, char *response)
     char *msgid;
     ArtHolder artHolder = NULL;
     ArtHolder *queue = NULL;
-    bool fromTake;
+    bool fromTake, reset;
 
     if (!(cxn->state == cxnFlushingS || cxn->state == cxnFeedingS
           || cxn->state == cxnClosingS)) {
@@ -3404,6 +3408,7 @@ processResponseSyntax(Connection cxn, unsigned int code, char *response)
     }
 
     fromTake = (queue == &cxn->takeRespHead);
+    reset = (code == 500 || (fromTake && cxn->doesStreaming));
 
     warn("%s:%u article %s dropped, remote answered %s with %u: %s", peerName,
          cxn->ident, artMsgId(artHolder->article),
@@ -3429,10 +3434,14 @@ processResponseSyntax(Connection cxn, unsigned int code, char *response)
         hostArticleNotWanted(cxn->myHost, cxn, artHolder->article);
     delArtHolder(artHolder);
 
-    if (code == 500) {
+    if (reset) {
         cxnLogStats(cxn, true);
-        warn("%s:%u cxnsleep command not recognized by the remote", peerName,
-             cxn->ident);
+        if (code == 500)
+            warn("%s:%u cxnsleep command not recognized by the remote",
+                 peerName, cxn->ident);
+        else
+            warn("%s:%u cxnsleep syntax error in TAKETHIS, resetting",
+                 peerName, cxn->ident);
         cxnSleepOrDie(cxn);
     }
 }
@@ -3569,6 +3578,9 @@ resetConnection(Connection cxn)
     cxn->takesSizeOkayed_checkpoint = 0;
 
     cxn->filterValue = 0.0;
+
+    /* The queues are empty here; restart the numbering of the commands. */
+    cxn->cmdSeq = 0;
 }
 
 
