@@ -93,6 +93,8 @@
 /* We keep a linked list of articles the connection is trying to transmit */
 typedef struct art_holder_s {
     Article article;
+    unsigned long seq; /* order in which the command for this article was
+                          sent (see cmdSeq in the Connection) */
     struct art_holder_s *next;
 } *ArtHolder;
 
@@ -132,6 +134,10 @@ struct connection_s {
     unsigned int articleQTotal; /* number of articles in all four queues */
     ArtHolder missing;          /* head of missing list */
 
+    unsigned long cmdSeq; /* counts the CHECK/IHAVE/TAKETHIS/IHAVE-body
+                             commands sent, so that a reply carrying no
+                             Message-ID (500, 501) can be attributed to the
+                             oldest command still waiting for its reply. */
 
     Buffer respBuffer; /* buffer all responses are read into */
 
@@ -274,6 +280,8 @@ static void processResponse436(Connection cxn, char *response);
 static void processResponse437(Connection cxn, char *response);
 static void processResponse480(Connection cxn, char *response);
 static void processResponse503(Connection cxn, char *response);
+static void processResponseSyntax(Connection cxn, unsigned int code,
+                                  char *response);
 
 
 /* Misc functions */
@@ -1950,6 +1958,11 @@ responseIsRead(EndPoint e, IoStatus i, Buffer *b, void *d)
             processResponse503(cxn, response);
             break;
 
+        case 500: /* command not recognized */
+        case 501: /* syntax error (e.g. disagreement on the Message-ID) */
+            processResponseSyntax(cxn, code, response);
+            break;
+
         default:
             warn("%s:%u cxnsleep response unknown: %d %s", peerName,
                  cxn->ident, code, response);
@@ -3319,6 +3332,113 @@ cxnIdle(Connection cxn)
 
 
 /*
+ * Process a 500 (command not recognized) or 501 (syntax error) response to
+ * IHAVE, CHECK, TAKETHIS or the IHAVE-body.
+ *
+ * The remote will not accept this article as we offered it, for instance
+ * because it disagrees about what a valid Message-ID is, and it will not
+ * change its mind when the article is offered again.  Retrying would loop
+ * forever on the same article, so it is dropped.
+ *
+ * These responses usually do not repeat the Message-ID, so the article is
+ * found by the order of the commands: replies come back in the order the
+ * commands were sent (RFC 3977 section 3.5), so the response belongs to the
+ * oldest command still waiting for its reply.  If the response does carry a
+ * known Message-ID, that one is used.
+ *
+ * After a 501 the connection is fine.  A 500 means the remote does not
+ * know the command at all (a reader server, a misconfigured peer), so
+ * nothing else will be accepted on this connection either; the other
+ * articles are given back to the Host and the connection is reset.
+ */
+static void
+processResponseSyntax(Connection cxn, unsigned int code, char *response)
+{
+    const char *peerName = hostPeerName(cxn->myHost);
+    char *msgid;
+    ArtHolder artHolder = NULL;
+    ArtHolder *queue = NULL;
+    bool fromTake;
+
+    if (!(cxn->state == cxnFlushingS || cxn->state == cxnFeedingS
+          || cxn->state == cxnClosingS)) {
+        warn("%s:%u cxnsleep connection in bad state: %s", peerName,
+             cxn->ident, stateToString(cxn->state));
+        cxnSleepOrDie(cxn);
+        return;
+    }
+
+    VALIDATE_CONNECTION(cxn);
+
+    /* A Message-ID in the response, if any, tells which article it is. */
+    msgid = getMsgId(response);
+    if (msgid != NULL && msgid[0] == '<') {
+        if ((artHolder = artHolderByMsgId(msgid, cxn->checkRespHead)) != NULL)
+            queue = &cxn->checkRespHead;
+        else if ((artHolder = artHolderByMsgId(msgid, cxn->takeRespHead))
+                 != NULL)
+            queue = &cxn->takeRespHead;
+    }
+    if (msgid != NULL)
+        free(msgid);
+
+    /* Otherwise it is the oldest command waiting for its reply. */
+    if (artHolder == NULL) {
+        if (cxn->checkRespHead != NULL
+            && (cxn->takeRespHead == NULL
+                || cxn->checkRespHead->seq < cxn->takeRespHead->seq)) {
+            artHolder = cxn->checkRespHead;
+            queue = &cxn->checkRespHead;
+        } else if (cxn->takeRespHead != NULL) {
+            artHolder = cxn->takeRespHead;
+            queue = &cxn->takeRespHead;
+        }
+    }
+
+    if (artHolder == NULL) {
+        /* Nothing was sent that waits for a reply. */
+        warn("%s:%u cxnsleep response unexpected: %u", peerName, cxn->ident,
+             code);
+        cxnSleepOrDie(cxn);
+        return;
+    }
+
+    fromTake = (queue == &cxn->takeRespHead);
+
+    warn("%s:%u article %s dropped, remote answered %s with %u: %s", peerName,
+         cxn->ident, artMsgId(artHolder->article),
+         cxn->doesStreaming ? (fromTake ? "TAKETHIS" : "CHECK")
+                            : (fromTake ? "the IHAVE body" : "IHAVE"),
+         code, response);
+
+    remArtHolder(artHolder, queue, &cxn->articleQTotal);
+    if (fromTake) {
+        cxn->takesRejected++;
+        cxn->takesSizeRejected += artSize(artHolder->article);
+    } else {
+        cxn->checksRefused++;
+    }
+
+    /* Go idle before telling the Host: it may hand us a new article. */
+    if (cxn->articleQTotal == 0 && !writeIsPending(cxn->myEp))
+        cxnIdle(cxn);
+
+    if (fromTake)
+        hostArticleRejected(cxn->myHost, cxn, artHolder->article);
+    else
+        hostArticleNotWanted(cxn->myHost, cxn, artHolder->article);
+    delArtHolder(artHolder);
+
+    if (code == 500) {
+        cxnLogStats(cxn, true);
+        warn("%s:%u cxnsleep command not recognized by the remote", peerName,
+             cxn->ident);
+        cxnSleepOrDie(cxn);
+    }
+}
+
+
+/*
  * Called when a response from the remote refers to a non-existent
  * message-id. The network connection is aborted and the Connection
  * object goes into sleep mode.
@@ -3624,6 +3744,7 @@ issueIHAVE(Connection cxn)
     /* now move the article to the second queue */
     cxn->checkRespHead = cxn->checkHead;
     cxn->checkHead = NULL;
+    cxn->checkRespHead->seq = ++cxn->cmdSeq;
 
     cxn->checksIssued++;
     hostArticleOffered(cxn->myHost, cxn);
@@ -3685,6 +3806,7 @@ issueIHAVEBody(Connection cxn)
     /* now move the article to the last queue */
     cxn->takeRespHead = cxn->takeHead;
     cxn->takeHead = NULL;
+    cxn->takeRespHead->seq = ++cxn->cmdSeq;
 
     return;
 }
@@ -3714,6 +3836,10 @@ issueStreamingCommands(Connection cxn)
     checkBuffer = buildCheckBuffer(cxn); /* may be null if none to issue */
 
     if (checkBuffer != NULL) {
+        /* The CHECK commands are sent in queue order. */
+        for (p = cxn->checkHead; p != NULL; p = p->next)
+            p->seq = ++cxn->cmdSeq;
+
         /* Now shift the articles to their new queue. */
         for (p = cxn->checkRespHead; p != NULL && p->next != NULL; p = p->next)
             /* nada--finding end of queue*/;
@@ -3739,6 +3865,10 @@ issueStreamingCommands(Connection cxn)
         }
 
         rval = true;
+
+        /* The TAKETHIS commands follow the CHECK commands, in queue order. */
+        for (p = cxn->takeHead; p != NULL; p = p->next)
+            p->seq = ++cxn->cmdSeq;
 
         /* now shift articles over to their new queue. */
         for (p = cxn->takeRespHead; p != NULL && p->next != NULL; p = p->next)
@@ -4338,6 +4468,7 @@ newArtHolder(Article article)
     ArtHolder a = xmalloc(sizeof(struct art_holder_s));
 
     a->article = article;
+    a->seq = 0;
     a->next = NULL;
 
     return a;
