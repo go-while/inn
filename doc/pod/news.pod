@@ -212,6 +212,16 @@ malformed stored Xref records with tradspool and corrupt history records.
 The overview and storage backends also validate more structures before using
 them.  Many thanks to Kevin Bowling for the patches.
 
+=item *
+
+A new B<-R> option in B<innxmit> sends articles with POST instead of IHAVE,
+to a news reader server (issue #45).  The header fields that a reader server
+refuses or sets itself (Path, Xref, Injection-Info, NNTP-Posting-Host, etc.)
+are removed from the articles, and the Message-ID is kept so that a duplicate
+is refused.  It is also accepted by B<nntpsend> and in F<nntpsend.ctl>.
+This is useful for a local server without peering, whose articles have to
+be posted to another server.
+
 =back
 
 =head1 Changes in 2.7.4 (2026-06-22)

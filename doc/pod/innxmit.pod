@@ -4,7 +4,7 @@ innxmit - Send Usenet articles to a remote NNTP server
 
 =head1 SYNOPSIS
 
-B<innxmit> [B<-acdHlprsv>] [B<-P> I<portnum>] [B<-T> I<seconds>]
+B<innxmit> [B<-acdHlpRrsv>] [B<-P> I<portnum>] [B<-T> I<seconds>]
 [B<-t> I<seconds>] I<host> I<file>
 
 =head1 DESCRIPTION
@@ -33,6 +33,12 @@ if present, are separated by a space.  If a communication error such
 as a write(2) failure occurs, B<innxmit> will stop sending and rewrite
 the batch file to contain the current article and any other unsent
 articles.
+
+B<innxmit> normally sends articles to a news transit server with IHAVE (or
+CHECK and TAKETHIS in streaming mode).  With the B<-R> flag, it sends them
+with POST instead to a news reader server, for instance for a local server
+which has no peering and whose articles are posted to another server.
+See the description of B<-R> below.
 
 An alternative to B<innxmit> can be B<innduct>, mentioned in the
 innfeed(8) man page.
@@ -90,6 +96,35 @@ To specify a port number other than the default, use the B<-P> flag.
 If the B<-p> flag is given, then no connection is made and the batch
 file is purged of entries that refer to files that no longer exist.
 This implies the B<-a> flag.
+
+=item B<-R>
+
+Send the articles with the POST command instead of IHAVE, for a server which
+accepts articles only from its news readers.  The port of its reader service
+may have to be given with B<-P>.  If I<passwd.nntp> has an entry for the
+remote server, B<innxmit> authenticates with AUTHINFO as usual.
+
+Streaming is not used in this mode (B<-s> is implied, and B<-c> has no effect),
+and B<-H> cannot be given.  Articles are sent one at a time, because POST
+cannot be pipelined.  In each article, the following header fields are removed
+before it is sent, as a reader server refuses them or sets them itself:
+Path, Xref, Injection-Info, NNTP-Posting-Host, NNTP-Posting-Date, X-Trace,
+X-Complaints-To, Date-Received, Posting-Version, Relay-Version, Also-Control,
+Article-Names, Article-Updates and See-Also.  All other header fields,
+including Message-ID, Date and Injection-Date, and the body are sent
+unchanged.  The Message-ID is kept so that the server can recognize an
+article it already has as a duplicate.  As POST has no way to offer a
+Message-ID first, the server only says so after the whole article was sent.
+
+The replies of the server are handled as follows.  A 240 response (article
+posted) counts as accepted.  A 441 response (posting failed, for instance
+because of a duplicate or an article refused by a filter) is a rejection:
+the article is dropped from the batch file, and the reason is logged with
+B<-l>.  When the server answers a POST command or an article with 400, 403,
+440, 480, 500 or 502, B<innxmit> stops, and rewrites the batch file with
+the current article and the unsent ones (no article is lost), so that they
+are tried again the next time.  Other unexpected responses are handled
+as with IHAVE, see B<-r>.
 
 =item B<-r>
 
