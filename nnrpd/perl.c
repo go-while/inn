@@ -366,7 +366,7 @@ perlAuthInit(void)
 
 void
 perlAuthenticate(char *user, char *passwd, int *code, char *errorstring,
-                 char *newUser)
+                 size_t errorstringsize, char *newUser, size_t newUsersize)
 {
     dSP;
     HV *attribs;
@@ -418,16 +418,13 @@ perlAuthenticate(char *user, char *passwd, int *code, char *errorstring,
         ExitWithStats(1, false);
     }
 
-    /* FIXME: Change the structure of the code so that we don't have to rely
-     * on keeping these sizes in sync with the buffers that are passed into
-     * this function. */
     if (rc == 3) {
         p = POPp;
-        strlcpy(newUser, p, BIG_BUFFER);
+        strlcpy(newUser, p, newUsersize);
     }
 
     p = POPp;
-    strlcpy(errorstring, p, BIG_BUFFER);
+    strlcpy(errorstring, p, errorstringsize);
 
     *code = POPi;
 

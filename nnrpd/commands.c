@@ -392,7 +392,7 @@ CMDauthinfo(int ac, char *av[])
         errorstr[0] = '\0';
         code = NNTP_FAIL_AUTHINFO_BAD;
 
-        PERMlogin(User, Password, &code, errorstr);
+        PERMlogin(User, Password, &code, errorstr, sizeof(errorstr));
         PERMgetpermissions();
 
         /* If authentication is successful. */

@@ -257,7 +257,8 @@ extern bool PERMartok(void);
 extern void PERMgetinitialaccess(char *readersconf);
 extern void PERMgetaccess(bool initialconnection);
 extern void PERMgetpermissions(void);
-extern void PERMlogin(char *uname, char *pass, int *code, char *errorstr);
+extern void PERMlogin(char *uname, char *pass, int *code, char *errorstr,
+                      size_t errorstrsize);
 extern bool PERMmatch(char **Pats, char **list);
 extern bool ParseDistlist(char ***argvp, char *list);
 extern void SetDefaultAccess(ACCESSGROUP *);
@@ -312,7 +313,8 @@ extern int TrackClient(char *client, char *user, size_t len);
 extern void loadPerl(void);
 extern void perlAccess(char *user, struct vector *access_vec);
 extern void perlAuthenticate(char *user, char *passwd, int *code,
-                             char *errorstring, char *newUser);
+                             char *errorstring, size_t errorstringsize,
+                             char *newUser, size_t newUsersize);
 extern void perlAuthInit(void);
 #endif /* DO_PERL */
 
@@ -320,7 +322,8 @@ extern void perlAuthInit(void);
 extern bool PY_use_dynamic;
 
 void PY_authenticate(char *path, char *Username, char *Password, int *code,
-                     char *errorstring, char *newUser);
+                     char *errorstring, size_t errorstringsize, char *newUser,
+                     size_t newUsersize);
 void PY_access(char *path, struct vector *access_vec, char *Username);
 void PY_close_python(void);
 int PY_dynamic(char *Username, char *NewsGroup, int PostFlag,

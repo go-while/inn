@@ -130,7 +130,8 @@ static char *dynamic_file;
 */
 void
 PY_authenticate(char *file, char *User, char *Password, int *code,
-                char *errorstring, char *newUser)
+                char *errorstring, size_t errorstringsize, char *newUser,
+                size_t newUsersize)
 {
     PyObject *result, *item, *proc;
     int authnum;
@@ -229,7 +230,7 @@ PY_authenticate(char *file, char *User, char *Password, int *code,
 
     /* Store error string. */
     temp = PyString_AS_STRING(item);
-    strlcpy(errorstring, temp, BIG_BUFFER);
+    strlcpy(errorstring, temp, errorstringsize);
 
     if (PyTuple_Size(result) == 3) {
 
@@ -247,7 +248,7 @@ PY_authenticate(char *file, char *User, char *Password, int *code,
 
         /* Store user string. */
         temp = PyString_AS_STRING(item);
-        strlcpy(newUser, temp, BIG_BUFFER);
+        strlcpy(newUser, temp, newUsersize);
     }
 
     /* Clean up the dictionary object. */
