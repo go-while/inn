@@ -14,6 +14,8 @@
 
 #include <errno.h>
 #include <fcntl.h>
+#include <sys/ipc.h>
+#include <sys/sem.h>
 #include <sys/stat.h>
 #include <sys/wait.h>
 
@@ -105,6 +107,26 @@ fake_innconf(void)
     innconf->pathoverview = xstrdup("ov-tmp");
     innconf->pathrun = xstrdup("ov-tmp");
     innconf->tradindexedmmap = true;
+}
+
+/* buffindexed serializes access to its shared memory with System V
+   semaphores, which some systems (such as GNU/Hurd) do not implement.  Return
+   true if they are usable.  Fail the tests on any other error from semget(),
+   since that points to a problem with the system that should be noticed. */
+static bool
+semaphores_available(void)
+{
+    int id;
+
+    id = semget(IPC_PRIVATE, 1, IPC_CREAT | S_IRUSR | S_IWUSR);
+    if (id < 0) {
+        if (errno == ENOSYS)
+            return false;
+        sysbail("cannot create a test semaphore");
+    }
+    if (semctl(id, 0, IPC_RMID, NULL) < 0)
+        sysdiag("cannot remove the test semaphore");
+    return true;
 }
 
 /* Initialize an empty buffindexed buffer. */
@@ -569,6 +591,9 @@ main(void)
     bool status;
     int fd;
     char trailing = 0;
+
+    if (strcmp(STRING(OVTYPE), "buffindexed") == 0 && !semaphores_available())
+        skip_all("System V semaphores not implemented");
 
     test_init(23);
 
