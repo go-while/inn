@@ -50,6 +50,9 @@ install_packages() {
         # the Python headers (innd's Python filter).
         apt-get -qq install -y libgd-perl iproute2 python3-dev >/dev/null 2>&1 \
             || echo "some optional packages are not available"
+        # The Perl module MIME::Parser, for controlchan.
+        apt-get -qq install -y libmime-tools-perl >/dev/null 2>&1 \
+            || echo "libmime-tools-perl is not available"
     elif command -v dnf >/dev/null; then
         dnf -q -y install gcc make autoconf bison flex findutils diffutils tar \
             perl perl-devel perl-ExtUtils-Embed perl-libnet openssl-devel \

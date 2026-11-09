@@ -977,6 +977,7 @@ tests/e2e                             End-to-end protocol tests in Go (Directory
 tests/e2e/README.md                   Documentation for the end-to-end tests
 tests/e2e/article_test.go             Article and reply helpers
 tests/e2e/auth_test.go                Tests of AUTHINFO with nnrpd and ckpasswd
+tests/e2e/checkgroups_test.go          Tests of docheckgroups and rmgroup descriptions
 tests/e2e/client_test.go              Tests of innxmit, innfeed, getlist, pullnews
 tests/e2e/compress_test.go            Tests of COMPRESS DEFLATE with nnrpd
 tests/e2e/conformance_test.go         Protocol conformance of nnrpd and innd
