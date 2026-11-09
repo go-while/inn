@@ -1904,4 +1904,82 @@ listed in F<control.ctl>.  If a hierarchy key has multiple user IDs, you
 may have to remove all the user IDs except the one that matches the
 F<control.ctl> entry using C<gpg --edit-key> and the C<delkey> command.
 
+=head2 Example: Verifying Control Messages with GnuPG
+
+Here is a complete setup of the verification of control messages with
+GnuPG, using the recommended key ring in I<pathetc>/pgp.  Run all these
+commands as the news user, so that the files belong to it, and adapt the
+paths to your installation.
+
+=over 4
+
+=item 1.
+
+Check that verification is enabled and that B<controlchan> is fed with
+control messages.  The first command should print C<true>; if not, set
+I<pgpverify> to true in F<inn.conf> and restart INN.  The second command
+should show the C<controlchan!> entry of the sample F<newsfeeds> file,
+which must not be commented out.
+
+    <pathbin>/innconfval pgpverify
+    grep -A2 '^controlchan!' <pathetc>/newsfeeds
+
+=item 2.
+
+Create the key ring directory, readable only by the news user:
+
+    mkdir -p <pathetc>/pgp
+    chmod 700 <pathetc>/pgp
+    touch <pathetc>/pgp/pubring.gpg
+
+When I<pathetc>/pgp exists, B<pgpverify> only looks for keys in the file
+F<pubring.gpg> in that directory.  Creating that file before importing
+keys matters with S<GnuPG 2.1> and later: if neither F<pubring.gpg> nor
+F<pubring.kbx> exists, these versions store keys in a new F<pubring.kbx>
+file, which B<pgpverify> does not read.  For the same reason, a
+F<trustedkeys.gpg> file is not needed in this directory.
+
+=item 3.
+
+Get the public keys of the hierarchy administrators and import them.
+The file below collects the keys of the major hierarchies; the URLs of
+other keys are given in comments in F<control.ctl>.
+
+    cd <pathtmp>
+    wget https://downloads.isc.org/pub/pgpcontrol/PGPKEYS
+    gpg --homedir <pathetc>/pgp --import PGPKEYS
+
+Add C<--allow-weak-digest-algos> to the B<gpg> command if it refuses some
+old keys.  Then check the imported keys:
+
+    gpg --homedir <pathetc>/pgp --list-keys
+
+=item 4.
+
+Check that B<pgpverify> finds the keys, with the signed control message
+installed with INN as F<sample-control> in the documentation directory
+(I<pathnews>/doc by default):
+
+    <pathbin>/pgpverify < <pathnews>/doc/sample-control
+
+It should print C<news.announce.newgroups>, the identity of the key that
+signed this message, which is also the one used in the C<verify-> actions
+for the Big Eight hierarchies in F<control.ctl>.  If nothing is printed,
+B<pgpverify> logs the reason with syslog at the C<err> level (normally
+in F<news.err>).
+
+=item 5.
+
+Review F<control.ctl> as explained above, and keep only the hierarchies
+you carry.  Each C<verify-> action names the key identity that must have
+signed the control message; see control.ctl(5).
+
+=back
+
+When a control message arrives, B<controlchan> runs B<pgpverify> on it.
+If the signature is good and comes from the expected key, the action of
+the matching F<control.ctl> line is done.  Otherwise, B<controlchan> logs
+a line like C<skipping newgroup ... (pgpverify failed)> with syslog, in
+F<news.notice>.
+
 =cut
