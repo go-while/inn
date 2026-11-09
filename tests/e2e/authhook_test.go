@@ -122,8 +122,8 @@ func TestAuthHookLongResults(t *testing.T) {
 			expect(t, c, 211, "GROUP e2e.test")
 			expect(t, c, 205, "QUIT")
 
-			// A long error string is truncated; nnrpd stays up and sends the start of it.
-			// Its reply buffer holds 2047 bytes, so the line has no end: read what comes.
+			// A long error string is truncated; nnrpd stays up and sends the start of it as
+			// one line that still ends with CRLF (its reply buffer holds 2047 bytes).
 			c = s.Reader(t)
 			expect(t, c, 381, "AUTHINFO USER shortuser")
 			send(t, c, "AUTHINFO PASS secret\r\n")
@@ -139,6 +139,10 @@ func TestAuthHookLongResults(t *testing.T) {
 			if len(reply) > 8192 {
 				t.Errorf("reply of %d bytes, longer than the error string buffer", len(reply))
 			}
+			if !strings.HasSuffix(reply, "\r\n") || strings.Count(reply, "\n") != 1 {
+				t.Errorf("reply of %d bytes is not one line ending with CRLF (ends with %q)", len(reply), reply[max(0, len(reply)-8):])
+			}
+			expect(t, c, 205, "QUIT")
 		})
 	}
 }
