@@ -391,6 +391,198 @@ func TestInnfeedSyntaxError(t *testing.T) {
 	}
 }
 
+// capsPeer is a fake transit peer for the CAPABILITIES tests of innfeed (#317). caps is its
+// answer to CAPABILITIES (the reply lines, "." included, or a single error line); with split,
+// it writes the first half of a multi-line answer, waits, and then writes the rest, so that
+// innfeed reads it in two parts. mode is its answer to MODE STREAM. CHECK and TAKETHIS
+// work only after a 203 to MODE STREAM; IHAVE always works. With user, AUTHINFO USER/PASS
+// are required before CAPABILITIES lists STREAMING, as innd does. It records the commands
+// it gets (verb, and the argument of MODE and AUTHINFO) and the articles it accepts.
+type capsPeer struct {
+	caps  []string
+	split bool
+	mode  string
+	user  string
+	mu    sync.Mutex
+	cmds  []string
+	got   []string
+}
+
+func (p *capsPeer) record(cmd string) {
+	p.mu.Lock()
+	p.cmds = append(p.cmds, cmd)
+	p.mu.Unlock()
+}
+
+func (p *capsPeer) commands() []string {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return slices.Clone(p.cmds)
+}
+
+func (p *capsPeer) accepted(ids ...string) bool {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	for _, id := range ids {
+		if !slices.Contains(p.got, id) {
+			return false
+		}
+	}
+	return true
+}
+
+func (p *capsPeer) handle(c *fakeserver.Conn, line string) ([]string, bool) {
+	verb, arg, _ := strings.Cut(line, " ")
+	verb = strings.ToUpper(verb)
+	switch verb {
+	case "MODE", "AUTHINFO":
+		p.record(verb + " " + strings.ToUpper(strings.Fields(arg + " x")[0]))
+	default:
+		p.record(verb)
+	}
+	streaming := func() bool {
+		p.mu.Lock()
+		defer p.mu.Unlock()
+		return slices.Contains(p.cmds, "MODE STREAM") && strings.HasPrefix(p.mode, "203")
+	}
+	authed := func() bool {
+		p.mu.Lock()
+		defer p.mu.Unlock()
+		return p.user == "" || slices.Contains(p.cmds, "AUTHINFO PASS")
+	}
+	switch verb {
+	case "CAPABILITIES":
+		r := p.caps
+		if !authed() {
+			r = []string{"101 capability list follows", "VERSION 2", "AUTHINFO USER", "."}
+		}
+		if p.split && len(r) > 2 {
+			if err := c.WriteLines(r[:len(r)/2]...); err != nil {
+				return nil, true
+			}
+			time.Sleep(300 * time.Millisecond)
+			return r[len(r)/2:], false
+		}
+		return r, false
+	case "AUTHINFO":
+		if strings.HasPrefix(strings.ToUpper(arg), "USER ") {
+			return []string{"381 password please"}, false
+		}
+		return []string{"281 authenticated"}, false
+	case "MODE":
+		if strings.EqualFold(arg, "STREAM") {
+			return []string{p.mode}, false
+		}
+		return []string{"501 Unknown MODE variant"}, false
+	case "CHECK":
+		if !streaming() {
+			return []string{"500 unknown command"}, false
+		}
+		return []string{"238 " + arg}, false
+	case "TAKETHIS":
+		if !streaming() {
+			return []string{"500 unknown command"}, false
+		}
+		if _, err := c.ReadDotBlock(); err != nil {
+			return nil, true
+		}
+		p.mu.Lock()
+		p.got = append(p.got, arg)
+		p.mu.Unlock()
+		return []string{"239 " + arg}, false
+	case "IHAVE":
+		if !authed() {
+			return []string{"480 authentication required"}, false
+		}
+		if err := c.WriteLines("335 send it"); err != nil {
+			return nil, true
+		}
+		if _, err := c.ReadDotBlock(); err != nil {
+			return nil, true
+		}
+		p.mu.Lock()
+		p.got = append(p.got, arg)
+		p.mu.Unlock()
+		return []string{"235 ok"}, false
+	case "QUIT":
+		return []string{"205 bye"}, true
+	}
+	return []string{"500 unknown command"}, false
+}
+
+// TestInnfeedCapabilities: innfeed sends CAPABILITIES once connected (after AUTHINFO when it
+// authenticates) and tries MODE STREAM only if the peer lists STREAMING or does not know
+// CAPABILITIES (#317). In every case the articles reach the peer, with CHECK/TAKETHIS when
+// streaming and with IHAVE otherwise.
+func TestInnfeedCapabilities(t *testing.T) {
+	// A list of capabilities longer than innfeed's 256-byte response buffer.
+	long := []string{"101 capability list follows", "VERSION 2",
+		"IMPLEMENTATION fake transit server for the innfeed CAPABILITIES test " + strings.Repeat("x", 120),
+		"IHAVE", "LIST ACTIVE NEWSGROUPS", "X-FAKE-ONE some arguments here", "X-FAKE-TWO more arguments here",
+		"X-FAKE-THREE and some more arguments"}
+	withStreaming := slices.Concat(long, []string{"STREAMING", "."})
+	withoutStreaming := slices.Concat(long, []string{"X-STREAMING-NOT", "."})
+	cases := []struct {
+		name   string
+		peer   *capsPeer
+		stream bool     // CHECK/TAKETHIS expected, else IHAVE
+		start  []string // the first commands innfeed sends
+		noMode bool     // MODE STREAM must not be sent
+	}{
+		{name: "streaming", peer: &capsPeer{caps: withStreaming, split: true, mode: "203 streaming ok"},
+			stream: true, start: []string{"CAPABILITIES", "MODE STREAM"}},
+		{name: "no-streaming", peer: &capsPeer{caps: withoutStreaming, split: true, mode: "501 Unknown MODE variant"},
+			start: []string{"CAPABILITIES", "IHAVE"}, noMode: true},
+		{name: "capabilities-500", peer: &capsPeer{caps: []string{"500 What?"}, mode: "203 streaming ok"},
+			stream: true, start: []string{"CAPABILITIES", "MODE STREAM"}},
+		{name: "capabilities-500-no-stream", peer: &capsPeer{caps: []string{"500 What?"}, mode: "501 Unknown MODE variant"},
+			start: []string{"CAPABILITIES", "MODE STREAM", "IHAVE"}},
+		{name: "auth", peer: &capsPeer{caps: withStreaming, mode: "203 streaming ok", user: "feeder"},
+			stream: true, start: []string{"AUTHINFO USER", "AUTHINFO PASS", "CAPABILITIES", "MODE STREAM"}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			p := tc.peer
+			srv := fakeserver.New(t, fakeserver.Options{Handler: fakeserver.LineHandler(p.handle)})
+			auth := ""
+			if p.user != "" {
+				auth = "    username: \"" + p.user + "\"\n    password: \"secret\"\n"
+			}
+			s := NewSite(t, SiteOptions{
+				Newsfeeds: "ME:*::\ninnfeed!:!*:Tc,Wnm*:@bindir@/innfeed\nfake:*:Tm:innfeed!\n",
+				Etc: map[string]string{"innfeed.conf": fmt.Sprintf(
+					"peer fake {\n    ip-name: \"127.0.0.1\"\n    port-number: %d\n    max-connections: 1\n%s}\n",
+					srv.Port(), auth)},
+			})
+			ids := s.Inject(t, "e2e.test", 3)
+			ok := false
+			for end := time.Now().Add(30 * time.Second); !ok && time.Now().Before(end); {
+				time.Sleep(50 * time.Millisecond)
+				ok = p.accepted(ids...)
+			}
+			cmds := p.commands()
+			if len(cmds) > 40 {
+				cmds = cmds[:40]
+			}
+			if !ok {
+				t.Fatalf("the articles did not reach the peer within 30s; commands: %q", cmds)
+			}
+			if len(cmds) < len(tc.start) || !slices.Equal(cmds[:len(tc.start)], tc.start) {
+				t.Errorf("innfeed began with %q, want %q", cmds, tc.start)
+			}
+			if tc.noMode && slices.Contains(cmds, "MODE STREAM") {
+				t.Errorf("innfeed sent MODE STREAM to a peer that does not list STREAMING: %q", cmds)
+			}
+			if st := slices.Contains(cmds, "TAKETHIS"); st != tc.stream {
+				t.Errorf("TAKETHIS used: %v, want %v (commands %q)", st, tc.stream, cmds)
+			}
+			if ih := slices.Contains(cmds, "IHAVE"); ih == tc.stream {
+				t.Errorf("IHAVE used: %v, want %v (commands %q)", ih, !tc.stream, cmds)
+			}
+		})
+	}
+}
+
 // TestInnfeedDebugSnapshotFiles: the debug-file and snapshot-file keys of innfeed.conf name
 // the file whose presence turns on debugging and the file SIGINT writes a snapshot to, so
 // that several innfeed instances do not share innfeed.debug and innfeed.snapshot (issue
