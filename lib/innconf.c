@@ -129,6 +129,7 @@ static const struct config config_table[] = {
     {K(icdsynccount),               UNUMBER(10)       },
     {K(ignorenewsgroups),           BOOL(false)       },
     {K(incominglogfrequency),       UNUMBER(200)      },
+    {K(keepdescriptions),           BOOL(false)       },
     {K(linecountfuzz),              UNUMBER(0)        },
     {K(logartsize),                 BOOL(true)        },
     {K(logcancelcomm),              BOOL(false)       },

@@ -212,6 +212,15 @@ malformed stored Xref records with tradspool and corrupt history records.
 The overview and storage backends also validate more structures before using
 them.  Many thanks to Kevin Bowling for the patches.
 
+=item *
+
+Added a I<keepdescriptions> parameter to F<inn.conf> (false by default).
+When set to true, B<docheckgroups> (including when run by B<controlchan> for
+checkgroups control messages) and the processing of rmgroup control messages
+no longer remove the descriptions of obsolete newsgroups from the F<newsgroups>
+file, and the contributed B<cleannewsgroups> script keeps them too.
+Thanks to Jesse Rehmer for the suggestion.
+
 =back
 
 =head1 Changes in 2.7.4 (2026-06-22)

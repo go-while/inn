@@ -360,6 +360,21 @@ This is a boolean value and the default is false.
 
 This setting is ignored unless the timecaf storage method is used.
 
+=item I<keepdescriptions>
+
+Whether the descriptions of newsgroups which are no longer wanted should be
+kept in the F<newsgroups> file.  When set to true, B<docheckgroups>
+(including when it is run by B<controlchan> for a checkgroups control message)
+and the processing of rmgroup control messages by B<controlchan> no longer
+remove the descriptions of newsgroups which are not in the checkgroups or which
+have been removed.  Descriptions of newsgroups which are in the checkgroups are
+still added and updated.  The contributed script F<cleannewsgroups> also keeps
+the descriptions of newsgroups which are no longer in the F<active> file.
+
+Note that the descriptions of newsgroups which are listed in the F<localgroups>
+file are always kept by B<docheckgroups>, whatever the value of this parameter.
+This is a boolean value and the default is false.
+
 =item I<linecountfuzz>
 
 If set to something other than C<0>, the line count of the article is

@@ -6,7 +6,8 @@
 ##  Usage: docheckgroups [-u] [include-pattern [exclude-pattern]] < message
 ##
 ##  If the -u flag is given, the newsgroups descriptions are automatically
-##  updated.
+##  updated.  If keepdescriptions is true in inn.conf, descriptions of
+##  newsgroups which are not in the checkgroups are kept.
 
 T=${TMPDIR}
 UPDATEDESC=false
@@ -100,6 +101,21 @@ cat ${T}/$$msg | ${PERL} -e 'while (<STDIN>) { my @fields = split();
 comm -13 ${T}/$$localdesc ${T}/$$newdesc >${T}/$$missingdesc
 comm -23 ${T}/$$localdesc ${T}/$$newdesc >${T}/$$removedesc
 
+##  If keepdescriptions is set in inn.conf, keep the descriptions of the
+##  newsgroups which are not in the checkgroups.  Only the descriptions
+##  which are replaced by a new one are then obsolete.
+cat /dev/null >${T}/$$keptdesc
+if [ "${KEEPDESCRIPTIONS}" = "true" ]; then
+    ${SED} <${T}/$$newdesc -e 's/[ 	].*//' | ${SORT} -u >${T}/$$newnames
+    ${PERL} -e 'open(NAMES, shift) or exit 1; my %names;
+        while (<NAMES>) { chomp; $names{$_} = 1; }
+        while (<STDIN>) { my @fields = split();
+            print $_ if ((scalar(@fields) > 0) && !$names{$fields[0]}); }' \
+        ${T}/$$newnames <${T}/$$localdesc >${T}/$$keptdesc
+    comm -23 ${T}/$$removedesc ${T}/$$keptdesc >${T}/$$removedesc2
+    mv -f ${T}/$$removedesc2 ${T}/$$removedesc
+fi
+
 ##  If the -u flag is given, update the newsgroups descriptions.
 if [ "${UPDATEDESC}" = "true" ]; then
     cat ${NEWSGROUPS} | ${PERL} -e 'while (<STDIN>) { my @fields = split();
@@ -109,7 +125,7 @@ if [ "${UPDATEDESC}" = "true" ]; then
         print $_ if ((scalar(@fields) > 0) && ($fields[0] !~ /'${1:-.}'/)
         && ($fields[0] =~ /'${PATS}'/)); }' \
         >>${T}/$$updatednewsgroups
-    cat ${T}/$$newdesc >>${T}/$$updatednewsgroups
+    cat ${T}/$$newdesc ${T}/$$keptdesc >>${T}/$$updatednewsgroups
     mv -f ${NEWSGROUPS} ${NEWSGROUPS}.old
     ${SORT} ${T}/$$updatednewsgroups | ${SED} 's/	[	]*/	/' \
         | ${PERL} -e 'while (<STDIN>) { my @fields = split("\t", $_, 2);
