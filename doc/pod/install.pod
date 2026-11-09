@@ -862,6 +862,9 @@ MANPATH environment variable; otherwise, you may have to use a command like:
 
 to see the inn.conf(5) man page (for example).
 
+The inn(1) man page lists all the other man pages, with a short
+description of each.
+
 Before we begin, it is worth mentioning the wildmat pattern matching
 syntax used in many configuration files.  These are simple wildcard
 matches using the asterisk (C<*>) as the wildcard character, much like the
