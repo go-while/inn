@@ -616,7 +616,6 @@ lib/sequence.c                        Sequence space arithmetic routines
 lib/setenv.c                          setenv replacement
 lib/seteuid.c                         seteuid replacement
 lib/setproctitle.c                    setproctitle replacement
-lib/snprintf.c                        snprintf and vsnprintf replacement
 lib/sqlite-helper-gen.in              Package SQLite code for convenient use
 lib/sqlite-helper.c                   SQLite code package implementation
 lib/strcasecmp.c                      Case-insensitive string comparison (BSD)
@@ -1027,7 +1026,6 @@ tests/lib/readin-t.c                  Tests for lib/readin.c
 tests/lib/reallocarray-t.c            Tests for lib/reallocarray.c
 tests/lib/reservedfd-t.c              Tests for reserved file descriptors
 tests/lib/setenv-t.c                  Tests for lib/setenv.c
-tests/lib/snprintf-t.c                Tests for lib/snprintf.c
 tests/lib/strlcat-t.c                 Tests for lib/strlcat.c
 tests/lib/strlcpy-t.c                 Tests for lib/strlcpy.c
 tests/lib/tst-t.c                     Tests for lib/tst.c

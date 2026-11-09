@@ -1,13 +1,13 @@
 dnl Test for a working C99 snprintf.
 dnl
-dnl Check for a working snprintf.  Some systems have an snprintf that doesn't
-dnl nul-terminate if the buffer isn't large enough.  Others return -1 if the
-dnl string doesn't fit into the buffer instead of returning the number of
-dnl characters that would have been formatted.  Still others don't support
+dnl Check for a working snprintf.  Some old systems have an snprintf that
+dnl doesn't nul-terminate if the buffer isn't large enough.  Others return -1
+dnl if the string doesn't fit into the buffer instead of returning the number
+dnl of characters that would have been formatted.  Still others don't support
 dnl NULL as the buffer argument (just to get a count of the formatted length).
 dnl
-dnl Provides INN_FUNC_SNPRINTF, which adds snprintf.o to LIBOBJS unless a
-dnl fully working snprintf is found.
+dnl Provides INN_FUNC_SNPRINTF, which makes configure fail unless a fully
+dnl working snprintf is found.  INN no longer ships a replacement.
 dnl
 dnl The canonical version of this file was maintained (until 2020) in the
 dnl rra-c-util package, available at
@@ -52,14 +52,14 @@ main()
 }
 ]])
 
-dnl The user-callable test.
+dnl The user-callable test.  A working snprintf and vsnprintf are required
+dnl (C99 or later); there is no replacement.  When cross-compiling, the check
+dnl cannot run and the C99 behaviour is assumed.
 AC_DEFUN([INN_FUNC_SNPRINTF],
 [AC_CACHE_CHECK([for working snprintf], [inn_cv_func_snprintf_works],
     [AC_RUN_IFELSE([AC_LANG_SOURCE([_INN_FUNC_SNPRINTF_SOURCE])],
         [inn_cv_func_snprintf_works=yes],
         [inn_cv_func_snprintf_works=no],
-        [inn_cv_func_snprintf_works=no])])
- AS_IF([test x"$inn_cv_func_snprintf_works" = xyes],
-    [AC_DEFINE([HAVE_SNPRINTF], 1,
-        [Define if your system has a working snprintf function.])],
-    [AC_LIBOBJ([snprintf])])])
+        [inn_cv_func_snprintf_works=yes])])
+ AS_IF([test x"$inn_cv_func_snprintf_works" != xyes],
+    [AC_MSG_ERROR([a working C99 snprintf and vsnprintf are required])])])
