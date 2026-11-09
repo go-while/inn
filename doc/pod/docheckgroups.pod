@@ -27,7 +27,11 @@ for which no checkgroups control messages are sent, unless
 you manually process checkgroups texts for them.  Lines beginning
 with a hash sign (C<#>) are not taken into account in this file.
 All the newsgroups and descriptions mentioned in I<pathetc>/localgroups
-are appended to the processed checkgroups.
+are appended to the processed checkgroups.  If I<keepdescriptions> is set
+to true in F<inn.conf>, the descriptions of all the newsgroups already present
+in the F<newsgroups> file are kept, even when these newsgroups are not in
+the checkgroups; only the descriptions of newsgroups present in the checkgroups
+are updated.
 
 If I<exclude-pattern> is given, I<include-pattern> should also
 be given before (you can use an empty string ("") if you want
@@ -63,7 +67,10 @@ status differs) and the relevant B<ctlinnd> commands to fix that;
 =item *
 
 Descriptions which should be removed (they are in the F<newsgroups> file
-but not in the checkgroups);
+but not in the checkgroups, or they differ from the one in the checkgroups).
+When I<keepdescriptions> is set to true in F<inn.conf>, only descriptions
+which differ from the one in the checkgroups are reported, because the
+descriptions of newsgroups which are not in the checkgroups are kept;
 
 =item *
 
@@ -89,7 +96,8 @@ fine, use B<mod-active> and the B<-u> flag.
 =item B<-u>
 
 If this flag is given, B<docheckgroups> will update the F<newsgroups> file:
-it removes obsolete descriptions and adds new ones.  It also sorts
+it removes obsolete descriptions (unless I<keepdescriptions> is set to true
+in F<inn.conf>) and adds new ones.  It also sorts
 this file alphabetically and improves its general format (see newsgroups(5)
 for an explanation of the preferred number of tabulations).
 
@@ -188,6 +196,7 @@ Documentation written by Julien Elie for InterNetNews.
 
 =head1 SEE ALSO
 
-active(5), controlchan(8), ctlinnd(8), mod-active(8), newsgroups(5).
+active(5), controlchan(8), ctlinnd(8), inn.conf(5), mod-active(8),
+newsgroups(5).
 
 =cut
