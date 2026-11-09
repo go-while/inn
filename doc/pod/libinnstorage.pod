@@ -464,6 +464,7 @@ Converted to POD by Julien Elie.
 
 =head1 SEE ALSO
 
-expire(8), fastrm(1), inn.conf(5), libinn_uwildmat(3), storage.conf(5).
+expire(8), fastrm(1), inn.conf(5), libinn_uwildmat(3),
+libinnstorage_overview(3), storage.conf(5).
 
 =cut
