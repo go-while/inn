@@ -19,6 +19,89 @@
 **  The locking problem is handled by semaphore.
 */
 
+/*
+**  Internals and on-disk format.
+**
+**  The structures below are read and written directly to disk, so the files
+**  are endian-dependent and possibly architecture-dependent (sizes of int,
+**  long, off_t and time_t, and structure padding).
+**
+**  Buffindexed has two parts: a block manager for the buffers listed in
+**  buffindexed.conf, and an overview manager that stores the index and the
+**  overview data of each newsgroup in those blocks.
+**
+**  Block manager.  Each buffer starts with a header area of ovbuff->base
+**  bytes, followed by blocks of OV_BLOCKSIZE (8 KB).  Block n of a buffer is
+**  at offset base + n * OV_BLOCKSIZE, and a block is designated by an OV
+**  struct (the index of the buffer from buffindexed.conf and the block
+**  number).  The header area holds:
+**
+**    - at offset 0, an OVBUFFHEAD: the magic string "ovbuff", the path of
+**      the buffer, its index, its length, the total, used and next free
+**      block numbers and the time of the last update, all as hexadecimal
+**      ASCII strings, followed by a version number (OVBUFF_VERSION) and
+**      binary copies of the next free block and the number of used blocks;
+**    - at offset OV_BEFOREBITF (8 KB), a bitfield with one bit per block,
+**      set when the block is in use.
+**
+**  Its size is the size of the bitfield plus 8 KB, rounded up to the next
+**  multiple of hdr_pagesize (16 KB, or the system page size if larger).
+**  The whole header area is loaded into a System V shared memory segment
+**  shared by all the processes using the buffer, and protected by a
+**  semaphore (see shmem.c).  It is written back to disk every
+**  ovflushcount updates and when the overview is closed.  A buffer without
+**  the magic string, or with another path in its header, is initialized as
+**  empty; a buffer whose index or length does not match buffindexed.conf
+**  is refused.
+**
+**  ovblocknew() hands out a free block, taking the buffers in turn, and
+**  ovblockfree() releases one.  The block manager does not know whether a
+**  block holds index or data.
+**
+**  Overview manager.  The group index is a separate file, group.index in
+**  pathdb (not the tradindexed file of the same name).  It starts with a
+**  GROUPHEADER: a magic number, a hash table of GROUPHEADERHASHSIZE heads
+**  of chains, and the head of a free list.  It is followed by an array of
+**  GROUPENTRY records, addressed by their record number (GROUPLOC); the
+**  file grows by 1024 records at a time, added to the free list.  A group is
+**  found by the MD5 hash of its name: the first bytes of the hash select a
+**  chain, which is followed through the next fields until an entry with the
+**  same hash is found.  Each GROUPENTRY holds the low and high water marks,
+**  the article count, the status flag, the time of the last expiry and of
+**  the deletion of the group, and the blocks in use:
+**
+**    - baseindex, the first index block of the group;
+**    - curindex and curindexoffset, the index block being filled and the
+**      number of entries already in it;
+**    - curdata and curoffset, the data block being filled and the offset
+**      of its free space.
+**
+**  An index block is an OVBLOCK: an OVINDEXHEAD (the next index block of the
+**  group, and the lowest and highest article numbers in this block)
+**  followed by OVINDEXMAX OVINDEX entries.  Each OVINDEX describes one
+**  article: its number, its storage token, its arrival and expiration
+**  times, and where its overview data is (data block, offset and length).
+**  The index blocks of a group form a chain starting at baseindex.  A data
+**  block holds the overview data of several articles of the group, one
+**  after the other.  Every block, index or data, belongs to a single group.
+**  The overview data of an article must fit in one block.
+**
+**  Adding an article (ovaddrec) appends its data to the current data block
+**  (or to a new one if it does not fit) and its index entry to the current
+**  index block (or to a new one, linked from the previous one, if it is
+**  full).  Index entries are therefore in arrival order, not in article
+**  number order.  To read a group, ovgroupmmap() loads all its index
+**  entries, sorts them by article number and keeps only one entry for each
+**  number.
+**
+**  Expiring a group (buffindexed_expiregroup) copies the entries of the
+**  articles still present into a new set of blocks, then frees all the old
+**  blocks and replaces the group entry.  Removing a group only marks its
+**  entry as deleted (and clears its hash); the blocks of deleted groups are
+**  freed by the final pass of expiration (expireover calls
+**  OVexpiregroup with a NULL group).
+*/
+
 #include "portable/system.h"
 
 #include "portable/mmap.h"
