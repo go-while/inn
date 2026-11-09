@@ -193,6 +193,61 @@ is toggled upon receipt of a SIGHUP; see signal(2).
 
 =back
 
+=head1 LIMITING CONNECTIONS PER HOST
+
+B<nnrpd> has no setting to limit the number of simultaneous connections
+from a single IP address.  The B<-H>, B<-T> and B<-X> flags of innd(8)
+only limit the rate of new connections, and I<maxconnections> in
+F<inn.conf> only limits the total number of connections accepted by
+B<innd>.
+
+If you need such a limit, let a super-server start B<nnrpd> instead of
+B<innd>, and use the per-source limit of that super-server.  B<nnrpd> then
+handles one connection on its standard input and output, as with inetd(8).
+B<innd> and B<nnrpd> cannot both listen on the same address and port: if
+B<nnrpd> is to answer on port 119, B<innd> has to listen on another port
+or address (see I<bindaddress> and I<port> in inn.conf(5)).  Otherwise,
+use another port for B<nnrpd>, like the TLS port 563 described below.
+
+With xinetd(8), use the I<per_source> attribute.  For instance, to allow
+at most 5 connections from the same address (change the path to
+B<nnrpd> to match your installation):
+
+    service nntp
+    {
+        socket_type = stream
+        protocol    = tcp
+        wait        = no
+        user        = news
+        server      = <pathbin>/nnrpd
+        per_source  = 5
+    }
+
+With systemd, use a socket unit with C<Accept=yes> and
+C<MaxConnectionsPerSource=>, which only works when C<Accept=yes> is set.
+For instance, F<nnrpd.socket>:
+
+    [Socket]
+    ListenStream=119
+    Accept=yes
+    MaxConnectionsPerSource=5
+
+    [Install]
+    WantedBy=sockets.target
+
+and the matching template service F<nnrpd@.service>:
+
+    [Service]
+    User=news
+    Group=news
+    ExecStart=<pathbin>/nnrpd
+    StandardInput=socket
+    StandardOutput=socket
+    StandardError=journal
+
+See xinetd.conf(5) and systemd.socket(5) for the other limits these
+programs provide, like the total number of instances.
+
 =head1 TLS SUPPORT
 
 If INN is built with B<--with-openssl> or if the OpenSSL SSL and crypto
