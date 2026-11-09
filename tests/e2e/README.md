@@ -37,6 +37,7 @@ needs the Go standard library:
 | `TestSIGTERMUnderLoad` | innd | innd exits with status 0 on SIGTERM while peers and readers connect |
 | `TestFilterHeadPerl` | innd, Perl filter | `filter_art` gets the whole header in `$hdr{__HEAD__}` (#73), byte for byte, and can reject on a header field innd does not know (437, 439, syslog) |
 | `TestFilterHeadPython` | innd, Python filter | the same with `art['__HEAD__']`; skipped when innd was built without Python |
+| `TestPythonDynamicNewsgroup` | innd, nnrpd, Python hook | the Python `dynamic` hook gets the newsgroup in `attributes['newsgroup']` when an article is requested by Message-ID (#162), for each group of a crosspost, and its refusal gives 502; skipped when nnrpd was built without Python |
 | `TestConformanceReader` | innd, nnrpd | nntp-testkit's RFC 3977 checks against nnrpd with a strict client: greeting, CAPABILITIES, GROUP, LISTGROUP, NEXT/LAST, ARTICLE/HEAD/BODY/STAT, the 412/420/423/430 errors, LIST variants, OVER, DATE, HELP, QUIT, POST, and IHAVE with the `I` permission |
 | `TestConformanceReaderAuth` | innd, nnrpd, ckpasswd | the RFC 4643 AUTHINFO checks, then the reader checks after logging in |
 | `TestConformancePeer` | innd, nnrpd | the RFC 4644 and IHAVE checks against innd itself (127.0.0.1 listed as a streaming peer): MODE STREAM, pipelined CHECK, TAKETHIS, duplicates, malformed IHAVE; reader checks via MODE READER |
