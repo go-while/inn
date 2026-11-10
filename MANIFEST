@@ -1007,6 +1007,7 @@ tests/e2e/syslogfile_test.go          Syslog messages from a file instead of the
 tests/e2e/tdx_test.go                 Tests of the tradindexed overview and tdx-util
 tests/e2e/tdxutil_test.go             Tests of tdx-util
 tests/e2e/tls_test.go                 Tests of STARTTLS with nnrpd
+tests/e2e/xref_test.go                Tests of the Xref header field innd generates
 tests/expire                          Test suite for expire (Directory)
 tests/expire/tombstone-e2e.t          End-to-end tests for tombstone log
 tests/expire/tombstone-hisexpire-t.c  HISexpire integration test for tombstone

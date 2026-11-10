@@ -66,6 +66,7 @@ needs the Go standard library:
 | `TestBytesBodyStartsWithDot` | innd, nnrpd | the `:bytes` overview field is the article's size also when its body begins with a dot-stuffed line |
 | `TestOvsqliteReaderSeesNewArticle` | innd, nnrpd, ovsqlite-server | with ovsqlite, GROUP shows an article as soon as innd has accepted it, with and without `walmode` |
 | `TestTimecafExpireoverCurrentFile` | innd, expireover | expireover removes an expired timecaf article in the CAF file innd is writing to, without waiting for innd to move on to another file |
+| `TestXrefReallocation` | innd, nnrpd, ctlinnd | crossposts whose Xref field outgrows innd's first 2049-octet buffer (about 2 KB, 74 groups with a Newsgroups header folded after each group, 21 KB, and larger ones on one connection), with CNFS (`newsgroups: *`) and tradspool: 235 by IHAVE, innd not throttled, Xref lists every group once with its number, the article is readable in every group, and a `WmR` file feed gets the same groups (#369; a known issue until it is merged) |
 
 ## Running
 
