@@ -62,14 +62,33 @@ if (!defined($opt{'s'})) {
     $opt{'s'} =~ s/\n+\Z//;
 }
 
-# Fix up any addresses.
+# Check the addresses.  They are given as arguments to the MTA (without
+# using a shell) and written in the To header field, so only the characters
+# of an unquoted local part (atext in RFC 5322), "." and "@" are accepted.
+# An address is never rewritten: one with other characters (whitespace,
+# quotes, angle brackets, control characters...) is refused with a warning,
+# and so is one beginning with "-", "|" or "/", which the MTA could take as
+# an option, a program or a file (these characters are only refused at the
+# beginning).  The mail is still sent to the other addresses, but innmail
+# then exits with status 1.
+my $addrchar = qr{[a-zA-Z0-9!#\$%&'*+/=?^_`\{|\}~.\@-]};
+my %leading = ('-' => 'an option', '|' => 'a program', '/' => 'a file');
+my $refused = 0;
 foreach (@ARGV) {
-    s![^-a-zA-Z0-9+_.@%]!!g;
-
-    push(@addrs, $_) if ($_ ne "");
+    next if ($_ eq "");
+    if (m{^([-|/])}) {
+        warn "$0: Refusing address beginning with '$1'"
+          . " (the MTA could take it as $leading{$1}): $_\n";
+        $refused = 1;
+    } elsif (!/^$addrchar+\z/) {
+        warn "$0: Refusing address with unsupported characters: $_\n";
+        $refused = 1;
+    } else {
+        push(@addrs, $_);
+    }
 }
 
-die "$0: No addresses specified\n\n$usage" unless @addrs;
+die "$0: No valid addresses specified\n\n$usage" unless @addrs;
 
 if ($sm =~ m!%s!) {
     $sm = sprintf $sm, join(' ', @addrs);
@@ -102,4 +121,4 @@ while (<STDIN>) {
     print $MTA $_;
 }
 close $MTA;
-exit;
+exit($refused ? 1 : 0);
