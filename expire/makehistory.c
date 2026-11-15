@@ -1082,6 +1082,18 @@ main(int argc, char **argv)
             if (Fork)
                 wait(&status);
         }
+        /* All articles are added.  Disable the low article cutoff, so that
+           an overview method can update the low water marks it kept as the
+           cutoff (ovsqlite does). */
+        if (Cutofflow && !WriteStdout) {
+            Cutofflow = false;
+            if (Fork && !OVopen(OV_WRITE))
+                sysdie("cannot open overview");
+            if (!OVctl(OVCUTOFFLOW, (void *) &Cutofflow))
+                warn("cannot disable overview cutoff");
+            if (Fork)
+                OVclose();
+        }
         if (!WriteStdout) {
             if ((F = fopen(RebuiltflagPath, "w")) == NULL)
                 sysdie("cannot open %s", RebuiltflagPath);
