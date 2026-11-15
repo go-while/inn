@@ -117,7 +117,10 @@ shutdown.
 B<Note:> WAL mode requires shared-memory support and does not work on
 network filesystems such as NFS if duties are split across multiple machines.
 Keep I<pathhistory> on local storage or only use a single instance to run
-B<innd> and other programs like B<nnrpd>.
+B<innd> and other programs like B<nnrpd>.  Where SQLite cannot use WAL mode,
+it keeps its rollback journal instead: writing still works, but read-only
+opens of the history are refused, and a warning is logged when the history
+is opened for writing.
 
 =head1 MIGRATION
 
