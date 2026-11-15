@@ -4,7 +4,7 @@ sm - Command-line interface to the INN storage manager
 
 =head1 SYNOPSIS
 
-B<sm> [B<-cdHiqRrSs>] [I<token> ...]
+B<sm> [B<-cdeHiqRrSs>] [I<token> ...]
 
 =head1 DESCRIPTION
 
@@ -57,6 +57,18 @@ so that a later B<expire> run can drop the corresponding history entry
 without a per-article storage check.  Append failures are logged
 but do not affect the cancellation itself.  See inn.conf(5) under
 I<expiretombstone> for the full mechanism.
+
+=item B<-e>
+
+When retrieving articles, tell an article that does not exist from an
+article that could not be retrieved because of an error of the storage
+system (an input or output error, an unconfigured storage method, etc.).
+Without this option, B<sm> reports both as C<could not retrieve I<token>>.
+With it, an article that does not exist (expired, cancelled, overwritten in
+a CNFS buffer, etc.) is reported as C<article I<token> does not exist>, and
+any other failure as C<could not retrieve I<token>: I<reason>>.  The exit
+status is unchanged.  This option cannot be used with B<-c>, B<-d>, B<-r>,
+B<-i>, or B<-s>; it is meant for scripts such as B<procbatch>.
 
 =item B<-H>
 
