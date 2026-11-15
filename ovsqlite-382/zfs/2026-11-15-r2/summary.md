@@ -1,3 +1,7 @@
+> **Superseded.** This is the working summary written right after round r2 (2026-11-15), kept as it was.
+> Its pwrite figures use the older DTrace window, and its checkpoint estimate ("17–18 MiB") came from comparing two single runs;
+> the later round r3 gives roughly 7–8 MiB per checkpoint from a fit. Use `../../RESULTS.md` instead.
+
 # ovsqlite on ZFS, repeats and long runs (VM 120, 2026-11-15)
 
 Caveat (ovz.py before the 2026-11-15 fix, lines 394-399 and 423): the DTrace window opens 1.5 s before the s0 snapshot and closes after s1, so pwrite KiB/article can include one extra commit, mostly for today. Disk KiB/s (iostat) is not affected.
