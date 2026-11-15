@@ -350,7 +350,8 @@ def snap(pid):
 # Running counters for the server's syscalls; the harness prints them with a marker
 # (getppid() from this process) right before each snapshot, so the DTrace window is the
 # same as the disk/kstat window.  The server is single-threaded, so plain globals are safe.
-DTRACE = ('BEGIN { printf("READY\\n"); } '
+DTRACE = ('BEGIN { fs = 0; fds = 0; pwb = (int64_t)0; pwn = 0; wb = (int64_t)0; wn = 0; vn = 0; '
+          'printf("READY\\n"); } '
           'syscall::fsync:entry /pid == %(srv)d/ { fs++; } '
           'syscall::fdatasync:entry /pid == %(srv)d/ { fds++; } '
           'syscall::pwrite:entry /pid == %(srv)d/ { pwb += arg2; pwn++; } '
@@ -406,11 +407,14 @@ def run_rate(setting, sdir, cfg, rate, rep):
                                       stderr=subprocess.STDOUT)
                 for _ in range(100):           # wait until dtrace is attached (max 10 s)
                     time.sleep(0.1)
+                    if dt.poll() is not None:
+                        break
                     with open(ROOT + '/dtrace.out') as fh:
-                        if 'READY' in fh.read():
+                        if 'READY' in fh.read().splitlines():
                             break
-                else:
-                    raise RuntimeError('dtrace did not start')
+                if dt.poll() is not None or not os.path.getsize(ROOT + '/dtrace.out'):
+                    with open(ROOT + '/dtrace.out') as fh:
+                        raise RuntimeError('dtrace did not start: ' + fh.read()[-400:])
                 os.getppid()                   # marker: counters at the window start
                 s0 = snap(inn.pid)
                 tw0 = time.monotonic()
