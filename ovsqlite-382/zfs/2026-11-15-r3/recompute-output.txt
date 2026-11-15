@@ -1,0 +1,281 @@
+== jobs (queue id, queue rc, RESULT lines, RUN ERROR lines, harness wall min, result lines/errors in jsonl)
+| job | queue id | rc | RESULTs | RUN ERRORs | wall min | jsonl lines | jsonl errors |
+|---|---|---|---|---|---|---|---|
+| 0 | 21 | 0 | 1 | 1 | 1.7 | 1 | 1 |
+| 0b | 25 | 0 | 1 | 0 | 1.4 | 1 | 0 |
+| 1 | 27 | 0 | 3 | 0 | 5.8 | 3 | 0 |
+| 2 | 29 | 0 | 3 | 0 | 31.4 | 3 | 0 |
+| 3 | 31 | none (local run killed) | 3 | 0 | 31.4 | 3 | 0 |
+| 4 | 36 | 0 | 3 | 0 | 31.6 | 3 | 0 |
+| 5-dtfail | 38 | 0 | 3 | 2 | 11.7 | 3 | 2 |
+| 5 | 45 | 0 | 3 | 0 | 31.4 | 3 | 0 |
+| 6 | 66 | 0 | 3 | 0 | 31.6 | 3 | 0 |
+| 7 | 100 | 0 | 3 | 0 | 31.4 | 3 | 0 |
+| 8 | 113 | 0 | 3 | 0 | 31.4 | 3 | 0 |
+| 9 | 121 | 0 | 3 | 0 | 31.4 | 3 | 0 |
+| 10 | 129 | 0 | 3 | 0 | 32.0 | 3 | 0 |
+| 11 | 132 | 0 | 3 | 0 | 31.5 | 3 | 0 |
+| 12 | 134 | 0 | 12 | 0 | 23.3 | 12 | 0 |
+
+== all runs (src, setting, cfg, rate, rep, accepted, win_s, cpu_s, flags)
+job0:1 rs128k-p4k up 0.5 1 30 60.37 0.057 ERROR RuntimeError('expected 2 dtrace markers, got 0')
+job0b:1 rs128k-p4k up 0.5 1 30 60.3 0.012 F=91 K=0 H=0 pw-nw=0 Npw-writes=0
+job1:1 rs128k-p4k up 0 1 0 90.06 0.000 F=0 K=0 H=0 pw-nw=0 Npw-writes=0
+job1:2 rs128k-p4k ttl1 0 1 0 90.02 0.000 F=0 K=0 H=0 pw-nw=0 Npw-writes=0
+job1:3 rs128k-p4k proto 0 1 0 90.39 0.000 F=0 K=0 H=0 pw-nw=0 Npw-writes=0
+job2:1 rs16k-p4k up 0.5 1 300 600.64 0.073 F=782 K=0 H=0 pw-nw=0 Npw-writes=0
+job2:2 rs16k-p4k ttl1 0.5 1 300 600.2 0.117 F=998 K=469 H=1 pw-nw=8240 Npw-writes=4
+job2:3 rs16k-p4k proto 0.5 1 300 600.43 0.114 F=999 K=469 H=1 pw-nw=0 Npw-writes=0
+job3:1 rs16k-p4k up 2 1 1201 601.31 0.235 F=2756 K=1117 H=2 pw-nw=0 Npw-writes=0
+job3:2 rs16k-p4k ttl1 2 1 1204 600.2 1.398 CPU>1s F=3455 K=1506 H=3 pw-nw=-24720 Npw-writes=-12
+job3:3 rs16k-p4k proto 2 1 1201 600.36 0.409 F=3965 K=1899 H=4 pw-nw=8240 Npw-writes=4
+job4:1 rs32k-p4k up 0.5 1 301 600.73 0.073 F=754 K=0 H=0 pw-nw=0 Npw-writes=0
+job4:2 rs32k-p4k ttl1 0.5 1 301 601.06 0.136 F=976 K=458 H=1 pw-nw=-8240 Npw-writes=-4
+job4:3 rs32k-p4k proto 0.5 1 304 600.89 0.124 F=980 K=460 H=1 pw-nw=-8240 Npw-writes=-4
+job5:1 rs32k-p4k up 2 1 1205 601.7 0.246 F=2768 K=1202 H=2 pw-nw=0 Npw-writes=0
+job5:2 rs32k-p4k ttl1 2 1 1201 600.33 0.331 F=3462 K=1578 H=3 pw-nw=0 Npw-writes=0
+job5:3 rs32k-p4k proto 2 1 1200 600.25 0.425 F=3992 K=1926 H=4 pw-nw=8240 Npw-writes=4
+job6:1 rs64k-p4k up 0.5 1 303 600.9 0.095 F=783 K=0 H=0 pw-nw=0 Npw-writes=0
+job6:2 rs64k-p4k ttl1 0.5 1 301 600.54 5.739 CPU>1s F=996 K=454 H=1 pw-nw=0 Npw-writes=0
+job6:3 rs64k-p4k proto 0.5 1 302 601.51 2.239 CPU>1s F=1002 K=457 H=1 pw-nw=0 Npw-writes=0
+job7:1 rs64k-p4k up 2 1 1204 600.25 0.280 F=2738 K=1185 H=2 pw-nw=0 Npw-writes=0
+job7:2 rs64k-p4k ttl1 2 1 1202 600.22 0.334 F=3455 K=1563 H=3 pw-nw=37080 Npw-writes=18
+job7:3 rs64k-p4k proto 2 1 1201 601.36 0.494 F=3949 K=1876 H=4 pw-nw=20600 Npw-writes=10
+job8:1 rs128k-p4k up 0.5 1 301 600.98 3.378 CPU>1s F=754 K=0 H=0 pw-nw=0 Npw-writes=0
+job8:2 rs128k-p4k ttl1 0.5 1 300 600.3 0.160 F=970 K=468 H=0 (H*3!=fdatasync) pw-nw=0 Npw-writes=0
+job8:3 rs128k-p4k proto 0.5 1 300 601.45 3.971 CPU>1s F=981 K=473 H=1 pw-nw=20600 Npw-writes=10
+job9:1 rs128k-p4k up 2 1 1203 600.78 1.153 CPU>1s F=2715 K=1200 H=2 pw-nw=0 Npw-writes=0
+job9:2 rs128k-p4k ttl1 2 1 1211 600.42 1.765 CPU>1s F=3407 K=1535 H=3 pw-nw=0 Npw-writes=0
+job9:3 rs128k-p4k proto 2 1 1201 601.22 2.313 CPU>1s F=3915 K=1875 H=4 pw-nw=-8240 Npw-writes=-4
+job10:1 rs128k-p16k up 0.5 1 301 600.56 0.097 DTrace counters not exact; dataset kstats: F=502 K=0 H=0; pwrites outside ovz/run: 604 calls, 6473260 B pw-nw=6473260 Npw-writes=604
+job10:2 rs128k-p16k ttl1 0.5 1 303 601.55 0.141 DTrace counters not exact; dataset kstats: F=765 K=0 H=0; pwrites outside ovz/run: 199 calls, 4080496 B pw-nw=4080496 Npw-writes=199
+job10:3 rs128k-p16k proto 0.5 1 302 600.6 0.135 DTrace counters not exact; dataset kstats: F=763 K=0 H=0; pwrites outside ovz/run: 210 calls, 4178940 B pw-nw=4178940 Npw-writes=210
+job11:1 rs128k-p16k up 2 1 1200 600.27 0.386 DTrace counters not exact; dataset kstats: F=1843 K=404 H=1; pwrites outside ovz/run: 4508 calls, 39691736 B pw-nw=39691736 Npw-writes=4508
+job11:2 rs128k-p16k ttl1 2 1 1203 602.25 0.513 DTrace counters not exact; dataset kstats: F=2222 K=742 H=2; pwrites outside ovz/run: 1648 calls, 21664896 B pw-nw=21664896 Npw-writes=1648
+job11:3 rs128k-p16k proto 2 1 1202 600.74 0.607 DTrace counters not exact; dataset kstats: F=3032 K=971 H=3; pwrites outside ovz/run: 846 calls, 16617432 B pw-nw=16617432 Npw-writes=846
+job12:1 rs32k-p4k up 10 1 928 90.05 0.165 F=1645 K=1271 H=1 (H*3!=fdatasync) pw-nw=0 Npw-writes=0
+job12:2 rs32k-p4k ttl1 10 1 921 90.34 0.175 F=2244 K=1132 H=2 pw-nw=0 Npw-writes=0
+job12:3 rs32k-p4k proto 10 1 904 90.02 0.157 F=1623 K=685 H=1 pw-nw=0 Npw-writes=0
+job12:4 rs64k-p4k ttl1 10 1 907 91.92 0.185 F=2231 K=1145 H=2 pw-nw=4120 Npw-writes=2
+job12:5 rs64k-p4k proto 10 1 908 90.03 0.177 F=1656 K=1299 H=1 (H*3!=fdatasync) pw-nw=0 Npw-writes=0
+job12:6 rs64k-p4k up 10 1 902 90.02 0.188 F=1878 K=1285 H=1 (H*3!=fdatasync) pw-nw=0 Npw-writes=0
+job12:7 rs32k-p4k proto 10 2 911 90.11 0.167 F=1668 K=1326 H=1 (H*3!=fdatasync) pw-nw=0 Npw-writes=0
+job12:8 rs32k-p4k up 10 2 917 90.02 0.154 F=1627 K=1299 H=1 (H*3!=fdatasync) pw-nw=0 Npw-writes=0
+job12:9 rs32k-p4k ttl1 10 2 904 90.51 0.170 F=2209 K=1161 H=2 pw-nw=-86520 Npw-writes=-42
+job12:10 rs64k-p4k up 10 2 902 90.04 0.182 F=1850 K=687 H=1 pw-nw=0 Npw-writes=0
+job12:11 rs64k-p4k ttl1 10 2 903 90.55 0.200 F=2208 K=1151 H=2 pw-nw=0 Npw-writes=0
+job12:12 rs64k-p4k proto 10 2 919 90.02 0.174 F=1706 K=1301 H=1 (H*3!=fdatasync) pw-nw=0 Npw-writes=0
+job5-dtfail:1 rs32k-p4k up 2 1 None None 0.000 ERROR RuntimeError('dtrace did not start: ')
+job5-dtfail:2 rs32k-p4k ttl1 2 1 1204 600.43 0.291 F=3476 K=1578 H=3 pw-nw=0 Npw-writes=0
+job5-dtfail:3 rs32k-p4k proto 2 1 None None 0.000 ERROR RuntimeError('dtrace did not start: ')
+
+== smoke (job 0b): pwrite vs nwritten
+job0b:1 dt_W_pwrite 374920 nwritten 374920 ratio 1.0000 dt_N_pwrite 182 writes 182
+
+== MAIN: 600-s runs, page 4096
+| rs | rate | cfg | win s | disk KiB/s | disk KiB/art | pwrite KiB/art | nwritten KiB/art | WAL frames/art | ckpt pages | WAL hdr writes | fdatasync | accepted | WAL end B | CPU s |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 16K | 0.5 | today | 601 | 37.7 | 75.5 | 10.49 | 10.49 | 2.61 | 0 | 0 | 0 | 300 | 3328992 | 0.07 |
+| 16K | 0.5 | ttl1 | 600 | 97.2 | 194.6 | 19.64 | 19.61 | 3.33 | 469 | 1 | 3 | 300 | 115392 | 0.12 |
+| 16K | 0.5 | proto | 600 | 99.4 | 198.9 | 19.65 | 19.65 | 3.33 | 469 | 1 | 3 | 300 | 131872 | 0.11 |
+| 32K | 0.5 | today | 601 | 43.3 | 86.4 | 10.08 | 10.08 | 2.50 | 0 | 0 | 0 | 301 | 3242472 | 0.07 |
+| 32K | 0.5 | ttl1 | 601 | 111.6 | 222.8 | 19.13 | 19.16 | 3.24 | 458 | 1 | 3 | 301 | 70072 | 0.14 |
+| 32K | 0.5 | proto | 601 | 114.1 | 225.4 | 19.02 | 19.05 | 3.22 | 460 | 1 | 3 | 304 | 86552 | 0.12 |
+| 64K | 0.5 | today | 601 | 31.9 | 63.3 | 10.40 | 10.40 | 2.58 | 0 | 0 | 0 | 303 | 3312512 | 0.09 |
+| 64K | 0.5 | ttl1 | 601 | 85.7 | 171.0 | 19.35 | 19.35 | 3.31 | 454 | 1 | 3 | 301 | 94792 | 5.74 |
+| 64K | 0.5 | proto | 602 | 85.8 | 170.9 | 19.40 | 19.40 | 3.32 | 457 | 1 | 3 | 302 | 119512 | 2.24 |
+| 128K | 0.5 | today | 601 | 37.9 | 75.7 | 10.08 | 10.08 | 2.50 | 0 | 0 | 0 | 301 | 3201272 | 3.38 |
+| 128K | 0.5 | ttl1 | 600 | 99.8 | 199.7 | 19.25 | 19.25 | 3.23 | 468 | 0 | 2 | 300 | 0 | 0.16 |
+| 128K | 0.5 | proto | 601 | 102.0 | 204.6 | 19.46 | 19.40 | 3.27 | 473 | 1 | 3 | 300 | 8272 | 3.97 |
+| 16K | 2 | today | 601 | 63.0 | 31.6 | 12.95 | 12.95 | 2.29 | 1117 | 2 | 6 | 1201 | 3357832 | 0.24 |
+| 16K | 2 | ttl1 | 600 | 126.2 | 62.9 | 16.55 | 16.57 | 2.87 | 1506 | 3 | 9 | 1204 | 2340192 | 1.40 |
+| 16K | 2 | proto | 600 | 134.1 | 67.0 | 19.61 | 19.60 | 3.30 | 1899 | 4 | 12 | 1201 | 346112 | 0.41 |
+| 32K | 2 | today | 602 | 70.0 | 34.9 | 13.23 | 13.23 | 2.30 | 1202 | 2 | 6 | 1205 | 3300152 | 0.25 |
+| 32K | 2 | ttl1 | 600 | 119.8 | 59.9 | 16.85 | 16.85 | 2.88 | 1578 | 3 | 9 | 1201 | 2348432 | 0.33 |
+| 32K | 2 | proto | 600 | 105.2 | 52.6 | 19.80 | 19.80 | 3.33 | 1926 | 4 | 12 | 1200 | 428512 | 0.42 |
+| 64K | 2 | today | 600 | 59.8 | 29.8 | 13.09 | 13.09 | 2.27 | 1185 | 2 | 6 | 1204 | 3106512 | 0.28 |
+| 64K | 2 | ttl1 | 600 | 110.4 | 55.1 | 16.77 | 16.74 | 2.87 | 1563 | 3 | 9 | 1202 | 2261912 | 0.33 |
+| 64K | 2 | proto | 601 | 118.2 | 59.2 | 19.48 | 19.46 | 3.29 | 1876 | 4 | 12 | 1201 | 317272 | 0.49 |
+| 128K | 2 | today | 601 | 72.1 | 36.0 | 13.07 | 13.07 | 2.26 | 1200 | 2 | 6 | 1203 | 3147712 | 1.15 |
+| 128K | 2 | ttl1 | 600 | 131.9 | 65.4 | 16.39 | 16.39 | 2.81 | 1535 | 3 | 9 | 1211 | 2105352 | 1.76 |
+| 128K | 2 | proto | 601 | 135.3 | 67.7 | 19.36 | 19.37 | 3.26 | 1875 | 4 | 12 | 1201 | 210152 | 2.31 |
+
+== 128K, page 16384, 600-s runs
+| rs | rate | cfg | win s | disk KiB/s | disk KiB/art | pwrite KiB/art | nwritten KiB/art | WAL frames/art | ckpt pages | WAL hdr writes | fdatasync | accepted | WAL end B | CPU s |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 128K p16k | 0.5 | today | 601 | 42.1 | 84.0 | 47.73 | 26.72 | ds:1.67 | ds:0 | 0 | 0 | 301 | 8597824 | 0.10 |
+| 128K p16k | 0.5 | ttl1 | 602 | 96.8 | 192.2 | 53.61 | 40.46 | ds:2.52 | ds:0 | 0 | 0 | 303 | 13060800 | 0.14 |
+| 128K p16k | 0.5 | proto | 601 | 98.7 | 196.4 | 54.00 | 40.48 | ds:2.53 | ds:0 | 0 | 0 | 302 | 13027984 | 0.14 |
+| 128K p16k | 2 | today | 600 | 76.2 | 38.1 | 62.30 | 30.00 | ds:1.54 | ds:404 | 1 | 3 | 1200 | 13963240 | 0.39 |
+| 128K p16k | 2 | ttl1 | 602 | 142.8 | 71.5 | 57.05 | 39.46 | ds:1.85 | ds:742 | 2 | 6 | 1203 | 4676312 | 0.51 |
+| 128K p16k | 2 | proto | 601 | 157.6 | 78.8 | 66.84 | 53.34 | ds:2.52 | ds:971 | 3 | 9 | 1202 | 2100256 | 0.61 |
+
+== 10/s, 90-s runs (r3 32K/64K new DTrace window; 2026-11-14 16K/128K old window, pwrite may include ~1.5 s extra)
+| src | rs | rate | cfg | win s | disk KiB/s | disk KiB/art | pwrite KiB/art | nwritten KiB/art | WAL frames/art | ckpt pages | WAL hdr writes | fdatasync | accepted | WAL end B | CPU s |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 1114:19 | 16K | 10 | today | 92 | 167.0 | 16.7 | 12.89 | 12.89 | 1.82 | 1293 | 1 | 5 | 925 | 32 | 0.22 |
+| 1114:49 | 16K | 10 | today | 91 | 191.6 | 19.0 | 14.83 | 13.23 | 2.24 | 1341 | 2 | 6 | 919 | 683952 | 0.27 |
+| 1114:20 | 16K | 10 | ttl1 | 91 | 220.1 | 21.7 | 14.99 | 14.91 | 2.48 | 1162 | 2 | 6 | 925 | 3090032 | 0.19 |
+| 1114:50 | 16K | 10 | ttl1 | 91 | 225.8 | 22.5 | 15.18 | 15.18 | 2.51 | 1163 | 2 | 6 | 917 | 2999392 | 0.22 |
+| 1114:18 | 16K | 10 | proto | 91 | 180.3 | 17.5 | 13.57 | 13.57 | 1.99 | 1300 | 2 | 6 | 933 | 745752 | 0.20 |
+| 1114:48 | 16K | 10 | proto | 91 | 195.9 | 19.3 | 14.18 | 14.18 | 2.08 | 1335 | 2 | 6 | 921 | 980592 | 0.19 |
+| job12:1 | 32K | 10 | today | 90 | 189.6 | 18.4 | 12.61 | 12.61 | 1.77 | 1271 | 1 | 5 | 928 | 0 | 0.16 |
+| job12:8 | 32K | 10 | today | 90 | 190.1 | 18.7 | 12.80 | 12.80 | 1.77 | 1299 | 1 | 5 | 917 | 0 | 0.15 |
+| job12:2 | 32K | 10 | ttl1 | 90 | 235.0 | 23.0 | 14.72 | 14.72 | 2.44 | 1132 | 2 | 6 | 921 | 2834592 | 0.18 |
+| job12:9 | 32K | 10 | ttl1 | 91 | 235.7 | 23.6 | 14.97 | 15.06 | 2.44 | 1161 | 2 | 6 | 904 | 2916992 | 0.17 |
+| job12:3 | 32K | 10 | proto | 90 | 131.6 | 13.1 | 10.25 | 10.25 | 1.80 | 685 | 1 | 3 | 904 | 3316632 | 0.16 |
+| job12:7 | 32K | 10 | proto | 90 | 196.5 | 19.4 | 13.19 | 13.19 | 1.83 | 1326 | 1 | 5 | 911 | 0 | 0.17 |
+| job12:6 | 64K | 10 | today | 90 | 209.6 | 20.9 | 14.08 | 14.08 | 2.08 | 1285 | 1 | 5 | 902 | 0 | 0.19 |
+| job12:10 | 64K | 10 | today | 90 | 138.4 | 13.8 | 11.30 | 11.30 | 2.05 | 687 | 1 | 3 | 902 | 3473192 | 0.18 |
+| job12:4 | 64K | 10 | ttl1 | 92 | 243.7 | 24.7 | 14.95 | 14.94 | 2.46 | 1145 | 2 | 6 | 907 | 2813992 | 0.19 |
+| job12:11 | 64K | 10 | ttl1 | 91 | 229.3 | 23.0 | 14.94 | 14.94 | 2.45 | 1151 | 2 | 6 | 903 | 2789272 | 0.20 |
+| job12:5 | 64K | 10 | proto | 90 | 202.4 | 20.1 | 13.06 | 13.06 | 1.82 | 1299 | 1 | 5 | 908 | 0 | 0.18 |
+| job12:12 | 64K | 10 | proto | 90 | 203.2 | 19.9 | 13.13 | 13.13 | 1.86 | 1301 | 1 | 5 | 919 | 0 | 0.17 |
+| 1114:9 | 128K | 10 | today | 91 | 213.9 | 21.1 | 13.91 | 13.13 | 2.02 | 1338 | 2 | 6 | 923 | 741632 | 0.25 |
+| 1114:39 | 128K | 10 | today | 91 | 220.1 | 21.2 | 13.86 | 13.02 | 2.04 | 1330 | 2 | 6 | 939 | 811672 | 0.24 |
+| 1114:10 | 128K | 10 | ttl1 | 90 | 238.4 | 23.3 | 15.21 | 15.21 | 2.52 | 1170 | 2 | 6 | 922 | 3094152 | 0.30 |
+| 1114:40 | 128K | 10 | ttl1 | 92 | 252.1 | 25.2 | 14.82 | 15.19 | 2.41 | 1178 | 2 | 6 | 922 | 3188912 | 0.49 |
+| 1114:8 | 128K | 10 | proto | 90 | 220.9 | 21.5 | 14.18 | 13.44 | 2.07 | 1355 | 2 | 6 | 923 | 696312 | 0.24 |
+| 1114:38 | 128K | 10 | proto | 93 | 233.4 | 23.6 | 14.29 | 14.29 | 2.09 | 1345 | 2 | 6 | 917 | 515032 | 0.23 |
+
+== idle (job 1)
+job1:1 rs128k-p4k up win 90.06 dev_kw 0.0 dev_wops 0.0 nwritten 0 pwrite 0 Npwrite 0 fdatasync 0 cpu_s 0.000 size-wal 0
+job1:2 rs128k-p4k ttl1 win 90.02 dev_kw 0.0 dev_wops 0.0 nwritten 0 pwrite 0 Npwrite 0 fdatasync 0 cpu_s 0.000 size-wal 0
+job1:3 rs128k-p4k proto win 90.39 dev_kw 0.0 dev_wops 0.0 nwritten 0 pwrite 0 Npwrite 0 fdatasync 0 cpu_s 0.000 size-wal 0
+
+== DERIVED 1: alternatives vs today (600-s runs, one run each)
+| page | rs | rate | alt | disk ratio | disk extra KiB/s | pwrite ratio | nwritten ratio | ckpt pages today/alt |
+|---|---|---|---|---|---|---|---|---|
+| 4096 | 16K | 0.5 | ttl1 | 2.58 | +59.6 | 1.87 | 1.87 | 0/469 |
+| 4096 | 16K | 0.5 | proto | 2.64 | +61.7 | 1.87 | 1.87 | 0/469 |
+| 4096 | 32K | 0.5 | ttl1 | 2.58 | +68.3 | 1.90 | 1.90 | 0/458 |
+| 4096 | 32K | 0.5 | proto | 2.63 | +70.8 | 1.89 | 1.89 | 0/460 |
+| 4096 | 64K | 0.5 | ttl1 | 2.68 | +53.8 | 1.86 | 1.86 | 0/454 |
+| 4096 | 64K | 0.5 | proto | 2.69 | +53.9 | 1.87 | 1.87 | 0/457 |
+| 4096 | 128K | 0.5 | ttl1 | 2.63 | +61.9 | 1.91 | 1.91 | 0/468 |
+| 4096 | 128K | 0.5 | proto | 2.69 | +64.1 | 1.93 | 1.92 | 0/473 |
+| 4096 | 16K | 2 | ttl1 | 2.00 | +63.1 | 1.28 | 1.28 | 1117/1506 |
+| 4096 | 16K | 2 | proto | 2.13 | +71.1 | 1.51 | 1.51 | 1117/1899 |
+| 4096 | 32K | 2 | ttl1 | 1.71 | +49.8 | 1.27 | 1.27 | 1202/1578 |
+| 4096 | 32K | 2 | proto | 1.50 | +35.2 | 1.50 | 1.50 | 1202/1926 |
+| 4096 | 64K | 2 | ttl1 | 1.85 | +50.6 | 1.28 | 1.28 | 1185/1563 |
+| 4096 | 64K | 2 | proto | 1.98 | +58.5 | 1.49 | 1.49 | 1185/1876 |
+| 4096 | 128K | 2 | ttl1 | 1.83 | +59.9 | 1.25 | 1.25 | 1200/1535 |
+| 4096 | 128K | 2 | proto | 1.88 | +63.2 | 1.48 | 1.48 | 1200/1875 |
+| 16384 | 128K | 0.5 | ttl1 | 2.30 | +54.7 | 1.12 | 1.51 | 0/0 |
+| 16384 | 128K | 0.5 | proto | 2.35 | +56.7 | 1.13 | 1.51 | 0/0 |
+| 16384 | 128K | 2 | ttl1 | 1.87 | +66.6 | 0.92 | 1.32 | 404/742 |
+| 16384 | 128K | 2 | proto | 2.07 | +81.5 | 1.07 | 1.78 | 404/971 |
+
+== DERIVED 2: disk KiB/s by recordsize at fixed rate and config (page 4096, 600 s), and ratio to 16K
+| rate | cfg | 16K | 32K | 64K | 128K | 32K/16K | 64K/16K | 128K/16K | ckpt pages 16/32/64/128 |
+|---|---|---|---|---|---|---|---|---|---|
+| 0.5 | today | 37.7 | 43.3 | 31.9 | 37.9 | 1.15 | 0.85 | 1.01 | 0/0/0/0 |
+| 0.5 | ttl1 | 97.2 | 111.6 | 85.7 | 99.8 | 1.15 | 0.88 | 1.03 | 469/458/454/468 |
+| 0.5 | proto | 99.4 | 114.1 | 85.8 | 102.0 | 1.15 | 0.86 | 1.03 | 469/460/457/473 |
+| 2 | today | 63.0 | 70.0 | 59.8 | 72.1 | 1.11 | 0.95 | 1.14 | 1117/1202/1185/1200 |
+| 2 | ttl1 | 126.2 | 119.8 | 110.4 | 131.9 | 0.95 | 0.87 | 1.05 | 1506/1578/1563/1535 |
+| 2 | proto | 134.1 | 105.2 | 118.2 | 135.3 | 0.78 | 0.88 | 1.01 | 1899/1926/1876/1875 |
+
+== DERIVED 3: disk KiB per txg-with-data, no-checkpoint runs only (today: 1 commit per 10 s; alt: data in every 5-s txg)
+0.5/s 16K: today 377 KiB/txg (7.2 KiB disk per KiB pwrite); ttl1 has ckpt; proto has ckpt
+0.5/s 32K: today 433 KiB/txg (8.6 KiB disk per KiB pwrite); ttl1 has ckpt; proto has ckpt
+0.5/s 64K: today 319 KiB/txg (6.1 KiB disk per KiB pwrite); ttl1 has ckpt; proto has ckpt
+0.5/s 128K: today 379 KiB/txg (7.5 KiB disk per KiB pwrite); ttl1 has ckpt; proto has ckpt
+2/s 16K: today has ckpt; ttl1 has ckpt; proto has ckpt
+2/s 32K: today has ckpt; ttl1 has ckpt; proto has ckpt
+2/s 64K: today has ckpt; ttl1 has ckpt; proto has ckpt
+2/s 128K: today has ckpt; ttl1 has ckpt; proto has ckpt
+
+== DERIVED 4: checkpoint cost estimate, per recordsize
+rs16k-p4k 0.5/s: ttl1 ckpt 469, proto ckpt 469 -> no with/without pair
+rs16k-p4k 2/s: ttl1 ckpt 1506, proto ckpt 1899 -> no with/without pair
+rs32k-p4k 0.5/s: ttl1 ckpt 458, proto ckpt 460 -> no with/without pair
+rs32k-p4k 2/s: ttl1 ckpt 1578, proto ckpt 1926 -> no with/without pair
+rs64k-p4k 0.5/s: ttl1 ckpt 454, proto ckpt 457 -> no with/without pair
+rs64k-p4k 2/s: ttl1 ckpt 1563, proto ckpt 1876 -> no with/without pair
+rs128k-p4k 0.5/s: ttl1 ckpt 468, proto ckpt 473 -> no with/without pair
+rs128k-p4k 2/s: ttl1 ckpt 1535, proto ckpt 1875 -> no with/without pair
+rs128k-p16k 0.5/s: ttl1 ckpt 0, proto ckpt 0 -> no with/without pair
+rs128k-p16k 2/s: ttl1 ckpt 742, proto ckpt 971 -> no with/without pair
+
+== REPLICATE: same cell measured twice (job 5 first attempt vs rerun)
+| src | rs | rate | cfg | win s | disk KiB/s | disk KiB/art | pwrite KiB/art | nwritten KiB/art | WAL frames/art | ckpt pages | WAL hdr writes | fdatasync | accepted | WAL end B | CPU s |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| job5-dtfail:2 | 32K | 2 | ttl1 | 600 | 136.4 | 68.0 | 16.86 | 16.86 | 2.89 | 1578 | 3 | 9 | 1204 | 2410232 | 0.29 |
+| job5:2 | 32K | 2 | ttl1 | 600 | 119.8 | 59.9 | 16.85 | 16.85 | 2.88 | 1578 | 3 | 9 | 1201 | 2348432 | 0.33 |
+
+== DERIVED 1b: per run, pwrite/nwritten and disk/nwritten (ZFS physical bytes per logical byte), 600-s runs
+| page | rs | rate | cfg | pwrite/nwritten | disk/nwritten | disk/pwrite |
+|---|---|---|---|---|---|---|
+| 4096 | 16K | 0.5 | today | 1.0000 | 7.19 | 7.19 |
+| 4096 | 16K | 0.5 | ttl1 | 1.0014 | 9.92 | 9.91 |
+| 4096 | 16K | 0.5 | proto | 1.0000 | 10.12 | 10.12 |
+| 4096 | 32K | 0.5 | today | 1.0000 | 8.57 | 8.57 |
+| 4096 | 32K | 0.5 | ttl1 | 0.9986 | 11.63 | 11.64 |
+| 4096 | 32K | 0.5 | proto | 0.9986 | 11.83 | 11.85 |
+| 4096 | 64K | 0.5 | today | 1.0000 | 6.09 | 6.09 |
+| 4096 | 64K | 0.5 | ttl1 | 1.0000 | 8.84 | 8.84 |
+| 4096 | 64K | 0.5 | proto | 1.0000 | 8.81 | 8.81 |
+| 4096 | 128K | 0.5 | today | 1.0000 | 7.52 | 7.52 |
+| 4096 | 128K | 0.5 | ttl1 | 1.0000 | 10.38 | 10.38 |
+| 4096 | 128K | 0.5 | proto | 1.0035 | 10.55 | 10.51 |
+| 4096 | 16K | 2 | today | 1.0000 | 2.44 | 2.44 |
+| 4096 | 16K | 2 | ttl1 | 0.9988 | 3.80 | 3.80 |
+| 4096 | 16K | 2 | proto | 1.0003 | 3.42 | 3.42 |
+| 4096 | 32K | 2 | today | 1.0000 | 2.64 | 2.64 |
+| 4096 | 32K | 2 | ttl1 | 1.0000 | 3.55 | 3.55 |
+| 4096 | 32K | 2 | proto | 1.0003 | 2.66 | 2.66 |
+| 4096 | 64K | 2 | today | 1.0000 | 2.28 | 2.28 |
+| 4096 | 64K | 2 | ttl1 | 1.0018 | 3.29 | 3.29 |
+| 4096 | 64K | 2 | proto | 1.0009 | 3.04 | 3.04 |
+| 4096 | 128K | 2 | today | 1.0000 | 2.75 | 2.75 |
+| 4096 | 128K | 2 | ttl1 | 1.0000 | 3.99 | 3.99 |
+| 4096 | 128K | 2 | proto | 0.9997 | 3.50 | 3.50 |
+| 16384 | 128K | 0.5 | today | 1.7859 | 3.14 | 1.76 |
+| 16384 | 128K | 0.5 | ttl1 | 1.3251 | 4.75 | 3.59 |
+| 16384 | 128K | 0.5 | proto | 1.3338 | 4.85 | 3.64 |
+| 16384 | 128K | 2 | today | 2.0769 | 1.27 | 0.61 |
+| 16384 | 128K | 2 | ttl1 | 1.4456 | 1.81 | 1.25 |
+| 16384 | 128K | 2 | proto | 1.2531 | 1.48 | 1.18 |
+
+== DERIVED 4b: checkpoint cost, model fit per recordsize (6 runs: 3 configs x 2 rates, ONE run per cell)
+# Model: disk KiB = m * txgs_with_data + w * WAL-frame KiB + c * checkpoints
+#   txgs_with_data assumed = win/10 for today (commit 10 s after the first write) and win/5 for ttl1/proto
+#   (commits about every 1 s or 250 ms, so data in every 5-s txg; vfs.zfs.txg.timeout = 5 read on the VM, zfsprops.out).
+#   checkpoints = WAL header rewrites H (plus 1 when fdatasync shows a checkpoint whose restart fell outside the
+#   window, fdatasync > 3H). 3 parameters from 6 points: indicative only, no error bars possible.
+| page | rs | m KiB/txg | w disk KiB per WAL KiB | c KiB per checkpoint | c MiB | ckpt pages/ckpt | c per ckpt page KiB | max abs resid % |
+|---|---|---|---|---|---|---|---|---|
+| 4096 | 16K | 430 | -0.75 | 10587 | 10.3 | 496 | 21.3 | 3.7 |
+| 4096 | 32K | 537 | 0.48 | -724 | -0.7 | 511 | -1.4 | 29.7 |
+| 4096 | 64K | 367 | -0.38 | 8667 | 8.5 | 503 | 17.2 | 8.7 |
+| 4096 | 128K | 433 | -0.04 | 8261 | 8.1 | 505 | 16.4 | 13.5 |
+| 16384 | 128K | not enough exact runs (6) |
+
+== DERIVED 4c: checkpoint cost, 2-parameter fit per recordsize: disk KiB = m * txgs_with_data + c * checkpoints
+#   same txg and checkpoint counting as 4b; the WAL-volume term of 4b is dropped (it came out negative: collinear).
+#   ONE run per cell; the job-5 replicate shows ~13% run-to-run disk spread, so c is uncertain by several MiB.
+| page | rs | m KiB/txg | c KiB/ckpt | c MiB | resid % (0.5 today/ttl1/proto, 2 today/ttl1/proto) |
+|---|---|---|---|---|---|
+| 4096 | 16K | 424 | 7550 | 7.4 | +12 +0 -2 +7 -3 +1 |
+| 4096 | 32K | 540 | 1268 | 1.2 | +25 -1 -3 -17 -5 +11 |
+| 4096 | 64K | 364 | 7128 | 7.0 | +14 -1 -1 +1 -2 +2 |
+| 4096 | 128K | 433 | 8098 | 7.9 | +14 +0 -2 -3 -4 +4 |
+| 16384 | 128K | 486 | 12898 | 12.6 | +15 +0 -2 -8 -2 +2 |
+
+== 10/s SUMMARY: mean of the 2 reps per cell (90-s windows; 1 or 2 checkpoints per window, so phase matters)
+| rs | src | cfg | disk KiB/s rep1, rep2 | mean | mean disk KiB/art | ckpt pages rep1, rep2 | mean / today |
+|---|---|---|---|---|---|---|---|
+| 16K | 2026-11-14 | today | 167.0, 191.6 | 179.3 | 17.8 | 1293, 1341 | 1.00 |
+| 16K | 2026-11-14 | ttl1 | 220.1, 225.8 | 222.9 | 22.1 | 1162, 1163 | 1.24 |
+| 16K | 2026-11-14 | proto | 180.3, 195.9 | 188.1 | 18.4 | 1300, 1335 | 1.05 |
+| 32K | r3 job12 | today | 189.6, 190.1 | 189.9 | 18.5 | 1271, 1299 | 1.00 |
+| 32K | r3 job12 | ttl1 | 235.0, 235.7 | 235.3 | 23.3 | 1132, 1161 | 1.24 |
+| 32K | r3 job12 | proto | 131.6, 196.5 | 164.0 | 16.3 | 685, 1326 | 0.86 |
+| 64K | r3 job12 | today | 209.6, 138.4 | 174.0 | 17.4 | 1285, 687 | 1.00 |
+| 64K | r3 job12 | ttl1 | 243.7, 229.3 | 236.5 | 23.8 | 1145, 1151 | 1.36 |
+| 64K | r3 job12 | proto | 202.4, 203.2 | 202.8 | 20.0 | 1299, 1301 | 1.17 |
+| 128K | 2026-11-14 | today | 213.9, 220.1 | 217.0 | 21.2 | 1338, 1330 | 1.00 |
+| 128K | 2026-11-14 | ttl1 | 238.4, 252.1 | 245.3 | 24.3 | 1170, 1178 | 1.13 |
+| 128K | 2026-11-14 | proto | 220.9, 233.4 | 227.2 | 22.6 | 1355, 1345 | 1.05 |

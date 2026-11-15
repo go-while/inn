@@ -36,7 +36,17 @@ python3.12 ovz.py '{"rates":[0.5,2],"reps":3,"win":90,"settings":[{"name":"rs128
 
 Each run appends one JSON line to `/var/tmp/ovz/results.jsonl`.
 Formulas: disk KiB/s = `dev_kw / win_s`; ovsqlite-server KiB per article = `dt_W_pwrite / 1024 / accepted`.
-`results.jsonl` here holds the 60 runs of 2026-11-14: 3 settings (recordsize 128K or 16K, page size 4 or 16 KiB), rates 0.5, 2 and 10 articles/s, the three configurations, 2 repeats, 90 s windows, plus idle runs.
+
+Results, one folder per round (each `results-*.jsonl` line is one run):
+
+| Folder | What | DTrace window |
+|---|---|---|
+| `zfs/2026-11-14/` | 60 runs: recordsize 128K/16K, 4 or 16 KiB pages, 0.5/2/10 articles/s, 90 s windows, 2 repeats, idle for today | old: pwrite columns can include one extra commit, mostly for today; disk columns are fine |
+| `zfs/2026-11-15-r2/` | 128K, 4 KiB pages: 3 more repeats at 0.5/2/10/s, 30-minute runs at 0.04/s, 10-minute runs at 0.5/s | old, as above |
+| `zfs/2026-11-15-r3/` | recordsize 16K/32K/64K/128K at 0.5 and 2/s with 10-minute windows, 128K with 16 KiB pages, 32K/64K at 10/s, idle for all three configurations | fixed: same window as the disk counters |
+
+`recompute.py` in each folder parses only that folder's results (and the 2026-11-14 file) and prints the tables; `recompute-output.txt` is its output.
+In r3 the WAL frames, checkpoint pages and WAL header writes are solved exactly from the pwrite byte and call counts.
 
 ## linux/: commits, syncs and bytes on an empty database (Linux)
 
