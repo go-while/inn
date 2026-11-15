@@ -3,7 +3,9 @@ package e2e
 // innmail, the mail-sending program used by INN for reports to the news administrator.
 
 import (
+	"errors"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -12,10 +14,11 @@ import (
 
 // TestInnmailAddresses: innmail gives the MTA (and the To header field) the addresses as they
 // were given, when they only have characters allowed in an unquoted local part of an e-mail
-// address, and ignores with a warning the others and those beginning with "-", which the MTA
-// would take as options (issue #186). innmail used to strip every character but
-// [-a-zA-Z0-9+_.@%], mailing another address, and to give the MTA arguments beginning with
-// "-" after a non-option argument or "--".
+// address, and refuses with a warning the others and those beginning with "-", "|" or "/",
+// which the MTA could take as an option, a program or a file (issue #186). The mail still
+// goes to the remaining addresses, but innmail then exits with status 1. innmail used to
+// strip every character but [-a-zA-Z0-9+_.@%], mailing another address, and to give the MTA
+// arguments beginning with "-" after a non-option argument or "--".
 func TestInnmailAddresses(t *testing.T) {
 	dir := t.TempDir()
 	mta := filepath.Join(t.TempDir(), "mta")
@@ -33,7 +36,7 @@ func TestInnmailAddresses(t *testing.T) {
 		name  string
 		args  []string // the arguments of innmail after -s Test
 		rcpts []string // the arguments the MTA gets after -oi -oem; nil = innmail fails
-		warn  []string // the ignored addresses innmail warns about
+		warn  []string // the refused addresses innmail warns about (then it exits with status 1)
 	}{
 		{"plain", []string{"joe", "a+b_c%d@x.invalid"},
 			[]string{"joe", "a+b_c%d@x.invalid"}, nil},
@@ -46,6 +49,12 @@ func TestInnmailAddresses(t *testing.T) {
 		{"unsupported", []string{"--", `"John Doe"@x.invalid`, "<a@x.invalid>", "b@[192.0.2.1]", "joe"},
 			[]string{"joe"}, []string{`"John Doe"@x.invalid`, "<a@x.invalid>", "b@[192.0.2.1]"}},
 		{"only dash", []string{"--", "-x"}, nil, []string{"-x"}},
+		{"pipe", []string{"|prog"}, nil, []string{"|prog"}},
+		{"file", []string{"/tmp/x"}, nil, []string{"/tmp/x"}},
+		{"pipe and file mixed", []string{"joe", "|prog", "/tmp/x", "a+b%c@x.invalid"},
+			[]string{"joe", "a+b%c@x.invalid"}, []string{"|prog", "/tmp/x"}},
+		{"pipe and slash inside", []string{"a|b@x.invalid", "c/d@x.invalid"},
+			[]string{"a|b@x.invalid", "c/d@x.invalid"}, nil},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			before := readMails(t, dir)
@@ -61,8 +70,12 @@ func TestInnmailAddresses(t *testing.T) {
 					t.Errorf("MTA called without a valid address: %q", mails[0].args)
 				}
 			} else {
-				if err != nil {
+				var ee *exec.ExitError
+				switch {
+				case len(tc.warn) == 0 && err != nil:
 					t.Errorf("innmail failed: %v", err)
+				case len(tc.warn) > 0 && (!errors.As(err, &ee) || ee.ExitCode() != 1):
+					t.Errorf("innmail returned %v after refusing an address, want exit status 1", err)
 				}
 				if len(mails) != 1 {
 					t.Fatalf("MTA called %d times, want once", len(mails))
