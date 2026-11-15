@@ -4,7 +4,7 @@ nntpsend - Send Usenet articles to remote sites
 
 =head1 SYNOPSIS
 
-B<nntpsend> [B<-acDdlNnpr>] [B<-P> I<portnum>] [B<-s> I<size>]
+B<nntpsend> [B<-acDdlNnpRr>] [B<-P> I<portnum>] [B<-s> I<size>]
 [B<-T> I<timelimit>] [B<-t> I<timeout>] [B<-w> I<delay>]
 [I<sitename> I<fqdn>] ...
 
@@ -61,11 +61,13 @@ passed to it.
 If the B<-w> flag is used, then B<nntpsend> waits for I<delay> seconds
 after flushing the site before launching B<innxmit>.
 
-=item B<-a>, B<-c>, B<-l>, B<-N>, B<-P> I<portnum>, B<-p>, B<-r>, B<-T>
+=item B<-a>, B<-c>, B<-l>, B<-N>, B<-P> I<portnum>, B<-p>, B<-R>, B<-r>, B<-T>
 I<timelimit>, B<-t> I<timeout>
 
-The B<-a>, B<-c>, B<-l>, B<-P> I<portnum>, B<-p>, B<-r>, B<-T> I<timelimit>
-and B<-t> I<timeout> flags are passed on to the child B<innxmit> program.
+The B<-a>, B<-c>, B<-l>, B<-P> I<portnum>, B<-p>, B<-R>, B<-r>, B<-T>
+I<timelimit> and B<-t> I<timeout> flags are passed on to the child
+B<innxmit> program.  With B<-R>, articles are sent with POST instead of
+IHAVE, to a news reader server.
 The B<-N> flag is passed as B<-s> flag to the child B<innxmit> program.
 See innxmit(8) for more details.
 
