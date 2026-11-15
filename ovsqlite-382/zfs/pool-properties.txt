@@ -1,0 +1,17 @@
+# Pool properties on the FreeBSD 15.1 VM, read on 2026-11-15 (sysctl, zpool list -v, zfs get).
+vfs.zfs.txg.timeout: 5
+vfs.zfs.dirty_data_max: 318081843
+NAME        SIZE  ALLOC   FREE  CKPOINT  EXPANDSZ   FRAG    CAP  DEDUP    HEALTH  ALTROOT
+ovz        4.50G  22.4M  4.48G        -         -     4%     0%  1.00x    ONLINE  -
+  da1         5G  22.4M  4.48G        -         -     4%  0.48%      -    ONLINE        -
+ovz	compression	on	default
+ovz	recordsize	128K	default
+ovz	copies	1	default
+ovz	redundant_metadata	all	default
+ovz	sync	standard	default
+ovz	logbias	latency	default
+ovz	atime	on	default
+ovz	checksum	on	default
+ovz	ashift	0	default
+15.1-RELEASE-p6
+

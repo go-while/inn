@@ -46,7 +46,7 @@ Results, one folder per round (each `results-*.jsonl` line is one run):
 | `zfs/2026-11-15-r2/` | 128K, 4 KiB pages: 3 more repeats at 0.5/2/10/s, 30-minute runs at 0.04/s, 10-minute runs at 0.5/s | old, as above |
 | `zfs/2026-11-15-r3/` | recordsize 16K/32K/64K/128K at 0.5 and 2/s with 10-minute windows, 128K with 16 KiB pages, 32K/64K at 10/s, idle for all three configurations | fixed: same window as the disk counters |
 
-`recompute.py` in each folder parses only that folder's results (and the 2026-11-14 file) and prints the tables; `recompute-output.txt` is its output.
+`2026-11-15-r2/` and `2026-11-15-r3/` also hold the working scripts (`recompute.py`, `recompute-output.txt`) used during the runs; `RESULTS.md` and `mkresults.py` supersede them.
 In r3 the WAL frames, checkpoint pages and WAL header writes are solved exactly from the pwrite byte and call counts.
 
 ## linux/: commits, syncs and bytes on an empty database (Linux)
