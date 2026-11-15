@@ -347,11 +347,19 @@ def snap(pid):
     return d
 
 
-DTRACE = ('syscall::fsync:entry,syscall::fdatasync:entry /pid == %d/ { @s[probefunc] = count(); } '
-          'syscall::pwrite:entry,syscall::write:entry,syscall::pwritev:entry,syscall::writev:entry '
-          '/pid == %d/ { @w[probefunc] = sum(arg2); @n[probefunc] = count(); } '
-          'END { printa("S %%s %%@d\\n", @s); printa("W %%s %%@d\\n", @w); '
-          'printa("N %%s %%@d\\n", @n); }')
+# Running counters for the server's syscalls; the harness prints them with a marker
+# (getppid() from this process) right before each snapshot, so the DTrace window is the
+# same as the disk/kstat window.  The server is single-threaded, so plain globals are safe.
+DTRACE = ('BEGIN { printf("READY\\n"); } '
+          'syscall::fsync:entry /pid == %(srv)d/ { fs++; } '
+          'syscall::fdatasync:entry /pid == %(srv)d/ { fds++; } '
+          'syscall::pwrite:entry /pid == %(srv)d/ { pwb += arg2; pwn++; } '
+          'syscall::write:entry /pid == %(srv)d/ { wb += arg2; wn++; } '
+          'syscall::pwritev:entry,syscall::writev:entry /pid == %(srv)d/ { vn++; } '
+          'syscall::getppid:entry /pid == %(me)d/ '
+          '{ printf("M %%d %%d %%d %%d %%d %%d %%d\\n", fs, fds, pwb, pwn, wb, wn, vn); }')
+DTKEYS = ['dt_S_fsync', 'dt_S_fdatasync', 'dt_W_pwrite', 'dt_N_pwrite', 'dt_W_write', 'dt_N_write',
+          'dt_N_vec']
 
 
 def run_rate(setting, sdir, cfg, rate, rep):
@@ -392,15 +400,24 @@ def run_rate(setting, sdir, cfg, rate, rep):
             now = time.monotonic()
             if not started and now >= t0 + P['warm']:
                 dtout = open(ROOT + '/dtrace.out', 'w')
-                dt = subprocess.Popen(['dtrace', '-q', '-n', DTRACE % (inn.pid, inn.pid)],
+                dt = subprocess.Popen(['dtrace', '-q', '-x', 'switchrate=20hz', '-n',
+                                       DTRACE % {'srv': inn.pid, 'me': os.getpid()}],
                                       stdin=subprocess.DEVNULL, stdout=dtout,
                                       stderr=subprocess.STDOUT)
-                time.sleep(1.5)
+                for _ in range(100):           # wait until dtrace is attached (max 10 s)
+                    time.sleep(0.1)
+                    with open(ROOT + '/dtrace.out') as fh:
+                        if 'READY' in fh.read():
+                            break
+                else:
+                    raise RuntimeError('dtrace did not start')
+                os.getppid()                   # marker: counters at the window start
                 s0 = snap(inn.pid)
                 tw0 = time.monotonic()
                 started = True
                 continue
             if started and now >= tw0 + P['win']:
+                os.getppid()                   # marker: counters at the window end
                 s1 = snap(inn.pid)
                 tw1 = time.monotonic()
                 break
@@ -428,10 +445,11 @@ def run_rate(setting, sdir, cfg, rate, rep):
         for k in s0:
             res[k] = round(s1[k] - s0[k], 1)
         with open(ROOT + '/dtrace.out') as fh:
-            for ln in fh:
-                f = ln.split()
-                if len(f) == 3 and f[0] in ('S', 'W', 'N'):
-                    res['dt_%s_%s' % (f[0], f[1])] = int(f[2])
+            marks = [ln.split()[1:] for ln in fh if ln.startswith('M ')]
+        if len(marks) != 2:
+            raise RuntimeError('expected 2 dtrace markers, got %d' % len(marks))
+        for k, a, b in zip(DTKEYS, marks[0], marks[1]):
+            res[k] = int(b) - int(a)
         for suf in ('', '-wal'):
             p = ovdir + '/ovsqlite.db' + suf
             res['size' + suf] = os.path.getsize(p) if os.path.exists(p) else 0
@@ -464,7 +482,8 @@ def main():
     for rep in range(1, P['reps'] + 1):
         for setting in P['settings']:
             if P.get('idle', True):
-                run_rate(setting, seeds[setting['page']], 'up', 0, rep)
+                for cfg in P.get('idle_cfgs', ['up']):
+                    run_rate(setting, seeds[setting['page']], cfg, 0, rep)
             for rate in P['rates']:
                 for cfg in order:
                     run_rate(setting, seeds[setting['page']], cfg, rate, rep)
