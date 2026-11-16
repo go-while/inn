@@ -330,7 +330,7 @@ The harness attaches DTrace before the feed starts and, after the start snapshot
 | 2 | `transtimelimit: 1` | 129.7 (3) | 131.3 (3) | 1.01 | 2026-11-16-r5/results-job4.jsonl:2 |
 | 2 | Prototype | 136.3 (4) | 134.9 (4) | 0.99 | 2026-11-16-r5/results-job4.jsonl:3 |
 
-- Disk KiB/article of the r5 alternatives at 0.5/s against Today's 30-minute run of round r4 (2026-11-16-r4/results-job1.jsonl:1): `transtimelimit: 1` 2.37, Prototype 2.39 (2026-11-16-r5/results-job3.jsonl:2, 2026-11-16-r5/results-job3.jsonl:3).
+- Disk KiB/article of the r5 alternatives at 0.5/s against Today's 30-minute run of round r4 (2026-11-16-r4/results-job1.jsonl:1): `transtimelimit: 1` 2.37, Prototype 2.39 (2026-11-16-r5/results-job3.jsonl:2, 2026-11-16-r5/results-job3.jsonl:3; checkpoints due 0.97 / 0.98).
 - 1 run had a checkpoint after the DTrace end marker and before the end snapshot (the feed stops at the window end and the idle server checkpoints): 2026-11-16-r5/results-job3.jsonl:2. Its checkpoint pages and ZIL bytes are in the disk and group figures, not in the checkpoint count; it is marked in the table and left out of "runs without a checkpoint". No other run in rounds r3 to r5 has ZIL bytes without a counted checkpoint or a counted checkpoint without ZIL bytes.
 - In 2026-11-16-r4/results-job2.jsonl:3 (6 vs 5), 2026-11-16-r4/results-job2.jsonl:12 (6 vs 5) the pool counted one ZIL commit more than the server's fdatasync calls in the window; not explained.
 
