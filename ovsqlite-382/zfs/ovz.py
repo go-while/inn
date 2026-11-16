@@ -335,6 +335,17 @@ def cpu_us(pid):
     return tot * 1e6
 
 
+def txgs():
+    # Pool transaction-group history (vfs.zfs.txg.history): txg, state, ndirty, nwritten.
+    out = sh(['sysctl', '-n', 'kstat.zfs.%s.txgs' % POOL], check=False)
+    rows = []
+    for ln in out.splitlines():
+        f = ln.split()
+        if len(f) >= 6 and f[0].isdigit():
+            rows.append((int(f[0]), f[2], int(f[3]), int(f[5])))
+    return rows
+
+
 def snap(pid):
     sh(['zpool', 'sync', POOL])
     kw, wops = dev_kw()
@@ -344,6 +355,7 @@ def snap(pid):
               'zil_itx_metaslab_normal_bytes', 'zil_itx_metaslab_normal_write',
               'zil_itx_copied_bytes', 'zil_itx_indirect_bytes', 'zil_itx_needcopy_bytes']:
         d[k] = ks.get(k, 0)
+    d['txg_span'] = max((t for t, st, _, _ in txgs() if st == 'C'), default=0)
     return d
 
 
@@ -405,7 +417,8 @@ def run_rate(setting, sdir, cfg, rate, rep):
                                        DTRACE % {'srv': inn.pid, 'me': os.getpid()}],
                                       stdin=subprocess.DEVNULL, stdout=dtout,
                                       stderr=subprocess.STDOUT)
-                for _ in range(100):           # wait until dtrace is attached (max 10 s)
+                for _ in range(600):           # wait until dtrace is attached (max 60 s; its start
+                                               # took 5-6 s of system time on this VM)
                     time.sleep(0.1)
                     if dt.poll() is not None:
                         break
@@ -448,6 +461,15 @@ def run_rate(setting, sdir, cfg, rate, rep):
         res.update(win_s=round(tw1 - tw0, 2), accepted=acc, rejected=rej)
         for k in s0:
             res[k] = round(s1[k] - s0[k], 1)
+        # Transaction groups synced in the window (after the start snapshot's zpool sync,
+        # up to and including the end snapshot's): count, groups with data, bytes each.
+        t0x, t1x = s0['txg_span'], s1['txg_span']
+        rows = [r for r in txgs() if t0x < r[0] <= t1x and r[1] == 'C']
+        res['txg_n'] = len(rows)
+        res['txg_n_data'] = sum(1 for r in rows if r[3] > 0)
+        res['txg_nwritten'] = sum(r[3] for r in rows)
+        res['txg_w'] = [r[3] for r in rows if r[3] > 0]
+        res['txg_hist_ok'] = len(rows) == t1x - t0x
         with open(ROOT + '/dtrace.out') as fh:
             marks = [ln.split()[1:] for ln in fh if ln.startswith('M ')]
         if len(marks) != 2:
@@ -477,6 +499,7 @@ def main():
     os.makedirs(ROOT, exist_ok=True)
     log('params', json.dumps(P))
     sh(['kldload', '-n', 'dtraceall'])
+    sh(['sysctl', 'vfs.zfs.txg.history=2000'])   # keep every group of a 40-minute window
     if '127.0.0.2' not in sh(['ifconfig', 'lo0']):
         sh(['ifconfig', 'lo0', 'alias', '127.0.0.2/32'])
     seeds = {}

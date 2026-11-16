@@ -2,7 +2,7 @@
 # Make RESULTS.md from the raw result files in zfs/ (parse only; no measurement).
 # usage: python3 -I mkresults.py > RESULTS.md
 # Every table cell and every number in the derived section is computed here from
-# zfs/2026-11-14/results.jsonl and zfs/2026-11-15-*/results-job*.jsonl.  The setup
+# zfs/2026-11-14/results.jsonl, zfs/2026-11-15-*/results-job*.jsonl and zfs/2026-11-16-r4/results-job*.jsonl.  The setup
 # facts in the first section come from ovz.py and zfs/pool-properties.txt.
 import collections
 import glob
@@ -353,6 +353,75 @@ p16 = [r for r in good if r['page'] != P and r['nwritten'] and r['src'].startswi
 if p16:
     extra = [(r['dt_W_pwrite'] - r['nwritten']) / 1e6 for r in p16]
     print('With 16 KiB SQLite pages (round r3) the server\'s pwrite bytes exceeded the dataset\'s `nwritten` by %s MB per window: writes that did not reach that dataset, not identified.\n' % rng(extra, '%.0f'))
+
+# ---------------------------------------------------------------- round r4
+R4ALL = load('2026-11-16-r4/results-job*.jsonl')
+R4 = [r for r in R4ALL if not r['bad'] and r['win_s'] >= 61]
+R4TXG = [r for r in R4 if r['rate'] in (0.04, 0.5, 2)]
+R4TEN = [r for r in R4 if r['rate'] == 10]
+
+
+def due(r):
+    return frames(r)[0] / 1000.0
+
+
+def mib_grp(r):
+    return r['txg_nwritten'] / r['txg_n_data'] / 1048576 if r.get('txg_n_data') else 0
+
+
+print('## 7. Round r4 (2026-11-16): transaction groups, longer windows, checkpoint counts\n')
+print('Same setup and harness, plus the pool\'s transaction-group history (`kstat.zfs.ovz.txgs`, `vfs.zfs.txg.history=2000`) read at both ends of each window: groups synced in the window, groups that wrote data, and their bytes (`txg_nwritten`; ZIL writes happen outside the groups). "checkpoints due" = WAL frames / 1000, the checkpoints a window of this length would hold on average. Recordsize 128K unless noted. Runs not counted here: %s.\n' % ', '.join(
+    '%s (%s)' % (r['src'], 'error: ' + r['error'][:40] if r['bad'] else 'smoke test, %d s' % r['win_s']) for r in R4ALL if r['bad'] or r['win_s'] < 61))
+print('| rate/s | config | window s | accepted | disk KiB/s | disk KiB/article | server KiB/article | checkpoints | checkpoints due | groups | groups with data | MiB per group with data | ZIL MiB | source |')
+print('|---|---|---|---|---|---|---|---|---|---|---|---|---|---|')
+for r in sorted(R4TXG, key=lambda r: (r['rate'], r['win_s'] < 1000, ['up', 'ttl1', 'proto'].index(r['cfg']))):
+    print('| %s | %s | %.0f | %d | %.1f | %.1f | %.2f | %d | %.2f | %d | %d | %.3f | %.2f | %s |' % (
+        r['rate'], NAME[r['cfg']], r['win_s'], r['accepted'], disk(r), r['dev_kw'] / r['accepted'], srv(r),
+        ckpts(r), due(r), r['txg_n'], r['txg_n_data'], mib_grp(r), r['zil_itx_metaslab_normal_bytes'] / 1048576, r['src']))
+print()
+chk = [(r['txg_nwritten'] + r['zil_itx_metaslab_normal_bytes']) / (r['dev_kw'] * 1024) for r in R4TXG]
+nock = [mib_grp(r) for r in R4TXG if ckpts(r) == 0]
+share_t = [r['txg_n_data'] / r['txg_n'] for r in R4TXG if r['cfg'] == 'up' and r['rate'] in (0.5, 2)]
+share_a = [r['txg_n_data'] / r['txg_n'] for r in R4TXG if r['cfg'] != 'up' and r['rate'] in (0.5, 2)]
+print('- Groups with data: Today %s of the groups at 0.5 and 2/s, the alternatives %s; at 0.04/s every article had its own group.' % (
+    rng([x * 100 for x in share_t], '%.0f %%'), rng([x * 100 for x in share_a], '%.0f %%')))
+print('- Bytes per group with data in the runs without a checkpoint: %s MiB.' % rng(nock, '%.2f'))
+print('- Group bytes plus ZIL bytes were %s times the disk bytes (`iostat`).' % rng(chk, '%.3f'))
+t1 = [r for r in R4TXG if r['cfg'] == 'up' and r['rate'] == 0.5 and r['win_s'] > 1000][0]
+alt = [r for r in R4TXG if r['cfg'] != 'up' and r['rate'] == 0.5]
+kt = kpc(t1)
+print('- Today at 0.5/s, 30-minute window (%s): %d checkpoints of %.0f pages (%.1f MiB of 4 KiB pages) each; the alternatives\' checkpoints at 0.5/s in this round: %s pages.' % (
+    t1['src'], ckpts(t1), kt, kt * P / 1048576, rng([kpc(r) for r in alt], '%.0f')))
+e_t = frames(t1)[0] / t1['accepted'] * (P + 24 + P * kt / 1000) / 1024
+e_a = [frames(r)[0] / r['accepted'] * (P + 24 + P * kpc(r) / 1000) / 1024 for r in alt]
+print('- Over whole checkpoint cycles (section 6 formula, Today\'s own checkpoint size): Today %.1f, alternatives %s server KiB/article, ratio %s.' % (
+    e_t, rng(e_a), rng([a / e_t for a in e_a], '%.2f')))
+print('- Disk, windows that caught about their due checkpoints (Today 30 min: %d of %.2f; alternatives 600 s: %s of %s): alternatives/Today %s disk KiB/article.' % (
+    ckpts(t1), due(t1), rng([ckpts(r) for r in alt], '%d'), rng([due(r) for r in alt], '%.2f'),
+    rng([(r['dev_kw'] / r['accepted']) / (t1['dev_kw'] / t1['accepted']) for r in alt], '%.2f')))
+low4 = {r['cfg']: r for r in R4TXG if r['rate'] == 0.04}
+print('- 0.04/s: disk KiB/s %s (Today, `transtimelimit: 1`, Prototype); ratio to Today %s; round r2 (section 4) had %s.' % (
+    ' / '.join('%.1f' % disk(low4[c]) for c in ('up', 'ttl1', 'proto')),
+    ' / '.join('%.2f' % (disk(low4[c]) / disk(low4['up'])) for c in ('ttl1', 'proto')),
+    ' / '.join('%.1f' % disk([r for r in LOW if r['cfg'] == c][0]) for c in ('up', 'ttl1', 'proto'))))
+print()
+print('**10 articles/s with checkpoint counts** (90-second windows, 2 repeats, order Today, `transtimelimit: 1`, Prototype):\n')
+print('| recordsize | config | rep | disk KiB/s | checkpoints | WAL frames/article | groups with data | source |')
+print('|---|---|---|---|---|---|---|---|')
+for r in sorted(R4TEN, key=lambda r: (RS.index(r['rs']), ['up', 'ttl1', 'proto'].index(r['cfg']), r['rep'])):
+    print('| %s | %s | %d | %.1f | %d | %.2f | %d | %s |' % (r['rs'], NAME[r['cfg']], r['rep'], disk(r), ckpts(r),
+                                                          frames(r)[0] / r['accepted'], r['txg_n_data'], r['src']))
+print()
+same = {'ttl1': [], 'proto': []}
+for rs in ('16K', '128K'):
+    for rep in (1, 2):
+        u = [r for r in R4TEN if r['rs'] == rs and r['rep'] == rep and r['cfg'] == 'up'][0]
+        for c in same:
+            a = [r for r in R4TEN if r['rs'] == rs and r['rep'] == rep and r['cfg'] == c][0]
+            if ckpts(a) == ckpts(u):
+                same[c].append(disk(a) / disk(u))
+print('- Same repeat and same number of checkpoints as Today: `transtimelimit: 1` %s, Prototype %s times Today\'s disk bytes (%d and %d pairs).\n' % (
+    rng(same['ttl1'], '%.2f') if same['ttl1'] else '–', rng(same['proto'], '%.2f') if same['proto'] else '–', len(same['ttl1']), len(same['proto'])))
 
 print('''## Caveats
 

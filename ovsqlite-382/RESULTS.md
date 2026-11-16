@@ -231,6 +231,50 @@ Fit per recordsize over the six section-1 runs, disk KiB = m × transaction grou
 
 With 16 KiB SQLite pages (round r3) the server's pwrite bytes exceeded the dataset's `nwritten` by 4–40 MB per window: writes that did not reach that dataset, not identified.
 
+## 7. Round r4 (2026-11-16): transaction groups, longer windows, checkpoint counts
+
+Same setup and harness, plus the pool's transaction-group history (`kstat.zfs.ovz.txgs`, `vfs.zfs.txg.history=2000`) read at both ends of each window: groups synced in the window, groups that wrote data, and their bytes (`txg_nwritten`; ZIL writes happen outside the groups). "checkpoints due" = WAL frames / 1000, the checkpoints a window of this length would hold on average. Recordsize 128K unless noted. Runs not counted here: 2026-11-16-r4/results-job0-try1.jsonl:1 (error: RuntimeError('dtrace did not start: ')), 2026-11-16-r4/results-job0.jsonl:1 (smoke test, 31 s).
+
+| rate/s | config | window s | accepted | disk KiB/s | disk KiB/article | server KiB/article | checkpoints | checkpoints due | groups | groups with data | MiB per group with data | ZIL MiB | source |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 0.04 | Today | 1800 | 72 | 22.8 | 569.6 | 13.36 | 0 | 0.24 | 362 | 72 | 0.556 | 0.00 | 2026-11-16-r4/results-job3.jsonl:1 |
+| 0.04 | `transtimelimit: 1` | 1800 | 73 | 20.3 | 500.3 | 13.28 | 0 | 0.24 | 362 | 73 | 0.489 | 0.00 | 2026-11-16-r4/results-job4.jsonl:1 |
+| 0.04 | Prototype | 1800 | 73 | 21.1 | 519.7 | 13.28 | 0 | 0.24 | 362 | 73 | 0.508 | 0.00 | 2026-11-16-r4/results-job5.jsonl:1 |
+| 0.5 | Today | 1800 | 905 | 50.4 | 100.3 | 15.26 | 2 | 2.33 | 362 | 150 | 0.559 | 4.69 | 2026-11-16-r4/results-job1.jsonl:1 |
+| 0.5 | Today | 601 | 300 | 44.1 | 88.5 | 10.11 | 0 | 0.75 | 122 | 50 | 0.518 | 0.00 | 2026-11-16-r4/results-job6.jsonl:1 |
+| 0.5 | `transtimelimit: 1` | 601 | 301 | 114.0 | 227.5 | 19.25 | 1 | 0.97 | 122 | 120 | 0.541 | 1.93 | 2026-11-16-r4/results-job6.jsonl:2 |
+| 0.5 | Prototype | 602 | 304 | 117.0 | 231.6 | 19.38 | 1 | 0.99 | 123 | 121 | 0.552 | 1.96 | 2026-11-16-r4/results-job6.jsonl:3 |
+| 2 | Today | 601 | 1209 | 77.3 | 38.4 | 13.03 | 2 | 2.71 | 122 | 57 | 0.700 | 5.37 | 2026-11-16-r4/results-job7.jsonl:1 |
+| 2 | `transtimelimit: 1` | 600 | 1202 | 129.7 | 64.8 | 16.46 | 3 | 3.39 | 122 | 120 | 0.578 | 6.64 | 2026-11-16-r4/results-job7.jsonl:2 |
+| 2 | Prototype | 601 | 1202 | 136.3 | 68.1 | 19.35 | 4 | 3.92 | 122 | 120 | 0.631 | 8.07 | 2026-11-16-r4/results-job7.jsonl:3 |
+
+- Groups with data: Today 41 %–47 % of the groups at 0.5 and 2/s, the alternatives 98 %; at 0.04/s every article had its own group.
+- Bytes per group with data in the runs without a checkpoint: 0.49–0.56 MiB.
+- Group bytes plus ZIL bytes were 0.997–1.047 times the disk bytes (`iostat`).
+- Today at 0.5/s, 30-minute window (2026-11-16-r4/results-job1.jsonl:1): 2 checkpoints of 554 pages (2.2 MiB of 4 KiB pages) each; the alternatives' checkpoints at 0.5/s in this round: 468–473 pages.
+- Over whole checkpoint cycles (section 6 formula, Today's own checkpoint size): Today 16.1, alternatives 19.1–19.3 server KiB/article, ratio 1.19–1.20.
+- Disk, windows that caught about their due checkpoints (Today 30 min: 2 of 2.33; alternatives 600 s: 1 of 0.97–0.99): alternatives/Today 2.27–2.31 disk KiB/article.
+- 0.04/s: disk KiB/s 22.8 / 20.3 / 21.1 (Today, `transtimelimit: 1`, Prototype); ratio to Today 0.89 / 0.93; round r2 (section 4) had 17.2 / 17.7 / 18.1.
+
+**10 articles/s with checkpoint counts** (90-second windows, 2 repeats, order Today, `transtimelimit: 1`, Prototype):
+
+| recordsize | config | rep | disk KiB/s | checkpoints | WAL frames/article | groups with data | source |
+|---|---|---|---|---|---|---|---|
+| 16K | Today | 1 | 183.7 | 2 | 1.76 | 8 | 2026-11-16-r4/results-job2.jsonl:1 |
+| 16K | Today | 2 | 131.9 | 1 | 1.84 | 8 | 2026-11-16-r4/results-job2.jsonl:8 |
+| 16K | `transtimelimit: 1` | 1 | 236.5 | 2 | 2.42 | 19 | 2026-11-16-r4/results-job2.jsonl:2 |
+| 16K | `transtimelimit: 1` | 2 | 236.3 | 2 | 2.50 | 19 | 2026-11-16-r4/results-job2.jsonl:9 |
+| 16K | Prototype | 1 | 186.8 | 2 | 1.79 | 8 | 2026-11-16-r4/results-job2.jsonl:3 |
+| 16K | Prototype | 2 | 141.5 | 1 | 2.09 | 9 | 2026-11-16-r4/results-job2.jsonl:7 |
+| 128K | Today | 1 | 230.8 | 2 | 1.81 | 8 | 2026-11-16-r4/results-job2.jsonl:6 |
+| 128K | Today | 2 | 153.6 | 1 | 1.83 | 8 | 2026-11-16-r4/results-job2.jsonl:10 |
+| 128K | `transtimelimit: 1` | 1 | 271.5 | 2 | 2.46 | 18 | 2026-11-16-r4/results-job2.jsonl:4 |
+| 128K | `transtimelimit: 1` | 2 | 277.6 | 2 | 2.51 | 18 | 2026-11-16-r4/results-job2.jsonl:11 |
+| 128K | Prototype | 1 | 244.2 | 2 | 1.88 | 9 | 2026-11-16-r4/results-job2.jsonl:5 |
+| 128K | Prototype | 2 | 239.6 | 2 | 2.03 | 9 | 2026-11-16-r4/results-job2.jsonl:12 |
+
+- Same repeat and same number of checkpoints as Today: `transtimelimit: 1` 1.18–1.29, Prototype 1.02–1.07 times Today's disk bytes (2 and 3 pairs).
+
 ## Caveats
 
 - One run per cell in section 1, and each recordsize ran in its own job at a different time, so differences of the size of the repeat runs cannot be told apart from job-to-job variation.
