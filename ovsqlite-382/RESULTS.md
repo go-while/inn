@@ -227,7 +227,7 @@ Fit per recordsize over the six section-1 runs, disk KiB = m × transaction grou
 - ZIL bytes per checkpoint (`zil_itx_metaslab_normal_bytes` / checkpoints): 1.90–2.69 MiB in section 1, 2.50–3.71 MiB at 10/s; in section 1 the ZIL bytes are 1.06–1.16 times the checkpoint pages, i.e. the checkpoint's fdatasync logs its pages and the transaction group writes them again (no separate log device).
 - The seeded database is 57057280 bytes for 300,000 overview rows, about 190 bytes per row.
 
-**WAL size.** Each checkpoint is a TRUNCATE checkpoint run once the WAL holds 1000 frames and no transaction is open, so in all three configurations the WAL stays below about 4120000 bytes (1000 frames of 4120 bytes) plus one transaction; the largest WAL at a window end in round r3 was 3473192 bytes.
+**WAL size.** Each checkpoint is a TRUNCATE checkpoint run once the WAL holds 1000 frames and no transaction is open, so in all three configurations the WAL stays below about 4120000 bytes (1000 frames of 4120 bytes) plus one transaction; the largest WAL at a window end with 4 KiB pages (rounds r3 to r5) was 4293072 bytes (2026-11-16-r5/results-job1.jsonl:7, Prototype, 10/s, 16K).
 
 **Runs not shown above**: 7 idle runs of the earlier rounds (Today only), 1 smoke test (60 s), 26 with 16 KiB SQLite pages, 3 with an error.
 
@@ -250,9 +250,9 @@ Same setup and harness, plus the pool's transaction-group history (`kstat.zfs.ov
 | 2 | `transtimelimit: 1` | 600 | 1202 | 129.7 | 64.8 | 16.46 | 3 | 3.39 | 122 | 120 | 0.578 | 6.64 | 2026-11-16-r4/results-job7.jsonl:2 |
 | 2 | Prototype | 601 | 1202 | 136.3 | 68.1 | 19.35 | 4 | 3.92 | 122 | 120 | 0.631 | 8.07 | 2026-11-16-r4/results-job7.jsonl:3 |
 
-- Groups with data: Today 41 %–47 % of the groups at 0.5 and 2/s, the alternatives 98 %; at 0.04/s every article had its own group.
-- Bytes per group with data in the runs without a checkpoint: 0.49–0.56 MiB.
-- Group bytes plus ZIL bytes were 0.997–1.047 times the disk bytes (`iostat`).
+- Rounds r4 and r5 at 128K (section 8 has the r5 rows). Groups with data: Today 41 %–48 % of the groups at 0.5 and 2/s, the alternatives 98 %–100 %; at 0.04/s every article had its own group.
+- Bytes per group with data (`txg_nwritten`) in the runs without a checkpoint: 0.49–0.56 MiB; in those runs the ZIL wrote nothing, so this was all the disk bytes.
+- Group bytes plus ZIL bytes were 0.997–1.047 times the disk bytes (`iostat`) at 0.04, 0.5 and 2/s.
 - Today at 0.5/s, 30-minute window (2026-11-16-r4/results-job1.jsonl:1): 2 checkpoints of 554 pages (2.2 MiB of 4 KiB pages) each; the alternatives' checkpoints at 0.5/s in this round: 468–473 pages.
 - Over whole checkpoint cycles (section 6 formula, Today's own checkpoint size): Today 16.1, alternatives 19.1–19.3 server KiB/article, ratio 1.19–1.20.
 - Disk, windows that caught about their due checkpoints (Today 30 min: 2 of 2.33; alternatives 600 s: 1 of 0.97–0.99): alternatives/Today 2.27–2.31 disk KiB/article.
@@ -281,7 +281,7 @@ Same setup and harness, plus the pool's transaction-group history (`kstat.zfs.ov
 
 The harness attaches DTrace before the feed starts and, after the start snapshot, restarts the article schedule from that moment, so no articles are held back and sent at once. "late" = articles sent more than 0.5 s after their slot inside the window. Runs not counted here: 2026-11-16-r5/results-job0.jsonl:1 (smoke test, 30 s).
 
-**Start backlog in the earlier rounds** (accepted minus window × rate, i.e. articles held back while DTrace attached and sent at the window start): rounds r3 and r4, 0.5/s: 0–5; 2/s: 0–10; 10/s: 0–69.
+**Start backlog in the earlier rounds** (accepted minus window × rate, i.e. articles held back while DTrace attached and sent at the window start), rounds r3 and r4: 10-minute windows 0.5/s 0–4; 2/s 0–10; 90-second windows at 10/s 0–69; the 30-minute window at 0.5/s 5.
 
 **10 articles/s, all recordsizes** (90-second windows, 2 repeats):
 
@@ -312,7 +312,9 @@ The harness attaches DTrace before the feed starts and, after the start snapshot
 | 128K | Prototype | 1 | 901 | 0 | 235.6 | 2 | 1.86 | 9 of 20 | 2026-11-16-r5/results-job2.jsonl:5 |
 | 128K | Prototype | 2 | 900 | 16 | 158.7 | 1 | 2.11 | 9 of 20 | 2026-11-16-r5/results-job2.jsonl:12 |
 
-- Same repeat and recordsize, same number of checkpoints as Today: `transtimelimit: 1` 1.15–1.23 (3 pairs), Prototype 0.96–1.02 (7 pairs) times Today's disk bytes.
+- Same repeat and recordsize, same number of checkpoints as Today: `transtimelimit: 1` 1.15–1.23 (3 of 8 pairs; 16K, 64K), Prototype 0.96–1.02 (7 of 8 pairs; 16K, 32K, 64K, 128K) times Today's disk bytes per second.
+- `transtimelimit: 1` with a different number of checkpoints than Today: 16K +1 checkpoint: 1.65; 32K +1 checkpoint: 1.77; 32K +1 checkpoint: 1.68; 128K +1 checkpoint: 1.72; 128K +1 checkpoint: 1.72.
+- Prototype with a different number of checkpoints than Today: 128K +1 checkpoint: 1.52.
 - Groups with data per window: Today 8–9, `transtimelimit: 1` 18–19, Prototype 8–9; late articles per window 0–16.
 
 **0.5 and 2 articles/s, 128K, 600-second windows: round r5 vs round r4** (disk KiB/s; checkpoints in brackets):
@@ -320,14 +322,27 @@ The harness attaches DTrace before the feed starts and, after the start snapshot
 | rate/s | config | r4 | r5 | r5/r4 | r5 source |
 |---|---|---|---|---|---|
 | 0.5 | Today | 44.1 (0) | 45.0 (0) | 1.02 | 2026-11-16-r5/results-job3.jsonl:1 |
-| 0.5 | `transtimelimit: 1` | 114.0 (1) | 118.1 (0) | 1.04 | 2026-11-16-r5/results-job3.jsonl:2 |
+| 0.5 | `transtimelimit: 1` | 114.0 (1) | 118.1 (0, +1 after the end marker) | 1.04 | 2026-11-16-r5/results-job3.jsonl:2 |
 | 0.5 | Prototype | 117.0 (1) | 119.6 (1) | 1.02 | 2026-11-16-r5/results-job3.jsonl:3 |
 | 2 | Today | 77.3 (2) | 77.8 (2) | 1.01 | 2026-11-16-r5/results-job4.jsonl:1 |
 | 2 | `transtimelimit: 1` | 129.7 (3) | 131.3 (3) | 1.01 | 2026-11-16-r5/results-job4.jsonl:2 |
 | 2 | Prototype | 136.3 (4) | 134.9 (4) | 0.99 | 2026-11-16-r5/results-job4.jsonl:3 |
 
-- `transtimelimit: 1` at 0.5/s caught 1 checkpoint in round r4 and 0 in round r5, yet r5 wrote 4 % more to the disk: between runs the disk bytes vary by at least as much as one checkpoint costs at this rate, so section 6's per-checkpoint disk cost (6–8 MiB) is not a reliable figure for adjusting windows.
+- 1 run had a checkpoint after the DTrace end marker and before the end snapshot (the feed stops at the window end and the idle server checkpoints): 2026-11-16-r5/results-job3.jsonl:2. Its checkpoint pages and ZIL bytes are in the disk and group figures, not in the checkpoint count; it is marked in the table and left out of "runs without a checkpoint". No other run in rounds r3 to r5 has ZIL bytes without a counted checkpoint or a counted checkpoint without ZIL bytes.
+- In 2026-11-16-r4/results-job2.jsonl:3 (6 vs 5), 2026-11-16-r4/results-job2.jsonl:12 (6 vs 5) the pool counted one ZIL commit more than the server's fdatasync calls in the window; not explained.
 
+**128K at 0.5 and 2/s across days** (disk KiB/s, 600-second windows; round r3 on 2026-11-15, rounds r4 and r5 on 2026-11-16):
+
+| rate/s | config | r3 | r4 | r5 | r4/r3 | r5/r3 |
+|---|---|---|---|---|---|---|
+| 0.5 | Today | 37.9 | 44.1 | 45.0 | 1.16 | 1.19 |
+| 0.5 | `transtimelimit: 1` | 99.8 | 114.0 | 118.1 | 1.14 | 1.18 |
+| 0.5 | Prototype | 102.0 | 117.0 | 119.6 | 1.15 | 1.17 |
+| 2 | Today | 72.1 | 77.3 | 77.8 | 1.07 | 1.08 |
+| 2 | `transtimelimit: 1` | 131.9 | 129.7 | 131.3 | 0.98 | 1.00 |
+| 2 | Prototype | 135.3 | 136.3 | 134.9 | 1.01 | 1.00 |
+
+- Ratio to Today in r3 / r4 / r5: 0.5/s `transtimelimit: 1` 2.63 / 2.58 / 2.62; 0.5/s Prototype 2.69 / 2.65 / 2.66; 2/s `transtimelimit: 1` 1.83 / 1.68 / 1.69; 2/s Prototype 1.88 / 1.76 / 1.73.
 ## Caveats
 
 - One run per cell in section 1, and each recordsize ran in its own job at a different time, so differences of the size of the repeat runs cannot be told apart from job-to-job variation.

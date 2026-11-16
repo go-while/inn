@@ -91,6 +91,8 @@ IDLE = [r for r in R3 if r['rate'] == 0]
 OLD90 = [r for r in good if r['page'] == P and r['rate'] in (0.5, 2) and 61 < r['win_s'] < 100
          and not r['src'].startswith('2026-11-15-r3/')]
 R2LONG = [r for r in good if r['src'].startswith('2026-11-15-r2/') and r['rate'] == 0.5 and r['win_s'] > 500]
+R4 = [r for r in load('2026-11-16-r4/results-job*.jsonl') if not r['bad'] and r['win_s'] >= 61]
+R5 = [r for r in load('2026-11-16-r5/results-job*.jsonl') if not r['bad'] and r['win_s'] >= 61]
 
 
 def cell(rows, rs, rate, cfg):
@@ -342,8 +344,9 @@ print('- ZIL bytes per checkpoint (`zil_itx_metaslab_normal_bytes` / checkpoints
 seed = [r['size'] for r in MAIN if ckpts(r) == 0 and r['cfg'] == 'up']
 print('- The seeded database is %d bytes for 300,000 overview rows, about %d bytes per row.\n' % (57057280, 57057280 // 300000))
 
-wal = max(r.get('size-wal', 0) for r in R3 if r['page'] == P)
-print('**WAL size.** Each checkpoint is a TRUNCATE checkpoint run once the WAL holds 1000 frames and no transaction is open, so in all three configurations the WAL stays below about %d bytes (1000 frames of %d bytes) plus one transaction; the largest WAL at a window end in round r3 was %d bytes.\n' % (1000 * (P + 24), P + 24, wal))
+walr = max((r for r in R3 + R4 + R5 if r['page'] == P), key=lambda r: r.get('size-wal', 0))
+wal = walr.get('size-wal', 0)
+print('**WAL size.** Each checkpoint is a TRUNCATE checkpoint run once the WAL holds 1000 frames and no transaction is open, so in all three configurations the WAL stays below about %d bytes (1000 frames of %d bytes) plus one transaction; the largest WAL at a window end with 4 KiB pages (rounds r3 to r5) was %d bytes (%s, %s, %s/s, %s).\n' % (1000 * (P + 24), P + 24, wal, walr['src'], NAME[walr['cfg']], walr['rate'], walr['rs']))
 
 shown = set(r['src'] for r in MAIN + REP + OLD90 + TEN + LOW + IDLE + R2LONG)
 left = [r for r in ALL if r['src'] not in shown]
@@ -361,6 +364,18 @@ R4ALL = load('2026-11-16-r4/results-job*.jsonl')
 R4 = [r for r in R4ALL if not r['bad'] and r['win_s'] >= 61]
 R4TXG = [r for r in R4 if r['rate'] in (0.04, 0.5, 2)]
 R4TEN = [r for r in R4 if r['rate'] == 10]
+R5ALL = load('2026-11-16-r5/results-job*.jsonl')
+R5 = [r for r in R5ALL if not r['bad'] and r['win_s'] >= 61]
+
+
+def gap(r):
+    # A checkpoint after the DTrace end marker and before the end snapshot: its ZIL
+    # bytes are in the window, its fdatasync calls are not.
+    return ckpts(r) == 0 and r.get('zil_itx_metaslab_normal_bytes', 0) > 1 << 20
+
+
+def ckstr(r):
+    return '%d, +1 after the end marker' % ckpts(r) if gap(r) else '%d' % ckpts(r)
 
 
 def due(r):
@@ -381,14 +396,15 @@ for r in sorted(R4TXG, key=lambda r: (r['rate'], r['win_s'] < 1000, ['up', 'ttl1
         r['rate'], NAME[r['cfg']], r['win_s'], r['accepted'], disk(r), r['dev_kw'] / r['accepted'], srv(r),
         ckpts(r), due(r), r['txg_n'], r['txg_n_data'], mib_grp(r), r['zil_itx_metaslab_normal_bytes'] / 1048576, r['src']))
 print()
-chk = [(r['txg_nwritten'] + r['zil_itx_metaslab_normal_bytes']) / (r['dev_kw'] * 1024) for r in R4TXG]
-nock = [mib_grp(r) for r in R4TXG if ckpts(r) == 0]
-share_t = [r['txg_n_data'] / r['txg_n'] for r in R4TXG if r['cfg'] == 'up' and r['rate'] in (0.5, 2)]
-share_a = [r['txg_n_data'] / r['txg_n'] for r in R4TXG if r['cfg'] != 'up' and r['rate'] in (0.5, 2)]
-print('- Groups with data: Today %s of the groups at 0.5 and 2/s, the alternatives %s; at 0.04/s every article had its own group.' % (
+TXG = R4TXG + [r for r in R5 if r['rate'] in (0.04, 0.5, 2)]
+chk = [(r['txg_nwritten'] + r['zil_itx_metaslab_normal_bytes']) / (r['dev_kw'] * 1024) for r in TXG]
+nock = [mib_grp(r) for r in TXG if ckpts(r) == 0 and not gap(r)]
+share_t = [r['txg_n_data'] / r['txg_n'] for r in TXG if r['cfg'] == 'up' and r['rate'] in (0.5, 2)]
+share_a = [r['txg_n_data'] / r['txg_n'] for r in TXG if r['cfg'] != 'up' and r['rate'] in (0.5, 2)]
+print('- Rounds r4 and r5 at 128K (section 8 has the r5 rows). Groups with data: Today %s of the groups at 0.5 and 2/s, the alternatives %s; at 0.04/s every article had its own group.' % (
     rng([x * 100 for x in share_t], '%.0f %%'), rng([x * 100 for x in share_a], '%.0f %%')))
-print('- Bytes per group with data in the runs without a checkpoint: %s MiB.' % rng(nock, '%.2f'))
-print('- Group bytes plus ZIL bytes were %s times the disk bytes (`iostat`).' % rng(chk, '%.3f'))
+print('- Bytes per group with data (`txg_nwritten`) in the runs without a checkpoint: %s MiB; in those runs the ZIL wrote nothing, so this was all the disk bytes.' % rng(nock, '%.2f'))
+print('- Group bytes plus ZIL bytes were %s times the disk bytes (`iostat`) at 0.04, 0.5 and 2/s.' % rng(chk, '%.3f'))
 t1 = [r for r in R4TXG if r['cfg'] == 'up' and r['rate'] == 0.5 and r['win_s'] > 1000][0]
 alt = [r for r in R4TXG if r['cfg'] != 'up' and r['rate'] == 0.5]
 kt = kpc(t1)
@@ -426,10 +442,6 @@ print('- Same repeat and same number of checkpoints as Today: `transtimelimit: 1
     rng(same['ttl1'], '%.2f') if same['ttl1'] else '–', rng(same['proto'], '%.2f') if same['proto'] else '–', len(same['ttl1']), len(same['proto'])))
 
 # ---------------------------------------------------------------- round r5
-R5ALL = load('2026-11-16-r5/results-job*.jsonl')
-R5 = [r for r in R5ALL if not r['bad'] and r['win_s'] >= 61]
-
-
 def backlog(r):
     return max(0, r['accepted'] - round(r['win_s'] * r['rate']))
 
@@ -437,8 +449,10 @@ def backlog(r):
 print('## 8. Round r5 (2026-11-16): feed timing fixed\n')
 print('The harness attaches DTrace before the feed starts and, after the start snapshot, restarts the article schedule from that moment, so no articles are held back and sent at once. "late" = articles sent more than 0.5 s after their slot inside the window. Runs not counted here: %s.\n' % ', '.join(
     '%s (smoke test, %d s)' % (r['src'], r['win_s']) for r in R5ALL if r['win_s'] < 61))
-print('**Start backlog in the earlier rounds** (accepted minus window × rate, i.e. articles held back while DTrace attached and sent at the window start): rounds r3 and r4, %s.\n' % '; '.join(
-    '%s/s: %s' % (rate, rng([backlog(r) for r in R3 + R4 if r['rate'] == rate and r['page'] == P], '%d')) for rate in (0.5, 2, 10)))
+print('**Start backlog in the earlier rounds** (accepted minus window × rate, i.e. articles held back while DTrace attached and sent at the window start), rounds r3 and r4: 10-minute windows %s; 90-second windows at 10/s %s; the 30-minute window at 0.5/s %s.\n' % (
+    '; '.join('%s/s %s' % (rate, rng([backlog(r) for r in R3 + R4 if r['rate'] == rate and r['page'] == P and 500 < r['win_s'] < 1000], '%d')) for rate in (0.5, 2)),
+    rng([backlog(r) for r in R3 + R4 if r['rate'] == 10 and r['page'] == P], '%d'),
+    rng([backlog(r) for r in R4 if r['rate'] == 0.5 and r['win_s'] > 1000], '%d')))
 print('**10 articles/s, all recordsizes** (90-second windows, 2 repeats):\n')
 print('| recordsize | config | rep | accepted | late | disk KiB/s | checkpoints | WAL frames/article | groups with data | source |')
 print('|---|---|---|---|---|---|---|---|---|---|')
@@ -448,16 +462,20 @@ for r in sorted(T5, key=lambda r: (RS.index(r['rs']), ['up', 'ttl1', 'proto'].in
                                                                      frames(r)[0] / r['accepted'], r['txg_n_data'], r['txg_n'], r['src']))
 print()
 same5 = {'ttl1': [], 'proto': []}
+off5 = {'ttl1': [], 'proto': []}
 for rs in RS:
     for rep in (1, 2):
         u = [r for r in T5 if r['rs'] == rs and r['rep'] == rep and r['cfg'] == 'up'][0]
         for c in same5:
             a = [r for r in T5 if r['rs'] == rs and r['rep'] == rep and r['cfg'] == c][0]
-            if ckpts(a) == ckpts(u):
-                same5[c].append(disk(a) / disk(u))
+            (same5 if ckpts(a) == ckpts(u) else off5)[c].append((rs, ckpts(a) - ckpts(u), disk(a) / disk(u)))
 g = lambda c: rng([r['txg_n_data'] for r in T5 if r['cfg'] == c], '%d')
-print('- Same repeat and recordsize, same number of checkpoints as Today: `transtimelimit: 1` %s (%d pairs), Prototype %s (%d pairs) times Today\'s disk bytes.' % (
-    rng(same5['ttl1'], '%.2f'), len(same5['ttl1']), rng(same5['proto'], '%.2f'), len(same5['proto'])))
+print('- Same repeat and recordsize, same number of checkpoints as Today: `transtimelimit: 1` %s (%d of 8 pairs; %s), Prototype %s (%d of 8 pairs; %s) times Today\'s disk bytes per second.' % (
+    rng([x[2] for x in same5['ttl1']], '%.2f'), len(same5['ttl1']), ', '.join(sorted(set(x[0] for x in same5['ttl1']), key=RS.index)),
+    rng([x[2] for x in same5['proto']], '%.2f'), len(same5['proto']), ', '.join(sorted(set(x[0] for x in same5['proto']), key=RS.index))))
+for c in ('ttl1', 'proto'):
+    if off5[c]:
+        print('- %s with a different number of checkpoints than Today: %s.' % (NAME[c], '; '.join('%s %+d checkpoint: %.2f' % x for x in off5[c])))
 print('- Groups with data per window: Today %s, `transtimelimit: 1` %s, Prototype %s; late articles per window %s.\n' % (
     g('up'), g('ttl1'), g('proto'), rng([r['late_articles'] for r in T5], '%d')))
 print('**0.5 and 2 articles/s, 128K, 600-second windows: round r5 vs round r4** (disk KiB/s; checkpoints in brackets):\n')
@@ -467,11 +485,33 @@ for rate in (0.5, 2):
     for c, name in CFG:
         a = [r for r in R4 if r['rate'] == rate and r['cfg'] == c and 500 < r['win_s'] < 1000][0]
         b = [r for r in R5 if r['rate'] == rate and r['cfg'] == c][0]
-        print('| %s | %s | %.1f (%d) | %.1f (%d) | %.2f | %s |' % (rate, name, disk(a), ckpts(a), disk(b), ckpts(b), disk(b) / disk(a), b['src']))
+        print('| %s | %s | %.1f (%s) | %.1f (%s) | %.2f | %s |' % (rate, name, disk(a), ckstr(a), disk(b), ckstr(b), disk(b) / disk(a), b['src']))
 print()
-t4 = [r for r in R4 if r['rate'] == 0.5 and r['cfg'] == 'ttl1' and 500 < r['win_s'] < 1000][0]
-t5 = [r for r in R5 if r['rate'] == 0.5 and r['cfg'] == 'ttl1'][0]
-print('- `transtimelimit: 1` at 0.5/s caught %d checkpoint in round r4 and %d in round r5, yet r5 wrote %.0f %% more to the disk: between runs the disk bytes vary by at least as much as one checkpoint costs at this rate, so section 6\'s per-checkpoint disk cost (6–8 MiB) is not a reliable figure for adjusting windows.\n' % (ckpts(t4), ckpts(t5), (disk(t5) / disk(t4) - 1) * 100))
+gaps = [r for r in R3 + R4 + R5 if r['page'] == P and frames(r) and 'dt_S_fdatasync' in r and gap(r)]
+print('- %d run had a checkpoint after the DTrace end marker and before the end snapshot (the feed stops at the window end and the idle server checkpoints): %s. Its checkpoint pages and ZIL bytes are in the disk and group figures, not in the checkpoint count; it is marked in the table and left out of "runs without a checkpoint". No other run in rounds r3 to r5 has ZIL bytes without a counted checkpoint or a counted checkpoint without ZIL bytes.' % (len(gaps), ', '.join(r['src'] for r in gaps)))
+odd = [r for r in R4 + R5 if r['page'] == P and 'dt_S_fdatasync' in r and r.get('zil_commit_count', 0) > r['dt_S_fdatasync'] and not gap(r)]
+if odd:
+    print('- In %s the pool counted one ZIL commit more than the server\'s fdatasync calls in the window; not explained.' % ', '.join('%s (%d vs %d)' % (r['src'], r['zil_commit_count'], r['dt_S_fdatasync']) for r in odd))
+print()
+print('**128K at 0.5 and 2/s across days** (disk KiB/s, 600-second windows; round r3 on 2026-11-15, rounds r4 and r5 on 2026-11-16):\n')
+print('| rate/s | config | r3 | r4 | r5 | r4/r3 | r5/r3 |')
+print('|---|---|---|---|---|---|---|')
+for rate in (0.5, 2):
+    for c, name in CFG:
+        a = cell(MAIN, '128K', rate, c)[0]
+        b = [r for r in R4 if r['rate'] == rate and r['cfg'] == c and 500 < r['win_s'] < 1000][0]
+        d = [r for r in R5 if r['rate'] == rate and r['cfg'] == c][0]
+        print('| %s | %s | %.1f | %.1f | %.1f | %.2f | %.2f |' % (rate, name, disk(a), disk(b), disk(d), disk(b) / disk(a), disk(d) / disk(a)))
+print()
+rows = {}
+for rate in (0.5, 2):
+    for c, _ in CFG:
+        rows[(rate, c)] = [disk(cell(MAIN, '128K', rate, c)[0]),
+                           disk([r for r in R4 if r['rate'] == rate and r['cfg'] == c and 500 < r['win_s'] < 1000][0]),
+                           disk([r for r in R5 if r['rate'] == rate and r['cfg'] == c][0])]
+print('- Ratio to Today in r3 / r4 / r5: %s.' % '; '.join(
+    '%s/s %s %s' % (rate, NAME[c], ' / '.join('%.2f' % (a / b) for a, b in zip(rows[(rate, c)], rows[(rate, 'up')])))
+    for rate in (0.5, 2) for c in ('ttl1', 'proto')))
 
 print('''## Caveats
 
