@@ -347,6 +347,8 @@ print('- The seeded database is %d bytes for 300,000 overview rows, about %d byt
 walr = max((r for r in R3 + R4 + R5 if r['page'] == P), key=lambda r: r.get('size-wal', 0))
 wal = walr.get('size-wal', 0)
 print('**WAL size.** Each checkpoint is a TRUNCATE checkpoint run once the WAL holds 1000 frames and no transaction is open, so in all three configurations the WAL stays below about %d bytes (1000 frames of %d bytes) plus one transaction; the largest WAL at a window end with 4 KiB pages (rounds r3 to r5) was %d bytes (%s, %s, %s/s, %s).\n' % (1000 * (P + 24), P + 24, wal, walr['src'], NAME[walr['cfg']], walr['rate'], walr['rs']))
+w16 = max((r for r in R3 + R4 + R5 if r['page'] != P), key=lambda r: r.get('size-wal', 0))
+print('With 16 KiB pages the same 1000 frames are about %d bytes; the largest WAL at a window end with 16 KiB pages was %d bytes (%s, %s, %s/s, %s).\n' % (1000 * (16384 + 24), w16.get('size-wal', 0), w16['src'], NAME[w16['cfg']], w16['rate'], w16['rs']))
 
 shown = set(r['src'] for r in MAIN + REP + OLD90 + TEN + LOW + IDLE + R2LONG)
 left = [r for r in ALL if r['src'] not in shown]
@@ -487,6 +489,10 @@ for rate in (0.5, 2):
         b = [r for r in R5 if r['rate'] == rate and r['cfg'] == c][0]
         print('| %s | %s | %.1f (%s) | %.1f (%s) | %.2f | %s |' % (rate, name, disk(a), ckstr(a), disk(b), ckstr(b), disk(b) / disk(a), b['src']))
 print()
+t30 = [r for r in R4 if r['cfg'] == 'up' and r['rate'] == 0.5 and r['win_s'] > 1000][0]
+a5 = [r for r in R5 if r['rate'] == 0.5 and r['cfg'] != 'up']
+print('- Disk KiB/article of the r5 alternatives at 0.5/s against Today\'s 30-minute run of round r4 (%s): %s (%s).' % (
+    t30['src'], ', '.join('%s %.2f' % (NAME[r['cfg']], (r['dev_kw'] / r['accepted']) / (t30['dev_kw'] / t30['accepted'])) for r in a5), ', '.join(r['src'] for r in a5)))
 gaps = [r for r in R3 + R4 + R5 if r['page'] == P and frames(r) and 'dt_S_fdatasync' in r and gap(r)]
 print('- %d run had a checkpoint after the DTrace end marker and before the end snapshot (the feed stops at the window end and the idle server checkpoints): %s. Its checkpoint pages and ZIL bytes are in the disk and group figures, not in the checkpoint count; it is marked in the table and left out of "runs without a checkpoint". No other run in rounds r3 to r5 has ZIL bytes without a counted checkpoint or a counted checkpoint without ZIL bytes.' % (len(gaps), ', '.join(r['src'] for r in gaps)))
 odd = [r for r in R4 + R5 if r['page'] == P and 'dt_S_fdatasync' in r and r.get('zil_commit_count', 0) > r['dt_S_fdatasync'] and not gap(r)]

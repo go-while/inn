@@ -229,6 +229,8 @@ Fit per recordsize over the six section-1 runs, disk KiB = m × transaction grou
 
 **WAL size.** Each checkpoint is a TRUNCATE checkpoint run once the WAL holds 1000 frames and no transaction is open, so in all three configurations the WAL stays below about 4120000 bytes (1000 frames of 4120 bytes) plus one transaction; the largest WAL at a window end with 4 KiB pages (rounds r3 to r5) was 4293072 bytes (2026-11-16-r5/results-job1.jsonl:7, Prototype, 10/s, 16K).
 
+With 16 KiB pages the same 1000 frames are about 16408000 bytes; the largest WAL at a window end with 16 KiB pages was 13963240 bytes (2026-11-15-r3/results-job11.jsonl:1, Today, 2/s, 128K).
+
 **Runs not shown above**: 7 idle runs of the earlier rounds (Today only), 1 smoke test (60 s), 26 with 16 KiB SQLite pages, 3 with an error.
 
 With 16 KiB SQLite pages (round r3) the server's pwrite bytes exceeded the dataset's `nwritten` by 4–40 MB per window: writes that did not reach that dataset, not identified.
@@ -328,6 +330,7 @@ The harness attaches DTrace before the feed starts and, after the start snapshot
 | 2 | `transtimelimit: 1` | 129.7 (3) | 131.3 (3) | 1.01 | 2026-11-16-r5/results-job4.jsonl:2 |
 | 2 | Prototype | 136.3 (4) | 134.9 (4) | 0.99 | 2026-11-16-r5/results-job4.jsonl:3 |
 
+- Disk KiB/article of the r5 alternatives at 0.5/s against Today's 30-minute run of round r4 (2026-11-16-r4/results-job1.jsonl:1): `transtimelimit: 1` 2.37, Prototype 2.39 (2026-11-16-r5/results-job3.jsonl:2, 2026-11-16-r5/results-job3.jsonl:3).
 - 1 run had a checkpoint after the DTrace end marker and before the end snapshot (the feed stops at the window end and the idle server checkpoints): 2026-11-16-r5/results-job3.jsonl:2. Its checkpoint pages and ZIL bytes are in the disk and group figures, not in the checkpoint count; it is marked in the table and left out of "runs without a checkpoint". No other run in rounds r3 to r5 has ZIL bytes without a counted checkpoint or a counted checkpoint without ZIL bytes.
 - In 2026-11-16-r4/results-job2.jsonl:3 (6 vs 5), 2026-11-16-r4/results-job2.jsonl:12 (6 vs 5) the pool counted one ZIL commit more than the server's fdatasync calls in the window; not explained.
 
