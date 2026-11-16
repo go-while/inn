@@ -1,4 +1,4 @@
-# VM and host facts for the measurement VM, read on 2026-11-16 (qm config 120, pvesm path, pvesm status, pveversion on the Proxmox host; sysctl, camcontrol, zfs/zpool in the guest). Only the lines that matter for the measurements.
+# VM and host facts for the measurement VM, read on 2026-11-16 (qm config 120, pvesm path, pvesm status, pveversion, zfs get and zpool status on the Proxmox host; sysctl, camcontrol, zfs/zpool in the guest). Only the lines that matter for the measurements.
 Host: Proxmox VE pve-manager 9.2.26 (kernel 7.0.14-28-pve)
 VM: cores 4, cpu host (Intel Xeon E5-2650 v3 @ 2.30GHz in the guest), memory 3072 MiB
 Controller: scsihw virtio-scsi-single
@@ -7,4 +7,7 @@ Backing: zvol /dev/zvol/tank0/vms/vm-120-disk-1 on the host's ZFS pool (storage 
 Guest disk: QEMU HARDDISK 2.5+ on vtscsi1, 512-byte sectors, 4096-byte stripe size
 Guest OpenZFS: zfs-2.4.2-1-FreeBSD_g6330a45b0 (zfs-kmod the same)
 Guest pool ovz: compression=on with feature@lz4_compress active (lz4), checksum=on, primarycache=all, logbias=latency, sync=standard, ashift 12
+Host zvol (zfs get, 2026-11-16, the user's OK): volblocksize 16K, compression lz4 (inherited, compressratio 1.87x), sync standard, logbias latency, primarycache all, copies 1, checksum on, dedup off
+Host pool tank0: ashift 12; four mirror vdevs of three 4 TB SATA HDDs each (WDC WD4000FYYZ), no log or cache device; host OpenZFS zfs-2.4.4-pve1
+Other VMs use the same host pool, so the host's physical writes for this zvol cannot be told apart.
 Not measured: what the host's ZFS writes for the guest's writes to the zvol.
