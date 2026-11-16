@@ -406,32 +406,40 @@ def run_rate(setting, sdir, cfg, rate, rep):
         inn.start()
         c = Conn('127.0.0.2')
         rnd = random.Random('%s-%s-%d' % (setting['name'], rate, rep))
+        # DTrace attaches before the feed starts, so its start-up (5-6 s of system time on
+        # this VM) cannot hold articles back and release them as a burst in the window.
+        dtout = open(ROOT + '/dtrace.out', 'w')
+        dt = subprocess.Popen(['dtrace', '-q', '-x', 'switchrate=20hz', '-n',
+                               DTRACE % {'srv': inn.pid, 'me': os.getpid()}],
+                              stdin=subprocess.DEVNULL, stdout=dtout,
+                              stderr=subprocess.STDOUT)
+        for _ in range(600):                   # wait until dtrace is attached (max 60 s)
+            time.sleep(0.1)
+            if dt.poll() is not None:
+                break
+            with open(ROOT + '/dtrace.out') as fh:
+                if 'READY' in fh.read().splitlines():
+                    break
+        if dt.poll() is not None or not os.path.getsize(ROOT + '/dtrace.out'):
+            with open(ROOT + '/dtrace.out') as fh:
+                raise RuntimeError('dtrace did not start: ' + fh.read()[-400:])
         t0 = time.monotonic()
-        i = acc = rej = 0
+        i = acc = rej = lag = 0
         started = False
         while True:
             now = time.monotonic()
             if not started and now >= t0 + P['warm']:
-                dtout = open(ROOT + '/dtrace.out', 'w')
-                dt = subprocess.Popen(['dtrace', '-q', '-x', 'switchrate=20hz', '-n',
-                                       DTRACE % {'srv': inn.pid, 'me': os.getpid()}],
-                                      stdin=subprocess.DEVNULL, stdout=dtout,
-                                      stderr=subprocess.STDOUT)
-                for _ in range(600):           # wait until dtrace is attached (max 60 s; its start
-                                               # took 5-6 s of system time on this VM)
-                    time.sleep(0.1)
-                    if dt.poll() is not None:
-                        break
-                    with open(ROOT + '/dtrace.out') as fh:
-                        if 'READY' in fh.read().splitlines():
-                            break
-                if dt.poll() is not None or not os.path.getsize(ROOT + '/dtrace.out'):
-                    with open(ROOT + '/dtrace.out') as fh:
-                        raise RuntimeError('dtrace did not start: ' + fh.read()[-400:])
                 os.getppid()                   # marker: counters at the window start
                 s0 = snap(inn.pid)
                 tw0 = time.monotonic()
                 started = True
+                # The snapshot (zpool sync) takes time; restart the schedule from now so
+                # the articles due meanwhile are spread out, not sent at once.
+                if rate:
+                    late = tw0 - (t0 + i / rate)
+                    res['start_late_s'] = round(max(0.0, late), 3)
+                    if late > 0:
+                        t0 += late
                 continue
             if started and now >= tw0 + P['win']:
                 os.getppid()                   # marker: counters at the window end
@@ -443,6 +451,8 @@ def run_rate(setting, sdir, cfg, rate, rep):
             if next_art <= next_evt:
                 if next_art > now:
                     time.sleep(next_art - now)
+                if started and time.monotonic() - next_art > 0.5:
+                    lag += 1                   # sent more than 0.5 s behind its slot
                 r = ihave(c, tag, i, GROUPS[rnd.randrange(NGROUPS)])
                 if started:
                     if r.startswith('235'):
@@ -458,7 +468,7 @@ def run_rate(setting, sdir, cfg, rate, rep):
         dt.wait(30)
         dtout.close()
         c.close()
-        res.update(win_s=round(tw1 - tw0, 2), accepted=acc, rejected=rej)
+        res.update(win_s=round(tw1 - tw0, 2), accepted=acc, rejected=rej, late_articles=lag)
         for k in s0:
             res[k] = round(s1[k] - s0[k], 1)
         # Transaction groups synced in the window (after the start snapshot's zpool sync,

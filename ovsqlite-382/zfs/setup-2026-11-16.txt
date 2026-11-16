@@ -1,4 +1,4 @@
-# Read-only setup check on the measurement VM (10.10.20.120), 2026-11-16, after all rounds; commands in /tank0/claude/inn-tools jobq runs 274, 275, 277, 278.
+# Read-only setup check on the measurement VM (10.10.20.120), 2026-11-16, after all rounds; commands in /tank0/claude/inn-tools jobq runs 274, 275, 277, 278, 326, 330.
 Mon Nov 16 11:20:12 UTC 2026
 == zpool history
 History for 'ovz':
@@ -65,4 +65,34 @@ kern.boottime: { sec = 1794743102, usec = 433369 } Sun Nov 15 11:45:02 2026
 15.1-RELEASE-p6
 15.1-RELEASE-p6
 -r--r--r--  1 root wheel 29370504 Oct 20 20:58:03 2026 /boot/kernel/kernel
+
+compression	on	default
+checksum	on	default
+primarycache	all	default
+logbias	latency	default
+sync	standard	default
+hw.ncpu: 4
+hw.physmem: 3180818432
+hw.model: Intel(R) Xeon(R) CPU E5-2650 v3 @ 2.30GHz
+<QEMU QEMU DVD-ROM 2.5+>           at scbus1 target 0 lun 0 (pass0,cd0)
+<QEMU QEMU HARDDISK 2.5+>          at scbus2 target 0 lun 0 (pass1,da0)
+<QEMU QEMU TARGET 2.5>             at scbus3 target 0 lun 0 (pass2)
+<QEMU QEMU HARDDISK 2.5+>          at scbus3 target 0 lun 1 (pass3,da1)
+   Sectorsize: 512
+   Stripesize: 4096
+   Mode: r1w1e1
+   descr: QEMU QEMU HARDDISK
+   ident: 
+   rotationrate: unknown
+da1 at vtscsi1 bus 0 scbus3 target 0 lun 1
+da1: <QEMU QEMU HARDDISK 2.5+> Fixed Direct Access SPC-3 SCSI device
+da1: 300.000MB/s transfers
+da1: Command Queueing enabled
+da1: 5120MB (10485760 512 byte sectors)
+FreeBSD 15.1-RELEASE-p6 releng/15.1-n283643-95719d8a895b GENERIC
+
+zfs-2.4.2-1-FreeBSD_g6330a45b0
+zfs-kmod-2.4.2-1-FreeBSD_g6330a45b0
+feature@lz4_compress	active
+feature@zstd_compress	enabled
 
