@@ -193,7 +193,7 @@ Older DTrace window: the frame counts can include one extra commit; disk figures
 
 **Over whole checkpoint cycles (estimate).** The windows end at a fixed time, so a configuration whose WAL was close to its next checkpoint is favoured (see "WAL frames at end"). Spreading each checkpoint over the 1000 frames that trigger it gives server KiB/article = frames/article × (4120 + 4096 × pages per checkpoint / 1000) / 1024. Pages per checkpoint come from the same run, or for Today at 0.5/s (no checkpoint in the window) from Today at 2/s with the same recordsize.
 
-For Today at 0.5/s the checkpoint size was not measured; the table gives it with Today's 2/s checkpoint size and, in the last column, with the size the alternatives had at 0.5/s.
+For Today at 0.5/s the checkpoint size was not measured in round r3 (it is in round r4, section 7); the table gives it with Today's 2/s checkpoint size and, in the last column, with the size the alternatives had at 0.5/s.
 
 | rate/s | config | estimated server KiB/article | ratio to Today | ratio to Today, other checkpoint size for Today |
 |---|---|---|---|---|
@@ -206,7 +206,7 @@ For Today at 0.5/s the checkpoint size was not measured; the table gives it with
 
 **Disk at 0.5/s with Today's share of a checkpoint (estimate).** Today's 600-s windows hold 754–783 frames but no checkpoint, the alternatives' one each. Charging Today frames/1000 checkpoints at 6–8 MiB each gives the alternatives 2.01–2.24 times Today's disk bytes (measured windows: see the table above).
 
-**ZFS cost per transaction group and per checkpoint (estimates).** Transaction groups were not counted. Today's 10 s start with the first article after a commit, so at 0.5/s it commits every 10–12 s (50–60 groups with data in 600 s); the alternatives have data in every 5-s group. The fit below assumes 10 s.
+**ZFS cost per transaction group and per checkpoint (estimates).** Transaction groups were not counted in round r3 (they are in round r4, section 7). Today's 10 s start with the first article after a commit, so at 0.5/s it commits every 10–12 s (50–60 groups with data in 600 s); the alternatives have data in every 5-s group. The fit below assumes 10 s.
 
 - Today at 0.5/s, no checkpoint in the window: 319–433 KiB per transaction group with data with 60 groups, 383–519 KiB with 50.
 - 0.04/s (one article, one commit and one group each): 431–454 KiB per article.

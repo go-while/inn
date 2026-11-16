@@ -266,7 +266,7 @@ def kpc(r):
 
 
 print('**Over whole checkpoint cycles (estimate).** The windows end at a fixed time, so a configuration whose WAL was close to its next checkpoint is favoured (see "WAL frames at end"). Spreading each checkpoint over the 1000 frames that trigger it gives server KiB/article = frames/article × (4120 + 4096 × pages per checkpoint / 1000) / 1024. Pages per checkpoint come from the same run, or for Today at 0.5/s (no checkpoint in the window) from Today at 2/s with the same recordsize.\n')
-print('For Today at 0.5/s the checkpoint size was not measured; the table gives it with Today\'s 2/s checkpoint size and, in the last column, with the size the alternatives had at 0.5/s.\n')
+print('For Today at 0.5/s the checkpoint size was not measured in round r3 (it is in round r4, section 7); the table gives it with Today\'s 2/s checkpoint size and, in the last column, with the size the alternatives had at 0.5/s.\n')
 print('| rate/s | config | estimated server KiB/article | ratio to Today | ratio to Today, other checkpoint size for Today |')
 print('|---|---|---|---|---|')
 est = {}
@@ -301,7 +301,7 @@ for rs in RS:
             share.append(cell(MAIN, rs, 0.5, c)[0]['dev_kw'] / tk)
 print('**Disk at 0.5/s with Today\'s share of a checkpoint (estimate).** Today\'s 600-s windows hold %s frames but no checkpoint, the alternatives\' one each. Charging Today frames/1000 checkpoints at 6–8 MiB each gives the alternatives %s times Today\'s disk bytes (measured windows: see the table above).\n' % (rng([frames(cell(MAIN, rs, 0.5, 'up')[0])[0] for rs in RS], '%d'), rng(share, '%.2f')))
 
-print('**ZFS cost per transaction group and per checkpoint (estimates).** Transaction groups were not counted. Today\'s 10 s start with the first article after a commit, so at 0.5/s it commits every 10–12 s (50–60 groups with data in 600 s); the alternatives have data in every 5-s group. The fit below assumes 10 s.\n')
+print('**ZFS cost per transaction group and per checkpoint (estimates).** Transaction groups were not counted in round r3 (they are in round r4, section 7). Today\'s 10 s start with the first article after a commit, so at 0.5/s it commits every 10–12 s (50–60 groups with data in 600 s); the alternatives have data in every 5-s group. The fit below assumes 10 s.\n')
 tg60 = [r['dev_kw'] / (r['win_s'] / 10) for r in MAIN if r['cfg'] == 'up' and r['rate'] == 0.5 and ckpts(r) == 0]
 tg50 = [r['dev_kw'] / (r['win_s'] / 12) for r in MAIN if r['cfg'] == 'up' and r['rate'] == 0.5 and ckpts(r) == 0]
 print('- Today at 0.5/s, no checkpoint in the window: %s KiB per transaction group with data with 60 groups, %s KiB with 50.' % (rng(tg60, '%.0f'), rng(tg50, '%.0f')))
