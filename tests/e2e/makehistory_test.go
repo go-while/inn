@@ -159,3 +159,30 @@ func overviewFields(lines []string) []string {
 	}
 	return out
 }
+
+// TestMakehistoryBatchBoundary: makehistory -O -l N rebuilds the overview when the number
+// of overview records is a multiple of N, with and without -F.  FlushOverTmpFile() left
+// OverTmpFile set after closing the file, so when the last batch had been flushed as it
+// filled up, the final flush at the end of the run used the FILE that was already
+// closed.  -l 3 does not end on a batch boundary and is the control, with and without -F.
+func TestMakehistoryBatchBoundary(t *testing.T) {
+	const group = "e2e.test"
+	s := NewSite(t, SiteOptions{}) // tradspool and tradindexed: makehistory sorts the overview
+	s.Inject(t, group, 4)
+	before := overviewLines(t, s, group)
+	if len(before) != 4 {
+		t.Fatalf("OVER of %s: %d lines, want 4", group, len(before))
+	}
+	for _, args := range [][]string{{"-l", "3"}, {"-F", "-l", "3"}, {"-l", "2"}, {"-l", "4"},
+		{"-F", "-l", "2"}, {"-F", "-l", "4"}} {
+		t.Run(strings.Join(args, ""), func(t *testing.T) {
+			emptyOverview(t, s, group)
+			argv := append([]string{"-O", "-x"}, args...)
+			out, err := runFor(s, time.Minute, "makehistory", argv...)
+			if err != nil {
+				t.Fatalf("makehistory %s: %v\n%s", strings.Join(argv, " "), err, out)
+			}
+			compareOverview(t, s, group, "", before)
+		})
+	}
+}
