@@ -3,7 +3,7 @@
 
 ##  Send news via NNTP by running several innxmit processes in the background.
 ##  Usage:
-##      nntpsend [-acDdlNnpr] [-P portnum] [-s size] [-T limit] [-t timeout]
+##      nntpsend [-acDdlNnpRr] [-P portnum] [-s size] [-T limit] [-t timeout]
 ##               [-w delay] [host fqdn] ...
 ##      -a              always have innxmit rewrite the batch file
 ##                                                          (if no size limit)
@@ -15,6 +15,7 @@
 ##      -n              do not lock for nntpsend
 ##      -P portnum      port number to use
 ##      -p              run innxmit with -p to prune batch files
+##      -R              innxmit, send articles with POST instead of IHAVE
 ##      -r              innxmit, don't requeue on unexpected error code
 ##      -s size         limit the file to size bytes
 ##      -T limit        innxmit connection transmit time limit (def: forever)
@@ -34,6 +35,7 @@ A_FLAG=
 D_FLAG=
 NO_LOG_FLAG=
 P_FLAG=
+PO_FLAG=
 R_FLAG=
 C_FLAG=
 L_FLAG=
@@ -67,6 +69,9 @@ while ${MORETODO}; do
         ;;
     X-r)
         R_FLAG="-r"
+        ;;
+    X-R)
+        PO_FLAG="-R"
         ;;
     X-N)
         S_FLAG="-s"
@@ -234,6 +239,7 @@ while read SITE HOST SIZE_ARG FLAGS; do
         ;;
     esac
     D_PARAM=
+    PO_PARAM=
     R_PARAM=
     S_PARAM=
     C_PARAM=
@@ -261,6 +267,9 @@ while read SITE HOST SIZE_ARG FLAGS; do
             ;;
         X-r)
             R_PARAM="-r"
+            ;;
+        X-R)
+            PO_PARAM="-R"
             ;;
         X-s)
             S_PARAM="-s"
@@ -350,6 +359,11 @@ while read SITE HOST SIZE_ARG FLAGS; do
         INNFLAGS="${INNFLAGS} ${R_FLAG}"
     else
         test -n "${R_PARAM}" && INNFLAGS="${INNFLAGS} ${R_PARAM}"
+    fi
+    if [ -n "${PO_FLAG}" ]; then
+        INNFLAGS="${INNFLAGS} ${PO_FLAG}"
+    else
+        test -n "${PO_PARAM}" && INNFLAGS="${INNFLAGS} ${PO_PARAM}"
     fi
     if [ -n "${S_FLAG}" ]; then
         INNFLAGS="${INNFLAGS} ${S_FLAG}"
