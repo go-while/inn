@@ -143,14 +143,14 @@ Rebuild(off_t size, bool IgnoreOld, bool Overwrite)
     dbzsetoptions(opt);
     if (IgnoreOld) {
         if (!dbzfresh(p, dbzsize(size))) {
-            syswarn("cannot do dbzfresh");
+            warn("cannot do dbzfresh");
             if (temp[0])
                 unlink(temp);
             exit(1);
         }
     } else {
         if (!dbzagain(p, HISTORY)) {
-            syswarn("cannot do dbzagain");
+            warn("cannot do dbzagain");
             if (temp[0])
                 unlink(temp);
             exit(1);
