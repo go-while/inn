@@ -1550,10 +1550,12 @@ the server will choose following its own preferences.
 
 =item I<tlsprotocols>
 
-The list of TLS/SSL protocol versions to support.  Valid protocols are
-C<SSLv3>, C<TLSv1>, C<TLSv1.1>, C<TLSv1.2> and C<TLSv1.3>.  For compatibility
-with older versions of INN, C<SSLv2> may also be listed, but this will have
-no effect.
+The list of TLS protocol versions to support.  Valid protocols are
+C<TLSv1.2> and C<TLSv1.3>.  For compatibility with older versions of INN,
+C<SSLv2>, C<SSLv3>, C<TLSv1> and C<TLSv1.1> may also be listed, but this
+will have no effect (a notice is logged), as support for these insecure
+protocols has been removed.  If no valid protocol is listed, B<nnrpd>
+refuses to initiate TLS.
 
 The default value is to only allow secure TLS protocols:
 
