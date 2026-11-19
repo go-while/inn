@@ -138,15 +138,18 @@ In I<pathetc>, copy F<innfeed.conf> to F<innfeed-delayed.conf>.
 =item *
 
 Edit F<innfeed-delayed.conf> in I<pathetc>, and change the occurrences of
-C<innfeed> to C<innfeed-delayed>, typically in the I<log-file>, I<pid-file>
-and I<status-file> parameters.  If these parameters are not set, you should
-explicitly set them in F<innfeed-delayed.conf> so that their default values
-do not conflict with a running instance in parallel of a real-time feed using
-B<innfeed>.  For instance:
+C<innfeed> to C<innfeed-delayed>, typically in the I<log-file>, I<pid-file>,
+I<status-file>, I<debug-file> and I<snapshot-file> parameters.  If these
+parameters are not set, you should explicitly set them in
+F<innfeed-delayed.conf> so that their default values do not conflict with a
+running instance in parallel of a real-time feed using B<innfeed>.  For
+instance:
 
-    log-file:    innfeed-delayed.log
-    pid-file:    innfeed-delayed.pid
-    status-file: innfeed-delayed.status
+    log-file:      innfeed-delayed.log
+    pid-file:      innfeed-delayed.pid
+    status-file:   innfeed-delayed.status
+    debug-file:    innfeed-delayed.debug
+    snapshot-file: innfeed-delayed.snapshot
 
 Using the same value for I<backlog-directory> in both F<innfeed.conf> and
 F<innfeed-delayed.conf> is fine because the site names in F<newsfeeds> are

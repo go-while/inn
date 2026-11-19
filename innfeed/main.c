@@ -68,6 +68,8 @@ char *deliver_to_header = NULL;
 
 /* privates */
 static char *logFile;
+static char *debugFile;
+static char *snapshotFile;
 static char *newsspool;
 
 static void sigemt(int sig);
@@ -111,7 +113,6 @@ main(int argc, char **argv)
     time_t now = theTime();
     char dateString[30];
     char *copt = NULL;
-    char *debugFile;
     bool checkConfig = false;
     bool val;
 
@@ -341,10 +342,9 @@ main(int argc, char **argv)
     } else if (!rval)
         exit(1);
 
-    debugFile = concatpath(innconf->pathlog, DEBUG_FILE);
+    /* An existing debug-file is the same as -d 1. */
     if (loggingLevel == 0 && fileExistsP(debugFile))
         loggingLevel = 1;
-    free(debugFile);
 
     if (logFile == NULL && !isatty(fileno(stderr)))
         logFile = concatpath(innconf->pathlog, LOG_FILE);
@@ -686,19 +686,19 @@ writePidFile(void)
 static void
 gprintinfo(void)
 {
-    char *snapshotFile;
     FILE *fp;
     char nowString[30];
     time_t now = theTime();
 
-    snapshotFile = concatpath(innconf->pathlog, SNAPSHOT_FILE);
+    /* The configuration file has not been read yet. */
+    if (snapshotFile == NULL)
+        snapshotFile = concatpath(innconf->pathlog, SNAPSHOT_FILE);
+
     fp = fopen(snapshotFile, "a");
     if (fp == NULL) {
         syswarn("ME fopen %s", snapshotFile);
-        free(snapshotFile);
         return;
     }
-    free(snapshotFile);
 
 #if defined(HAVE_SETBUFFER)
     setbuffer(fp, NULL, 0);
@@ -779,6 +779,20 @@ mainConfigLoadCbk(void *data)
         logFile = concatpath(innconf->pathlog, p);
         free(p);
     }
+
+    free(debugFile);
+    if (getString(topScope, "debug-file", &p, NO_INHERIT)) {
+        debugFile = concatpath(innconf->pathlog, p);
+        free(p);
+    } else
+        debugFile = concatpath(innconf->pathlog, DEBUG_FILE);
+
+    free(snapshotFile);
+    if (getString(topScope, "snapshot-file", &p, NO_INHERIT)) {
+        snapshotFile = concatpath(innconf->pathlog, p);
+        free(p);
+    } else
+        snapshotFile = concatpath(innconf->pathlog, SNAPSHOT_FILE);
 
     if (getString(topScope, "log-time-format", &p, NO_INHERIT)) {
         free(timeToStringFormat);
@@ -919,10 +933,14 @@ mainCleanup(void)
     free((void *) configFile);
     free((void *) pidFile);
     free(logFile);
+    free(debugFile);
+    free(snapshotFile);
     free(newsspool);
     configFile = NULL;
     pidFile = NULL;
     logFile = NULL;
+    debugFile = NULL;
+    snapshotFile = NULL;
     newsspool = NULL;
 }
 
