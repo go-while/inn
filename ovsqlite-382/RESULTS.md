@@ -351,7 +351,7 @@ The harness attaches DTrace before the feed starts and, after the start snapshot
 - One run per cell in section 1, and each recordsize ran in its own job at a different time, so differences of the size of the repeat runs cannot be told apart from job-to-job variation.
 - The windows end at a fixed time, not at a checkpoint; see "over whole checkpoint cycles".
 - Synthetic, evenly spaced articles with one group each that compress well; one 57 MB database; one VM with a virtual disk whose pool holds only the overview, so every transaction group's fixed cost is charged to it.
-- Not covered: other filesystems, readers (nnrpd reading the WAL can delay checkpoints), expiry (which removes rows and rebalances the B-tree), crossposts, bursty arrival, rates between 0.04 and 0.5/s.
+- Not covered: other filesystems, readers (nnrpd reading the WAL can delay checkpoints), expiry (which removes rows and rebalances the B-tree), crossposts, bursty arrival, rates other than 0.04, 0.08, 0.16, 0.5, 2 and 10/s.
 
 ## 9. Round r6 (2026-11-18): 0.08 and 0.16 articles/s
 
