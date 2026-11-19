@@ -2,7 +2,7 @@
 # Make RESULTS.md from the raw result files in zfs/ (parse only; no measurement).
 # usage: python3 -I mkresults.py > RESULTS.md
 # Every table cell and every number in the derived section is computed here from
-# zfs/2026-11-14/results.jsonl, zfs/2026-11-15-*/results-job*.jsonl and zfs/2026-11-16-r4/ and -r5/results-job*.jsonl.  The setup
+# zfs/2026-11-14/results.jsonl, zfs/2026-11-15-*/results-job*.jsonl, zfs/2026-11-16-r4/ and -r5/ and zfs/2026-11-18-r6/results-job*.jsonl.  The setup
 # facts in the first section come from ovz.py and zfs/pool-properties.txt.
 import collections
 import glob
@@ -527,3 +527,28 @@ print('''## Caveats
 - Synthetic, evenly spaced articles with one group each that compress well; one 57 MB database; one VM with a virtual disk whose pool holds only the overview, so every transaction group's fixed cost is charged to it.
 - Not covered: other filesystems, readers (nnrpd reading the WAL can delay checkpoints), expiry (which removes rows and rebalances the B-tree), crossposts, bursty arrival, rates between 0.04 and 0.5/s.
 ''')
+
+# ---------------------------------------------------------------- round r6
+R6ALL = load('2026-11-18-r6/results-job*.jsonl')
+R6 = [r for r in R6ALL if not r['bad'] and r['win_s'] >= 61]
+print('## 9. Round r6 (2026-11-18): 0.08 and 0.16 articles/s\n')
+print('Same harness as round r5 (feed timing fixed), recordsize 128K, 4 KiB pages, one 30-minute window per configuration, order Today, `transtimelimit: 1`, Prototype. 0.08/s is about 6,900 articles/day, 0.16/s about 13,800. Columns as in section 7. Runs not counted here: %s.\n' % (
+    ', '.join(r['src'] for r in R6ALL if r['bad'] or r['win_s'] < 61) or 'none'))
+print('| rate/s | config | window s | accepted | late articles | disk KiB/s | disk KiB/article | server KiB/article | checkpoints | checkpoints due | groups | groups with data | MiB per group with data | ZIL MiB | source |')
+print('|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|')
+for r in sorted(R6, key=lambda r: (r['rate'], ['up', 'ttl1', 'proto'].index(r['cfg']))):
+    print('| %s | %s | %.0f | %d | %d | %.1f | %.1f | %.2f | %s | %.2f | %d | %d | %.3f | %.2f | %s |' % (
+        r['rate'], NAME[r['cfg']], r['win_s'], r['accepted'], r.get('late_articles', 0), disk(r), r['dev_kw'] / r['accepted'], srv(r),
+        ckstr(r), due(r), r['txg_n'], r['txg_n_data'], mib_grp(r), r['zil_itx_metaslab_normal_bytes'] / 1048576, r['src']))
+print()
+for rate in sorted({r['rate'] for r in R6}):
+    rr = {r['cfg']: r for r in R6 if r['rate'] == rate}
+    if 'up' not in rr:
+        continue
+    u = rr['up']
+    print('- %s/s (one article every %.2f s; Today commits 10 s after a transaction starts): ratio to Today, `transtimelimit: 1` / Prototype: disk KiB/article %s, server KiB/article %s; groups with data Today %d, alternatives %s.' % (
+        rate, 1 / rate,
+        ' / '.join('%.2f' % ((rr[c]['dev_kw'] / rr[c]['accepted']) / (u['dev_kw'] / u['accepted'])) for c in ('ttl1', 'proto') if c in rr),
+        ' / '.join('%.2f' % (srv(rr[c]) / srv(u)) for c in ('ttl1', 'proto') if c in rr),
+        u['txg_n_data'], ' / '.join('%d' % rr[c]['txg_n_data'] for c in ('ttl1', 'proto') if c in rr)))
+print('- No window held a checkpoint; the disk figures are without checkpoint writes (compare the whole-cycle estimates in section 6).\n')

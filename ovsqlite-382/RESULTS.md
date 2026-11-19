@@ -353,3 +353,20 @@ The harness attaches DTrace before the feed starts and, after the start snapshot
 - Synthetic, evenly spaced articles with one group each that compress well; one 57 MB database; one VM with a virtual disk whose pool holds only the overview, so every transaction group's fixed cost is charged to it.
 - Not covered: other filesystems, readers (nnrpd reading the WAL can delay checkpoints), expiry (which removes rows and rebalances the B-tree), crossposts, bursty arrival, rates between 0.04 and 0.5/s.
 
+## 9. Round r6 (2026-11-18): 0.08 and 0.16 articles/s
+
+Same harness as round r5 (feed timing fixed), recordsize 128K, 4 KiB pages, one 30-minute window per configuration, order Today, `transtimelimit: 1`, Prototype. 0.08/s is about 6,900 articles/day, 0.16/s about 13,800. Columns as in section 7. Runs not counted here: none.
+
+| rate/s | config | window s | accepted | late articles | disk KiB/s | disk KiB/article | server KiB/article | checkpoints | checkpoints due | groups | groups with data | MiB per group with data | ZIL MiB | source |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 0.08 | Today | 1800 | 144 | 0 | 36.4 | 454.6 | 13.08 | 0 | 0.47 | 362 | 144 | 0.444 | 0.00 | 2026-11-18-r6/results-job0.jsonl:1 |
+| 0.08 | `transtimelimit: 1` | 1801 | 144 | 0 | 36.4 | 455.0 | 13.13 | 0 | 0.47 | 362 | 144 | 0.444 | 0.00 | 2026-11-18-r6/results-job1.jsonl:1 |
+| 0.08 | Prototype | 1800 | 144 | 0 | 37.6 | 469.4 | 13.22 | 0 | 0.47 | 361 | 144 | 0.458 | 0.00 | 2026-11-18-r6/results-job2.jsonl:1 |
+| 0.16 | Today | 1800 | 288 | 0 | 33.1 | 207.2 | 12.13 | 0 | 0.87 | 362 | 144 | 0.405 | 0.00 | 2026-11-18-r6/results-job3.jsonl:1 |
+| 0.16 | `transtimelimit: 1` | 1800 | 288 | 0 | 72.0 | 450.3 | 13.36 | 0 | 0.96 | 361 | 288 | 0.440 | 0.00 | 2026-11-18-r6/results-job4.jsonl:1 |
+| 0.16 | Prototype | 1801 | 288 | 0 | 77.7 | 485.6 | 13.44 | 0 | 0.96 | 362 | 289 | 0.473 | 0.00 | 2026-11-18-r6/results-job5.jsonl:1 |
+
+- 0.08/s (one article every 12.50 s; Today commits 10 s after a transaction starts): ratio to Today, `transtimelimit: 1` / Prototype: disk KiB/article 1.00 / 1.03, server KiB/article 1.00 / 1.01; groups with data Today 144, alternatives 144 / 144.
+- 0.16/s (one article every 6.25 s; Today commits 10 s after a transaction starts): ratio to Today, `transtimelimit: 1` / Prototype: disk KiB/article 2.17 / 2.34, server KiB/article 1.10 / 1.11; groups with data Today 144, alternatives 288 / 289.
+- No window held a checkpoint; the disk figures are without checkpoint writes (compare the whole-cycle estimates in section 6).
+

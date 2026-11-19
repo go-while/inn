@@ -47,6 +47,7 @@ Results, one folder per round (each `results-*.jsonl` line is one run):
 | `zfs/2026-11-15-r3/` | recordsize 16K/32K/64K/128K at 0.5 and 2/s with 10-minute windows, 128K with 16 KiB pages, 32K/64K at 10/s, idle for all three configurations | fixed: same window as the disk counters |
 | `zfs/2026-11-16-r4/` | 128K: transaction-group counts at 0.04, 0.5 and 2/s, Today at 0.5/s with a 30-minute window, 0.04/s with the fixed window; 16K and 128K at 10/s with checkpoint counts | fixed; harness also reads the pool's transaction-group history and waits up to 60 s for DTrace |
 | `zfs/2026-11-16-r5/` | feed timing fixed (DTrace attaches before the feed): 10/s at all four recordsizes, 0.5 and 2/s at 128K for comparison with r4 | fixed; no start backlog; counts articles sent late |
+| `zfs/2026-11-18-r6/` | 0.08 and 0.16 articles/s at 128K, 30-minute windows, one configuration per job | fixed, as r5 |
 
 `2026-11-15-r2/` and `2026-11-15-r3/` also hold the working scripts (`recompute.py`, `recompute-output.txt`) used during the runs; `RESULTS.md` and `mkresults.py` supersede them.
 In r3 the WAL frames, checkpoint pages and WAL header writes are solved exactly from the pwrite byte and call counts.
