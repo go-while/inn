@@ -172,6 +172,7 @@ doc/man/incoming.conf.5               Manpage for incoming.conf config file
 doc/man/inews.1                       Manpage for inews frontend
 doc/man/inn-radius.conf.5             Manpage for inn-radius.conf config file
 doc/man/inn-secrets.conf.5            Manpage for inn-secrets.conf
+doc/man/inn.1                         Manpage for INN documentation index
 doc/man/inn.conf.5                    Manpage for inn.conf config file
 doc/man/innbind.8                     Manpage for innbind
 doc/man/inncheck.8                    Manpage for inncheck utility
@@ -299,6 +300,7 @@ doc/pod/inews.pod                     Master file for inews.1
 doc/pod/inn-radius.conf.pod           Master file for inn-radius.conf.5
 doc/pod/inn-secrets.conf.pod          Master file for inn-secrets.conf.5
 doc/pod/inn.conf.pod                  Master file for inn.conf.5
+doc/pod/inn.pod                       Master file for inn.1
 doc/pod/innbind.pod                   Master file for innbind.8
 doc/pod/inncheck.pod                  Master file for inncheck.8
 doc/pod/innconfval.pod                Master file for innconfval.1
