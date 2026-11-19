@@ -1257,6 +1257,9 @@ CHANreadloop(void)
         gettimeofday(&Now, NULL);
         if (Now.tv_sec > last_sync + TimeOut.tv_sec) {
             HISsync(History);
+            /* Release storage resources even when other traffic prevents an
+               idle flush, notably the cached timecaf writer's lock. */
+            SMflushcacheddata(SM_ALL);
             if (ICDactivedirty != 0) {
                 ICDwriteactive();
                 ICDactivedirty = 0;
