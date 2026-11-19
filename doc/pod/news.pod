@@ -160,6 +160,13 @@ each incoming feed to a TCP window of about S<48 KB>.  New I<peerrcvbufsize>
 and I<peersndbufsize> parameters in F<inn.conf> set fixed sizes instead.
 Set both of them to C<24576> to keep the previous behaviour.
 
+=item *
+
+INN no longer ships its own replacement for B<snprintf> and B<vsnprintf>.
+A C99-conforming implementation is now required of the system C library, and
+B<configure> fails when it finds a missing or broken one.  Such systems
+had become very rare, and the replacement was not otherwise maintained.
+
 =back
 
 =head1 Changes in 2.7.5 (not yet released)

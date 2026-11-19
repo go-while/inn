@@ -31,7 +31,7 @@ EXTRA_SOURCES = asprintf.c daemon.c fseeko.c ftello.c getaddrinfo.c        \
 		getnameinfo.c getpagesize.c inet_aton.c inet_ntoa.c	   \
 		inet_ntop.c mkstemp.c pread.c pwrite.c                     \
 	        reallocarray.c sd-daemon.c setenv.c                        \
-		seteuid.c setproctitle.c snprintf.c strcasecmp.c strlcat.c \
+		seteuid.c setproctitle.c strcasecmp.c strlcat.c            \
 		strlcpy.c strspn.c strtok.c symlink.c
 
 OBJECTS       = $(LIBOBJS) $(SOURCES:.c=.o)
@@ -669,9 +669,6 @@ setproctitle.o: setproctitle.c ../include/portable/system.h \
   ../include/inn/system.h ../include/portable/stdbool.h \
   ../include/portable/macros.h ../include/portable/stdbool.h \
   ../include/portable/setproctitle.h ../include/inn/messages.h
-snprintf.o: snprintf.c ../include/config.h ../include/inn/macros.h \
-  ../include/inn/portable-macros.h ../include/inn/options.h \
-  ../include/inn/system.h ../include/portable/stdbool.h
 strcasecmp.o: strcasecmp.c ../include/portable/system.h \
   ../include/config.h ../include/inn/macros.h \
   ../include/inn/portable-macros.h ../include/inn/options.h \
