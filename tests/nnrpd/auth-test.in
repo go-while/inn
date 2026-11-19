@@ -79,6 +79,10 @@ if ($arg eq 'okay') {
     print STDOUT "User:tester";
     print STDERR "This is an error\n";
     exit 1;
+
+} elsif ($arg eq 'slow') {
+    sleep(2);
+    print STDOUT "User:tester\r\n";
 }
 
 exit 0;

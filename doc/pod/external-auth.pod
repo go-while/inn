@@ -91,8 +91,9 @@ C<User:aidan> is read by B<nnrpd> as a different username than
 C<User: aidan>.  If a domain is provided, it would for instance be
 C<User:aidan@domain>.
 
-Note that B<nnrpd> implements a five-second timeout for the receipt
-of this line.
+Note that B<nnrpd> kills the program if it does not write anything for five
+seconds (unless another value is set with the I<program_timeout> parameter
+of the auth group in F<readers.conf>), and then considers that it failed.
 
 =head1 Error Messages
 
