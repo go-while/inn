@@ -398,6 +398,17 @@ as it arrived (with its line endings, normally CRLF, and dot-stuffing), up
 to the line ending of its last line.  Filters that hash the body (like the EMP checks of
 Cleanfeed) or look at its end get different values than before.
 
+=item *
+
+B<innmail> no longer silently rewrites the addresses it is given by removing
+the characters it does not know, which could send the mail to another
+address.  It now accepts all the characters allowed in an unquoted local
+part of an e-mail address (like C<=>, C</> or C<'>).  An address containing
+other characters, or beginning with C<->, C<|> or C</> (which the MTA could
+take as an option, a program or a file), is refused with a warning; the mail
+is still sent to the other addresses, but B<innmail> then exits with
+status 1.
+
 =back
 
 =head1 Changes in 2.7.4 (2026-06-22)
