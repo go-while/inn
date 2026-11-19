@@ -2038,6 +2038,7 @@ ARTpost(CHANNEL *cp)
     struct buffer *article;
     char *filterrc;
     long headlen;
+    long bodylen;
 #endif
     OVADDRESULT result;
 
@@ -2049,6 +2050,12 @@ ARTpost(CHANNEL *cp)
     /* The header block given to the filters: all the header field lines with
      * their CRLF, without the empty line that ends the headers. */
     headlen = (data->Body >= cp->Start + 2) ? data->Body - 2 - cp->Start : 0;
+    /* The body given to the filters: in wire format (CRLF line endings,
+     * dot-stuffing kept) but without the ".\r\n" line that ends the
+     * article. */
+    bodylen = cp->Next - data->Body;
+    if (bodylen >= 3 && memcmp(article->data + cp->Next - 3, ".\r\n", 3) == 0)
+        bodylen -= 3;
 #endif
 
     /* Preliminary clean-ups. */
@@ -2158,7 +2165,7 @@ ARTpost(CHANNEL *cp)
 #if defined(DO_PYTHON)
     TMRstart(TMR_PYTHON);
     filterrc = PYartfilter(data, article->data + cp->Start, headlen,
-                           article->data + data->Body, cp->Next - data->Body,
+                           article->data + data->Body, bodylen,
                            data->Lines);
     TMRstop(TMR_PYTHON);
     if (filterrc != NULL) {
@@ -2191,7 +2198,7 @@ ARTpost(CHANNEL *cp)
 #if defined(DO_PERL)
     TMRstart(TMR_PERL);
     filterrc = PLartfilter(data, article->data + cp->Start, headlen,
-                           article->data + data->Body, cp->Next - data->Body,
+                           article->data + data->Body, bodylen,
                            data->Lines);
     TMRstop(TMR_PERL);
     if (filterrc) {

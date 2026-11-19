@@ -110,6 +110,13 @@ C<$hdr{'__LINES__'}> will contain the number of lines in the body of the
 article, and C<$hdr{'__HEAD__'}> will contain all the header fields of the
 article, including the ones not in the above list.
 
+The body is in wire format, as it arrived: each line normally
+ends with CRLF, and a line beginning with a period has that period doubled
+(dot-stuffing).  B<innd> also accepts a bare CR or LF inside an article and
+passes it on unchanged.  The line with a single period that ends the
+article is not part of it, so the body ends with the line ending of its last
+line, and is empty for an article without body.
+
 C<$hdr{'__HEAD__'}> is the header of the article as it arrived: every header
 field line in the order received, with folded and repeated header fields
 as they are, without the empty line that separates the header from the
