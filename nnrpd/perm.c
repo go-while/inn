@@ -106,7 +106,8 @@ static void CompressList(char *);
 static bool MatchHost(char *, char *, char *);
 static int MatchUser(char *, char *);
 static char *ResolveUser(AUTHGROUP *);
-static char *AuthenticateUser(AUTHGROUP *, char *, char *, int *, char *);
+static char *AuthenticateUser(AUTHGROUP *, char *, char *, int *, char *,
+                              size_t);
 
 static void GrowArray(void *, void *);
 static void PERMvectortoaccess(ACCESSGROUP *acc, const char *name,
@@ -1652,7 +1653,8 @@ PERMgetaccess(bool initialconnection)
 }
 
 void
-PERMlogin(char *uname, char *pass, int *code, char *errorstr)
+PERMlogin(char *uname, char *pass, int *code, char *errorstr,
+          size_t errorstrsize)
 {
     int i = 0;
     char *runame;
@@ -1677,7 +1679,8 @@ PERMlogin(char *uname, char *pass, int *code, char *errorstr)
     runame = NULL;
 
     while (runame == NULL && i-- > 0)
-        runame = AuthenticateUser(auth_realms[i], uname, pass, code, errorstr);
+        runame = AuthenticateUser(auth_realms[i], uname, pass, code, errorstr,
+                                  errorstrsize);
 
 #if defined(HAVE_BLACKLIST) || defined(HAVE_BLOCKLIST)
     BlocklistReport(runame);
@@ -2166,7 +2169,8 @@ ResolveUser(AUTHGROUP *auth)
 */
 static char *
 AuthenticateUser(AUTHGROUP *auth, char *username, char *password,
-                 int *code UNUSED, char *errorstr UNUSED)
+                 int *code UNUSED, char *errorstr UNUSED,
+                 size_t errorstrsize UNUSED)
 {
     int i, j;
     char *command;
@@ -2207,7 +2211,8 @@ AuthenticateUser(AUTHGROUP *auth, char *username, char *password,
                 perlAuthInit();
 
                 newUser[0] = '\0';
-                perlAuthenticate(username, password, code, errorstr, newUser);
+                perlAuthenticate(username, password, code, errorstr,
+                                 errorstrsize, newUser, sizeof(newUser));
                 if (*code == NNTP_OK_AUTHINFO) {
                     if (newUser[0] != '\0')
                         user = xstrdup(newUser);
@@ -2239,7 +2244,8 @@ AuthenticateUser(AUTHGROUP *auth, char *username, char *password,
             if ((script_path != NULL) && (strlen(script_path) > 0)) {
                 newUser[0] = '\0';
                 PY_authenticate(script_path, username, password, code,
-                                errorstr, newUser);
+                                errorstr, errorstrsize, newUser,
+                                sizeof(newUser));
                 free(script_path);
                 if (*code == NNTP_OK_AUTHINFO) {
                     if (newUser[0] != '\0')
