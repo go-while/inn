@@ -169,6 +169,7 @@ FlushOverTmpFile(void)
     if (fflush(OverTmpFile) == EOF || ferror(OverTmpFile)
         || fclose(OverTmpFile) == EOF)
         sysdie("cannot close temporary overview file");
+    OverTmpFile = NULL;
     if (Fork) {
         if (!first) { /* if previous one is running, wait for it */
             int status;
