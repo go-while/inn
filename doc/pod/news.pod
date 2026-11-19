@@ -253,6 +253,12 @@ peer offers the article again later.  When only the history write failed, the
 article is already stored, so a second copy is stored when the peer offers it
 again, as was already the case for IHAVE.
 
+=item *
+
+A new I<tlsloglevel> parameter in F<inn.conf> permits enabling the logging
+of TLS/SSL connections by B<nnrpd> for debugging purposes.  It previously
+required changing an internal variable and rebuilding INN.
+
 =back
 
 =head1 Changes in 2.7.4 (2026-06-22)

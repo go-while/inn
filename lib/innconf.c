@@ -200,6 +200,7 @@ static const struct config config_table[] = {
     {K(tlsciphers13),               STRING(NULL)      },
     {K(tlscompression),             BOOL(false)       },
     {K(tlseccurve),                 STRING(NULL)      },
+    {K(tlsloglevel),                UNUMBER(0)        },
     {K(tlspreferserverciphers),     BOOL(true)        },
     {K(tlsprotocols),               LIST(NULL)        },
 #endif  /* HAVE_OPENSSL */
