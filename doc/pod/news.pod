@@ -409,6 +409,13 @@ take as an option, a program or a file), is refused with a warning; the mail
 is still sent to the other addresses, but B<innmail> then exits with
 status 1.
 
+=item *
+
+The man pages of the configuration files now say how changes to them take
+effect: which C<ctlinnd> command reloads it, whether B<nnrpd> picks it up
+at the next connection, or whether a restart is needed.  The C<ctlinnd
+reload> keywords are now listed one by one in ctlinnd(8).
+
 =back
 
 =head1 Changes in 2.7.4 (2026-06-22)

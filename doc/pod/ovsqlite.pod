@@ -51,7 +51,13 @@ Restart INN to take the change into account (after having rebuilt your
 existing overview with B<makehistory>, if needed).
 
 These additional parameters are read from the F<ovsqlite.conf>
-configuration file:
+configuration file.  B<ovsqlite-server> only reads it when it starts, and
+B<nnrpd> reads I<walmode>, I<mmapsize> and I<readercachesize> each time it
+is spawned for a new connection.  F<ovsqlite.conf> cannot be reloaded with
+C<ctlinnd reload>, and C<ctlinnd xexec innd> does not restart
+B<ovsqlite-server>; to make a change take effect, shut down INN with
+C<rc.news stop> and start it again with B<rc.news>.  The following
+parameters can be set:
 
 =over 4
 
