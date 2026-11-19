@@ -133,6 +133,17 @@ files behind after a failed creation, and the buffindexed overview method
 validates its F<group.index> file and no longer frees memory twice when
 mapping overview data fails.  Many thanks to Kevin Bowling for the patches.
 
+=item *
+
+B<innd> no longer forces S<24 KB> socket buffers on the connections of its
+incoming peers, and B<innxbatch> no longer does on its connection to the
+remote server.  The operating system defaults are now used, which lets
+Linux and other systems with automatic tuning grow the buffers on fast or
+distant links; a fixed SO_RCVBUF disables this tuning on Linux and limited
+each incoming feed to a TCP window of about S<48 KB>.  New I<peerrcvbufsize>
+and I<peersndbufsize> parameters in F<inn.conf> set fixed sizes instead.
+Set both of them to C<24576> to keep the previous behaviour.
+
 =back
 
 =head1 Changes in 2.7.5 (not yet released)
