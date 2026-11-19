@@ -1,0 +1,188 @@
+=head1 NAME
+
+hashtab - Generic hash table functions
+
+=head1 SYNOPSIS
+
+    #include <inn/hashtab.h>
+
+    struct hash;
+
+    typedef unsigned long (*hash_func)(const void *key);
+    typedef const void *(*hash_key_func)(const void *datum);
+    typedef bool (*hash_equal_func)(const void *key, const void *datum);
+    typedef void (*hash_delete_func)(void *datum);
+    typedef void (*hash_traverse_func)(void *datum, void *data);
+
+    struct hash *hash_create(size_t size, hash_func hash_f,
+                             hash_key_func key_f,
+                             hash_equal_func equal_f,
+                             hash_delete_func delete_f);
+
+    void hash_free(struct hash *hash);
+
+    void *hash_lookup(struct hash *hash, const void *key);
+
+    bool hash_insert(struct hash *hash, const void *key, void *datum);
+
+    bool hash_replace(struct hash *hash, const void *key, void *datum);
+
+    bool hash_delete(struct hash *hash, const void *key);
+
+    void hash_traverse(struct hash *hash, hash_traverse_func callback,
+                       void *data);
+
+    unsigned long hash_count(struct hash *hash);
+
+    unsigned long hash_searches(struct hash *hash);
+
+    unsigned long hash_collisions(struct hash *hash);
+
+    unsigned long hash_expansions(struct hash *hash);
+
+    unsigned long hash_string(const void *key);
+
+    unsigned long hash_lookup2(const char *key, size_t length,
+                               unsigned long partial);
+
+=head1 DESCRIPTION
+
+These functions implement a generic hash table with open addressing and
+linear probing.  The table stores pointers to data items (called
+I<datum> below).  It does not store the keys: the key of an item is
+obtained from the item itself with a function given by the caller.
+
+A hash table is described by four functions given to B<hash_create>:
+
+=over 4
+
+=item I<hash_f>
+
+Returns the hash value of a key.  B<hash_string> can be used when the
+keys are nul-terminated strings.
+
+=item I<key_f>
+
+Returns the key of a data item.  It is used when the table is resized,
+so the key it returns must stay valid as long as the item is in the
+table.
+
+=item I<equal_f>
+
+Returns true if a data item has the given key, false otherwise.  Its
+first argument is the key, its second argument the data item.
+
+=item I<delete_f>
+
+Called on a data item when it is removed from the table, typically to
+free it.  It is always called, so it must not be C<NULL>; use a function
+that does nothing if the table does not own its items.
+
+=back
+
+B<hash_create> creates a new hash table and returns it.  I<size> is the
+expected number of items; it is rounded up to the next power of two, with
+a minimum of 4.  The table grows automatically: it is resized to about
+twice the number of items when it becomes 75% full (deleted slots
+count as full until the next resize).  Memory allocation failures abort
+the program, so B<hash_create> always returns a valid pointer.
+
+B<hash_free> calls the delete function on every item still in I<hash>,
+then frees I<hash>.
+
+B<hash_lookup> returns the data item with key I<key>, or C<NULL> if
+there is no such item.
+
+B<hash_insert> adds I<datum> with key I<key> to I<hash>.  It returns
+true on success, and false if an item with that key is already in
+the table.  In that case, the table is not changed and I<datum> is not
+freed.  I<datum> must not be C<NULL>.
+
+B<hash_replace> replaces the data item with key I<key> by I<datum>,
+after calling the delete function on the old item.  It returns true on
+success, and false without changing the table if no item has that key.
+
+B<hash_delete> removes the data item with key I<key> from I<hash> and
+calls the delete function on it.  It returns true on success, and false
+if no item has that key.
+
+B<hash_traverse> calls I<callback> on every data item in I<hash>, in no
+particular order.  The first argument of I<callback> is the data item,
+the second one is I<data>, which is passed unchanged.  I<callback> must
+not add items to I<hash>, as the table may then be resized during the
+traversal.
+
+B<hash_count> returns the number of data items in I<hash>.
+
+B<hash_searches>, B<hash_collisions> and B<hash_expansions> return
+statistics, mainly useful for debugging and tuning: the number of
+searches done in the table (by B<hash_lookup>, B<hash_insert>,
+B<hash_replace> and B<hash_delete>), the number of collisions met
+during these searches (each slot tried after the first one counts as a
+collision), and the number of times the table was resized.
+
+B<hash_string> is a hash function for nul-terminated strings, suitable
+as the I<hash_f> argument of B<hash_create>.  It calls B<hash_lookup2>
+on the whole string.
+
+B<hash_lookup2> returns a 32-bit hash value of the I<length> bytes
+starting at I<key>, using the lookup2 function by Bob Jenkins.  I<partial>
+is an initial value.  It is usually C<0>, but the result of a previous
+call can be given to hash data in several pieces.  This function is
+meant for building hash functions for hash tables; it must not be used
+for cryptographic purposes.
+
+=head1 EXAMPLES
+
+A table of items whose key is a string they contain:
+
+    struct entry {
+        char *name;
+        int value;
+    };
+
+    static const void *
+    entry_key(const void *datum)
+    {
+        return ((const struct entry *) datum)->name;
+    }
+
+    static bool
+    entry_equal(const void *key, const void *datum)
+    {
+        return strcmp(key, ((const struct entry *) datum)->name) == 0;
+    }
+
+    static void
+    entry_delete(void *datum)
+    {
+        free(((struct entry *) datum)->name);
+        free(datum);
+    }
+
+    struct hash *table;
+    struct entry *entry;
+
+    table = hash_create(64, hash_string, entry_key, entry_equal,
+                        entry_delete);
+
+    entry = xmalloc(sizeof(*entry));
+    entry->name = xstrdup("news.software.nntp");
+    entry->value = 42;
+    if (!hash_insert(table, entry->name, entry))
+        entry_delete(entry);
+
+    entry = hash_lookup(table, "news.software.nntp");
+
+    hash_free(table);
+
+=head1 HISTORY
+
+The hash table implementation was written by Russ Allbery
+<eagle@eyrie.org>.  B<hash_lookup2> is based on code by Bob Jenkins.
+
+=head1 SEE ALSO
+
+libinn(3).
+
+=cut
