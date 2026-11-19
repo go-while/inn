@@ -276,6 +276,14 @@ C<@$LOCALGROUPS> in a variable did not exclude the groups of
 C<$LOCALGROUPS> from the feeds using that variable.  The value of a
 variable and an entry are now limited to S<1 MB> once expanded.
 
+=item *
+
+The output of C<inncheck -f --perm> is now always valid input for a shell.
+Syntax problems found in the checked files, as well as the messages of the
+B<-v> flag, were not prefixed with a hash sign like the other messages.
+The file names in the generated B<chown>, B<chgrp> and B<chmod> commands are
+now quoted, so that names containing spaces or quotes work.
+
 =back
 
 =head1 Changes in 2.7.4 (2026-06-22)
