@@ -530,6 +530,13 @@ so a crossposted article may lead to several calls for one command.  The
 article is sent if any of these calls grants access, and refused only if all
 of them refuse it, as with the I<read> parameter of F<readers.conf>.
 
+=item *
+
+B<auth_krb5> now rejects with a clear message a username containing a C</>
+or a C<\> when its B<-i> option is given, instead of building a malformed
+Kerberos principal with several instances (or with an escaped C</>) and
+letting the authentication fail with an obscure error.
+
 =back
 
 =head1 Changes in 2.7.4 (2026-06-22)
