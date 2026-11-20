@@ -133,6 +133,13 @@ files behind after a failed creation, and the buffindexed overview method
 validates its F<group.index> file and no longer frees memory twice when
 mapping overview data fails.  Many thanks to Kevin Bowling for the patches.
 
+=item *
+
+The text documentation which was only installed as plain text files is now
+also installed as man pages in section 7: inn-checklist(7),
+inn-external-auth(7), inn-hacking(7), inn-hook-perl(7), inn-hook-python(7),
+inn-install(7) and inn-readme(7).  The plain text files are still installed.
+
 =back
 
 =head1 Changes in 2.7.5 (not yet released)

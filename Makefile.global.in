@@ -262,6 +262,7 @@ MAN1		= $(mandir)/man1
 MAN3		= $(mandir)/man3
 MAN3PM		= $(mandir)/man3
 MAN5		= $(mandir)/man5
+MAN7		= $(mandir)/man7
 MAN8		= $(mandir)/man8
 
 ##  Extension used for Perl modules man pages (for instance "INN::Config.3pm"

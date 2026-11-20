@@ -1,3 +1,10 @@
+=begin man
+
+.SH NAME
+inn\-external\-auth \- External authentication support in nnrpd
+
+=end man
+
 =head1 B<nnrpd> External Authentication Support
 
 A fundamental part of the readers.conf(5)-based authorization mechanism
