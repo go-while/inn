@@ -1,3 +1,10 @@
+=begin man
+
+.SH NAME
+inn\-checklist \- Installation checklist for INN
+
+=end man
+
 =head1 Introduction
 
 This is an installation checklist initially written by Rebecca Ore,

@@ -1,3 +1,10 @@
+=begin man
+
+.SH NAME
+inn\-hook\-perl \- Perl filtering and authentication support in INN
+
+=end man
+
 =head1 INN Perl Filtering and Authentication Support
 
 This file documents INN's built-in support for Perl filtering and reader

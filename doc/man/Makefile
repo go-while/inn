@@ -23,6 +23,9 @@ SEC5	= active.5 active.times.5 buffindexed.conf.5 control.ctl.5 \
 	ovsqlite.5 passwd.nntp.5 inn-radius.conf.5 readers.conf.5 \
 	storage.conf.5 subscriptions.5
 
+SEC7	= inn-checklist.7 inn-external-auth.7 inn-hacking.7 inn-hook-perl.7 \
+	inn-hook-python.7 inn-install.7 inn-readme.7
+
 SEC8	= actmerge.8 actsync.8 archive.8 batcher.8 buffchan.8 ckpasswd.8 \
 	cnfsheadconf.8 cnfsstat.8 controlbatch.8 controlchan.8 ctlinnd.8 \
 	cvtbatch.8 \
@@ -41,7 +44,8 @@ all:
 clobber clean distclean:
 profiled:
 
-install: install-man1 install-man3 install-man3pm install-man5 install-man8
+install: install-man1 install-man3 install-man3pm install-man5 install-man7 \
+	install-man8
 
 install-man1:
 	for M in $(SEC1) ; do \
@@ -78,6 +82,11 @@ install-man5:
 	    $(LN_S) ../man8/docheckgroups.8 $D$(MAN5)/localgroups.5 ; \
 	    $(LN_S) ../man8/perl-nocem.8 $D$(MAN5)/nocem.ctl.5 ; \
 	fi
+
+install-man7:
+	for M in $(SEC7) ; do \
+	    $(CP_MAN) $$M $D$(MAN7)/$$M ; \
+	done
 
 # auth_krb5 is conditionally compiled, so handle it specially.  actsync(8)
 # also covers actsyncd.
