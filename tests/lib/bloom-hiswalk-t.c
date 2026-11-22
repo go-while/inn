@@ -8,6 +8,8 @@
  * Written by Kevin Bowling in 2026.
  */
 
+#define LIBTEST_NEW_FORMAT 1
+
 #include "portable/system.h"
 
 #include <errno.h>
@@ -64,7 +66,7 @@ main(void)
     unsigned long false_negatives;
     bool walk_ok;
 
-    test_init(8);
+    plan(8);
 
     /* Create temporary directory for the history database. */
     strlcpy(tmpdir, "bloom-hiswalk-XXXXXX", sizeof(tmpdir));
@@ -99,19 +101,20 @@ main(void)
 
     HISsync(h);
     HISclose(h);
-    ok(1, true); /* history created and populated */
+    ok(true, "create and populate history");
 
     /* Reopen read-only (as expireover does). */
     h = HISopen(histpath, "hisv6", HIS_RDONLY);
     if (h == NULL)
         bail("can't reopen history at %s", histpath);
-    ok(2, true); /* history reopened */
+    ok(true, "reopen history read-only");
 
     /* Build the Bloom filter via HISwalk. */
     bloom = bloom_create(N_WITH_TOKEN + N_REMEMBERED, 10000);
     walk_ok = HISwalk(h, NULL, bloom, build_bloom_cb);
-    ok(3, walk_ok);                            /* HISwalk succeeded */
-    ok(4, bloom_count(bloom) == N_WITH_TOKEN); /* only token entries added */
+    ok(walk_ok, "walk history");
+    ok(bloom_count(bloom) == N_WITH_TOKEN,
+       "only entries with tokens are counted");
 
     /* Verify: all token entries should be Bloom hits. */
     false_negatives = 0;
@@ -122,7 +125,7 @@ main(void)
             false_negatives++;
         free(msgid);
     }
-    ok(5, false_negatives == 0); /* no false negatives for token entries */
+    ok(false_negatives == 0, "token entries contain no false negatives");
     if (false_negatives > 0)
         diag("false negatives: %lu out of %d", false_negatives, N_WITH_TOKEN);
 
@@ -136,7 +139,8 @@ main(void)
             bloom_misses++;
         free(msgid);
     }
-    ok(6, bloom_misses > N_REMEMBERED * 9 / 10); /* >90% should miss */
+    ok(bloom_misses > N_REMEMBERED * 9 / 10,
+       "over ninety percent of remembered entries miss");
     diag("remembered entries: %lu/%d were Bloom misses (expected most)",
          bloom_misses, N_REMEMBERED);
 
@@ -150,7 +154,8 @@ main(void)
             bloom_misses++;
         free(msgid);
     }
-    ok(7, bloom_misses > N_NOT_IN_HIST * 9 / 10); /* >90% should miss */
+    ok(bloom_misses > N_NOT_IN_HIST * 9 / 10,
+       "over ninety percent of absent entries miss");
     diag("not-in-history entries: %lu/%d were Bloom misses (expected most)",
          bloom_misses, N_NOT_IN_HIST);
 
@@ -164,7 +169,7 @@ main(void)
         if (system(cmd) < 0)
             sysdiag("can't clean up %s", tmpdir);
     }
-    ok(8, true); /* cleanup */
+    ok(true, "close history and remove test data");
 
     return 0;
 }
