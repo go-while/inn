@@ -1,0 +1,60 @@
+=head1 NAME
+
+sqlite_helper_init, sqlite_helper_term - prepare and finalize SQLite statements
+
+=head1 SYNOPSIS
+
+    #include <inn/sqlite-helper.h>
+
+    typedef struct sqlite_helper_t {
+        size_t stmt_count;
+        char const *text;
+    } sqlite_helper_t;
+
+    int sqlite_helper_init(sqlite_helper_t const *helper,
+                           sqlite3_stmt **stmts, sqlite3 *connection,
+                           unsigned int prepare_flags, char **errmsg);
+
+    void sqlite_helper_term(sqlite_helper_t const *helper,
+                            sqlite3_stmt **stmts);
+
+=head1 DESCRIPTION
+
+These routines are available when INN is configured with SQLite support.
+They work with a statement descriptor that the build generates from a SQL
+source file with the F<lib/sqlite-helper-gen> script.  The descriptor
+I<helper> holds the number of named statements in I<stmt_count>.  Its
+I<text> contains the initialization SQL followed by pairs of statement
+names and SQL texts, each component terminated by a NUL.
+
+B<sqlite_helper_init> first executes the initialization SQL on
+I<connection>.  It then prepares the named statements in descriptor order,
+passing I<prepare_flags> to C<sqlite3_prepare_v3>.  It stores the resulting
+statement pointers in I<stmts>, which must have room for I<stmt_count>
+entries.
+
+The return value is a SQLite result code, with C<SQLITE_OK> indicating
+success.  If preparing a statement fails, the function finalizes the
+statements it has already prepared and clears those entries in I<stmts>.
+Initialization SQL may already have run when an error is returned.
+
+If I<errmsg> is non-NULL, an error message may be returned through it.
+Release any returned message with C<sqlite3_free>.  An error preparing a
+named statement includes its name when the message can be allocated; an
+error in the initialization SQL is returned as SQLite reports it.
+
+B<sqlite_helper_term> finalizes all I<stmt_count> statements in I<stmts>
+and clears each pointer.  It leaves I<connection> open.  Initialize
+I<stmts> to null pointers if it may be passed to B<sqlite_helper_term>
+after a failed initialization.
+
+=head1 HISTORY
+
+Written by Bo Lindbergh in 2020 for ovsqlite.  Moved into libinn by
+Kevin Bowling in 2026 when hissqlite began using the same helper.
+
+=head1 SEE ALSO
+
+hissqlite(5), libinn(3), ovsqlite(5).
+
+=cut
