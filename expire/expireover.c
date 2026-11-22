@@ -175,6 +175,7 @@ main(int argc, char *argv[])
     bool purge_deleted = false;
     bool always_stat = false;
     bool tombstone_clean = true;
+    bool complete_scan = true;
     struct history *history;
     struct bloom_filter *bloom = NULL;
     struct bloom_filter *null_bloom = NULL;
@@ -275,7 +276,6 @@ main(int argc, char *argv[])
         if (qp == NULL)
             sysdie("can't open active file (%s)", active_path);
     }
-    free(active_path);
 
     /* open up the history manager */
     path = concatpath(innconf->pathhistory, INN_PATH_HISTORY);
@@ -520,8 +520,25 @@ main(int argc, char *argv[])
     if (signalled)
         warn("received signal, exiting");
 
+    /* QIOread also returns NULL on a read error or a line too long for its
+       buffer.  The groups after that point were not visited, and the purge
+       below would take them for removed groups (ovsqlite marks every group
+       not expired in this pass as deleted, buffindexed expires them as hidden
+       groups), so a partial scan must not purge anything. */
+    if (!signalled && QIOerror(qp)) {
+        if (QIOtoolong(qp))
+            warn("line too long in %s, stopping without expiring the"
+                 " remaining newsgroups",
+                 active_path);
+        else
+            syswarn("can't read %s, stopping without expiring the remaining"
+                    " newsgroups",
+                    active_path);
+        complete_scan = false;
+    }
+
     /* If desired, purge all deleted newsgroups. */
-    if (!signalled && purge_deleted)
+    if (!signalled && complete_scan && purge_deleted)
         if (!OVexpiregroup(NULL, NULL, history))
             warn("can't expire deleted newsgroups");
 
@@ -531,6 +548,7 @@ main(int argc, char *argv[])
         bloom_free(bloom);
     }
     QIOclose(qp);
+    free(active_path);
     OVclose();
     SMshutdown();
     HISclose(history);
@@ -553,7 +571,7 @@ main(int argc, char *argv[])
             syswarn("can't finalize tombstone log %s", tombstone_path_new);
             tombstone_clean = false;
         }
-        if (signalled)
+        if (signalled || !complete_scan)
             tombstone_clean = false;
         if (ovge.delayrm) {
             /* Leave .NEW for expirerm.  If we were signalled or hit
@@ -578,5 +596,5 @@ main(int argc, char *argv[])
         free(tombstone_path_new);
     }
 
-    return 0;
+    return complete_scan ? 0 : 1;
 }
