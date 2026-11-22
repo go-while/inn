@@ -124,14 +124,14 @@ checkdumpname ninpaths-tmp "other-%s-%x-%n-%.3f-%."
 
 # A name which does not fit is reported, and not written truncated.  Make a
 # directory that is long enough so that the file name of the dump would be
-# cut in the middle if it were truncated to the 1023 characters allowed.
+# cut in the middle if it were truncated to the 1023 bytes allowed.
 rm -rf ninpaths-tmp
 component=$(printf '%0200d' 0)
 deep=ninpaths-tmp/$component/$component/$component/$component
 mkdir -p $deep
 name=$(printf '%0230d' 0)
 runninpaths "$deep/$name.%d"
-if grep 'too long' ninpaths-err >/dev/null; then
+if grep 'too long.*at most 1023 bytes' ninpaths-err >/dev/null; then
     printcount "ok"
 else
     printcount "not ok"

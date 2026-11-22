@@ -246,7 +246,7 @@ writedumpfile(const char *n)
     if (!expandname(buf, sizeof(buf), n, time(NULL))) {
         fprintf(stderr,
                 "writedumpfile: dump file name too long for ninpaths"
-                " (at most %d characters)\n",
+                " (at most %d bytes)\n",
                 MAXFNAME - 1);
         return;
     }

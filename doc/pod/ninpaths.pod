@@ -93,7 +93,7 @@ the current system time (the number of seconds since the epoch, written as
 a decimal number) when the dump is made.  Any C<%%> will be replaced with a
 single C<%>, so that C<%%d> gives a literal C<%d> in the file name.  Any other
 C<%> is kept as is.  If the resulting file name is longer than 1023
-characters, B<ninpaths> reports an error and does not write the dump.
+bytes, B<ninpaths> reports an error and does not write the dump.
 This option should be used with B<-p>.  If I<dumpfile> is C<->, then stdout
 is used.
 
