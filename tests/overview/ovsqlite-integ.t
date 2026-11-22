@@ -165,6 +165,18 @@ else
     printcount "ok" "# server stopped (signal)"
 fi
 
+# Where SQLite cannot use WAL mode (no shared memory, as on some network
+# filesystems or GNU/Hurd), the server warns and keeps another journal mode;
+# there is then no direct reader to test.  Only that warning skips the
+# direct-reader tests: an SQLite error while setting the journal mode
+# ("cannot enable WAL mode: ...") leaves them to fail.
+nowal=
+if grep -q 'WAL mode not available: journal mode is ' "$tmpdir/server.log"; then
+    nowal="SQLite cannot use WAL mode here"
+    echo "# $nowal:"
+    sed 's/^/# /' "$tmpdir/server.log"
+fi
+
 # Tests 6-15: report database statistics and vacuum with ovsqlite-util.
 # Run the source directly with -p so the test does not depend on an installed
 # INN::Config and innconfval.  The server is already stopped, so vacuum can
@@ -197,7 +209,9 @@ else
     else
         printcount "not ok" "# schema version statistic"
     fi
-    if echo "$stats_output" | grep -q '^Journal mode: wal$'; then
+    if [ -n "$nowal" ]; then
+        printcount "ok" "# skip $nowal"
+    elif echo "$stats_output" | grep -q '^Journal mode: wal$'; then
         printcount "ok" "# journal mode statistic"
     else
         printcount "not ok" "# journal mode statistic"
@@ -233,7 +247,9 @@ else
         echo "$stats_output" | sed 's/^/# /'
         printcount "not ok" "# article count statistics"
     fi
-    if echo "$stats_output" | grep -q '^WAL file size: [0-9][0-9]* bytes$'; then
+    if [ -n "$nowal" ]; then
+        printcount "ok" "# skip $nowal"
+    elif echo "$stats_output" | grep -q '^WAL file size: [0-9][0-9]* bytes$'; then
         printcount "ok" "# WAL file size statistic"
     else
         printcount "not ok" "# WAL file size statistic"
@@ -262,23 +278,29 @@ else
 fi
 
 # Tests 16-20: run the reader (5 TAP tests from inside).
-reader_output=$($reader 2>&1)
-reader_rc=$?
-reader_count=$(echo "$reader_output" | grep -c "^ok ")
-if [ $reader_rc -eq 0 ] && [ "$reader_count" -eq 5 ]; then
-    printcount "ok" "# reader open (direct)"
-    printcount "ok" "# group stats"
-    printcount "ok" "# article data"
-    printcount "ok" "# search order"
-    printcount "ok" "# reopen"
+if [ -n "$nowal" ]; then
+    for i in 16 17 18 19 20; do
+        printcount "ok" "# skip $nowal"
+    done
 else
-    echo "# Reader failed (rc=$reader_rc):"
-    echo "$reader_output" | sed 's/^/# /'
-    printcount "not ok" "# reader open (direct)"
-    printcount "not ok" "# group stats"
-    printcount "not ok" "# article data"
-    printcount "not ok" "# search order"
-    printcount "not ok" "# reopen"
+    reader_output=$($reader 2>&1)
+    reader_rc=$?
+    reader_count=$(echo "$reader_output" | grep -c "^ok ")
+    if [ $reader_rc -eq 0 ] && [ "$reader_count" -eq 5 ]; then
+        printcount "ok" "# reader open (direct)"
+        printcount "ok" "# group stats"
+        printcount "ok" "# article data"
+        printcount "ok" "# search order"
+        printcount "ok" "# reopen"
+    else
+        echo "# Reader failed (rc=$reader_rc):"
+        echo "$reader_output" | sed 's/^/# /'
+        printcount "not ok" "# reader open (direct)"
+        printcount "not ok" "# group stats"
+        printcount "not ok" "# article data"
+        printcount "not ok" "# search order"
+        printcount "not ok" "# reopen"
+    fi
 fi
 
 # Tests 21-23: server restart resilience.
@@ -312,15 +334,19 @@ wait $server_pid 2>/dev/null
 printcount "ok" "# server re-stop"
 
 # Reader should still work — data survives the restart cycle.
-reader_output=$($reader 2>&1)
-reader_rc=$?
-reader_count=$(echo "$reader_output" | grep -c "^ok ")
-if [ $reader_rc -eq 0 ] && [ "$reader_count" -eq 5 ]; then
-    printcount "ok" "# reader after restart"
+if [ -n "$nowal" ]; then
+    printcount "ok" "# skip $nowal"
 else
-    echo "# Reader after restart failed (rc=$reader_rc):"
-    echo "$reader_output" | sed 's/^/# /'
-    printcount "not ok" "# reader after restart"
+    reader_output=$($reader 2>&1)
+    reader_rc=$?
+    reader_count=$(echo "$reader_output" | grep -c "^ok ")
+    if [ $reader_rc -eq 0 ] && [ "$reader_count" -eq 5 ]; then
+        printcount "ok" "# reader after restart"
+    else
+        echo "# Reader after restart failed (rc=$reader_rc):"
+        echo "$reader_output" | sed 's/^/# /'
+        printcount "not ok" "# reader after restart"
+    fi
 fi
 
 # Clean up.
