@@ -133,6 +133,15 @@ files behind after a failed creation, and the buffindexed overview method
 validates its F<group.index> file and no longer frees memory twice when
 mapping overview data fails.  Many thanks to Kevin Bowling for the patches.
 
+=item *
+
+B<actsyncd> now retries a failed download of the remote F<active> file up
+to 9 more times, 6 minutes apart, as documented in actsync(8); it used to
+give up at the first failure when the download left no file behind.  Each
+attempt starts without the files of the previous one, NNTP retries keep
+the port given with the host, and there is no longer a 6-minute wait
+after the last attempt.
+
 =back
 
 =head1 Changes in 2.7.5 (not yet released)
