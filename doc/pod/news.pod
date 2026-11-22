@@ -133,6 +133,14 @@ files behind after a failed creation, and the buffindexed overview method
 validates its F<group.index> file and no longer frees memory twice when
 mapping overview data fails.  Many thanks to Kevin Bowling for the patches.
 
+=item *
+
+When I<expiretombstone> is set in F<inn.conf>, a cancellation recorded by
+B<innd> or B<sm> while B<expire> was taking its snapshot of
+F<cancels.tombstone> could be written to the snapshot after B<expire> had
+read it, and was then lost when the snapshot was removed.  The writers now
+check that the file they locked is still the live one.
+
 =back
 
 =head1 Changes in 2.7.5 (not yet released)
