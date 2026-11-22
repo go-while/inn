@@ -89,6 +89,7 @@ xrefslave:                   false
 # Reading
 
 allownewnews:                true
+#disablecapabilities:        [ ]
 articlemmap:                 true
 clienttimeout:               1800
 initialtimeout:              10
