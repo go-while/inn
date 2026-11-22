@@ -6,6 +6,7 @@ package e2e
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -460,5 +461,37 @@ func TestExpireAsideLeavesPaused(t *testing.T) {
 	s.Ctlinnd(t, "go", reason)
 	if mode := s.Ctlinnd(t, "mode"); !strings.Contains(mode, "Server running") {
 		t.Errorf("innd is not running after ctlinnd go:\n%s", mode)
+	}
+}
+
+// TestFastrmExitStatus: fastrm exits with status 1 when it cannot remove a file, as its
+// manual page says, so that expirerm notices the failure; a file that does not exist is
+// not a failure.
+func TestFastrmExitStatus(t *testing.T) {
+	s := NewSite(t, SiteOptions{})
+	spool := filepath.Join(s.Dir, "spool", "articles")
+	dir := filepath.Join(spool, "e2e", "locked")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	s.writeFile(t, "spool/articles/e2e/locked/1", "article\n")
+	chmodUntilCleanup(t, dir, 0o555)
+
+	cmd := exec.Command(filepath.Join(s.Prefix, "bin", "fastrm"), "-e", spool)
+	cmd.Dir = spool
+	cmd.Env = append(os.Environ(), s.Env...)
+	cmd.Stdin = strings.NewReader("e2e/locked/1\n")
+	out, err := cmd.CombinedOutput()
+	t.Logf("fastrm with a file it cannot remove: err=%v\n%s", err, out)
+	if err == nil {
+		t.Errorf("fastrm exited 0 although it could not remove e2e/locked/1")
+	}
+
+	cmd = exec.Command(filepath.Join(s.Prefix, "bin", "fastrm"), "-e", spool)
+	cmd.Dir = spool
+	cmd.Env = append(os.Environ(), s.Env...)
+	cmd.Stdin = strings.NewReader("e2e/nothere\n")
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Errorf("fastrm with a file that does not exist: %v\n%s", err, out)
 	}
 }
