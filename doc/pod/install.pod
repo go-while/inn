@@ -107,6 +107,13 @@ you have another compiler available, you may wish to use B<gcc> instead.
 
 =item *
 
+B<ckpasswd> uses the system C<crypt()> function.  If your C library does
+not provide it, install the development package for the system crypt
+library before configuring INN.  For example, newer glibc systems use
+libxcrypt, which may be packaged as C<libcrypt-dev> or C<libxcrypt-devel>.
+
+=item *
+
 Currently, in order to build INN, you will need an implementation of B<yacc>.
 GNU B<bison> (from L<https://ftp.gnu.org/gnu/bison/> or its mirrors) will work
 fine.  We hope to remove this requirement in the future.

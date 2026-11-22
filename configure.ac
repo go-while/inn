@@ -525,7 +525,8 @@ dnl be forced by Perl) DNS resolution fails.
 AC_SEARCH_LIBS([inet_aton], [resolv])
 
 dnl Search for various additional libraries used by portions of INN.
-INN_SEARCH_AUX_LIBS([crypt], [crypt], [CRYPT_LIBS])
+INN_SEARCH_AUX_LIBS([crypt], [crypt], [CRYPT_LIBS], [],
+    [AC_MSG_ERROR([crypt() is required by ckpasswd; install the development package for your system's crypt library (such as libxcrypt).])])
 INN_SEARCH_AUX_LIBS([getspnam], [shadow], [SHADOW_LIBS])
 
 dnl IRIX has a PAM library with the right symbols but no header files suitable
@@ -601,6 +602,16 @@ dnl Generic checks for header files.
 AC_CHECK_HEADERS([crypt.h inttypes.h \
                   stdint.h strings.h sys/bitypes.h sys/filio.h sys/loadavg.h \
                   sys/select.h sys/time.h sys/uio.h syslog.h unistd.h])
+
+dnl ckpasswd and contrib/auth_pass include crypt.h when available.  On
+dnl systems providing crypt in libc, unistd.h may declare it instead.
+AC_CHECK_DECL([crypt], [],
+    [AC_MSG_ERROR([no declaration for crypt(); install the headers for your system's crypt library (such as libxcrypt).])],
+    [AC_INCLUDES_DEFAULT
+#ifdef HAVE_CRYPT_H
+# include <crypt.h>
+#endif
+])
 
 dnl Some Linux systems have db1/ndbm.h instead of ndbm.h.  Others have
 dnl gdbm/ndbm.h or gdbm-ndbm.h.  Detecting the last two ones is not
