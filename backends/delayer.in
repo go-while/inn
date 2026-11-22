@@ -44,9 +44,26 @@ if (!$buffered) {
 }
 
 my @queue;
-if ($store) {
-    eval { @queue = @{ retrieve($store) } };
-    unlink($store);
+if ($store && -e $store) {
+    my $saved = eval { retrieve($store) };
+    if (ref($saved) eq 'ARRAY') {
+        @queue = @{$saved};
+        unlink($store)
+          or warn "$0: cannot remove $store: $!\n";
+    } else {
+        # Do not remove a store which cannot be read back: it may be the only
+        # copy of the queued lines.  Keep it aside so that the next save does
+        # not overwrite it either.
+        my $error = $@ || "not a saved queue\n";
+        if (rename($store, "$store.bad")) {
+            warn "$0: cannot restore the queue from $store, kept as"
+              . " $store.bad: $error";
+        } else {
+            warn "$0: cannot restore the queue from $store: $error"
+              . "$0: cannot rename it to $store.bad ($!), not using it\n";
+            undef $store;
+        }
+    }
 }
 
 my $rin = '';
@@ -62,15 +79,24 @@ while (1) {
         my $line = <STDIN>;
         if (!defined $line) {    # exit NOW!
             if ($store) {
-                eval { store(\@queue, $store); };
-            } else {
-                foreach (@queue) {
-                    s/^[^:]+://g;
-                    print OUT;
+                # Write a new file and rename it, so that an interrupted
+                # save does not leave a truncated store behind.
+                if (eval { store(\@queue, "$store.new") }
+                    && rename("$store.new", $store))
+                {
+                    exit;
                 }
-                close(OUT);
-                sleep(1);
+                warn "$0: cannot save the queue to $store: "
+                  . ($@ || "$!\n")
+                  . "$0: writing out the queued lines now\n";
+                unlink("$store.new");
             }
+            foreach (@queue) {
+                s/^[^:]+://g;
+                print OUT;
+            }
+            close(OUT);
+            sleep(1);
             exit;
         }
         push(@queue, "$exp:$line");
@@ -232,6 +258,12 @@ the configured delay has not been reached yet.
 
 When this flag is used, these lines will be written to the given file instead,
 to be used upon next startup.  Using an absolute path name is recommended.
+
+If the lines cannot be written to that file (for instance because the disk
+is full), they are written out as without this flag, and an error is
+reported on standard error.  If the file cannot be read back upon startup, it
+is renamed with a F<.bad> suffix and an error is reported, so that the lines
+it holds are not lost.
 
 =item B<--> I<some-other-program> [I<args> ...]
 
