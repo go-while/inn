@@ -71,16 +71,20 @@ build_bloom_cb(void *cookie, const HASH *hash, time_t arrived UNUSED,
 }
 
 /*
-**  Verify each line of an in-memory tombstone buffer via SMretrieve and
-**  append survivors to kept.  An entry survives if SMretrieve confirms
-**  the article is gone (SMERR_NOENT) or returns a non-NOENT error
-**  (SMERR_UNINIT, EIO, etc., where we cannot tell whether the article
-**  is alive); a transient failure must not silently discard a valid
-**  cancel record.  Live articles (SMretrieve returns non-NULL) are
-**  dropped: we must not re-tombstone an article that is still on disk.
+**  Verify each line of an in-memory tombstone buffer via SMretrieve.
+**  Entries whose article is confirmed gone (SMERR_NOENT, or SMERR_UNINIT
+**  for a storage method no longer configured) are appended to kept, to be
+**  carried into the new log.  Entries for which SMretrieve fails with
+**  another error (EIO, EACCES, etc., where we cannot tell whether the
+**  article is alive) are appended to retry: they must neither be lost
+**  nor reach a log that expire trusts, since an article whose removal
+**  failed may still be on disk and expire would then drop its history
+**  entry.  Live articles (SMretrieve returns non-NULL) are dropped: we
+**  must not re-tombstone an article that is still on disk.
 */
 static void
-verify_tombstone_lines(char *raw, ssize_t got, struct buffer *kept)
+verify_tombstone_lines(char *raw, ssize_t got, struct buffer *kept,
+                       struct buffer *retry)
 {
     char *entry, *save_p;
 
@@ -99,21 +103,81 @@ verify_tombstone_lines(char *raw, ssize_t got, struct buffer *kept)
                 /* Article still on disk; drop from tombstone to
                    avoid orphaning history for it. */
                 SMfreearticle(art);
-            } else {
-                /* Either confirmed gone (SMERR_NOENT) or transient
-                   error (SMERR_UNINIT, EIO, etc.).  Keep the entry
-                   either way: confirmed-gone is the normal case,
-                   and on transient error we cannot tell whether
-                   the article is alive, so preserve the record so
-                   the next run can re-evaluate.  Silently dropping
-                   on transient error would leak cancels across a
-                   storage outage. */
+            } else if (SMerrno == SMERR_NOENT || SMerrno == SMERR_UNINIT) {
+                /* Confirmed gone: the normal case. */
                 buffer_append(kept, entry, len);
                 buffer_append(kept, "\n", 1);
+            } else {
+                /* Transient error: we cannot tell whether the article
+                   is alive.  Keep the record for the next run to
+                   re-evaluate, outside the log expire consumes. */
+                buffer_append(retry, entry, len);
+                buffer_append(retry, "\n", 1);
             }
         }
         entry = strtok_r(NULL, "\n", &save_p);
     }
+}
+
+
+/*
+**  Count the lines of the data in a buffer.
+*/
+static size_t
+count_lines(const struct buffer *b)
+{
+    size_t i, n = 0;
+
+    for (i = 0; i < b->left; i++)
+        if (b->data[b->used + i] == '\n')
+            n++;
+    return n;
+}
+
+
+/*
+**  Replace the retry file with the entries of retry (or remove it when
+**  there are none).  Written to a temporary file renamed into place, so
+**  that a crash leaves either the previous or the new set.  Returns false
+**  if the entries could not be saved.
+*/
+static bool
+write_retry_file(const char *path, const struct buffer *retry)
+{
+    char *tmp;
+    int fd;
+    bool ok;
+
+    if (retry->left == 0) {
+        if (unlink(path) < 0 && errno != ENOENT) {
+            syswarn("can't unlink %s", path);
+            return false;
+        }
+        return true;
+    }
+    tmp = concat(path, ".tmp", (char *) 0);
+    fd = open(tmp, O_WRONLY | O_CREAT | O_TRUNC, 0664);
+    if (fd < 0) {
+        syswarn("can't create %s", tmp);
+        free(tmp);
+        return false;
+    }
+    ok = xwrite(fd, TOMBSTONE_HEADER, strlen(TOMBSTONE_HEADER)) >= 0
+         && xwrite(fd, retry->data + retry->used, retry->left) >= 0;
+    if (!ok)
+        syswarn("can't write %s", tmp);
+    if (close(fd) < 0) {
+        syswarn("can't close %s", tmp);
+        ok = false;
+    }
+    if (ok && rename(tmp, path) < 0) {
+        syswarn("can't rename %s to %s", tmp, path);
+        ok = false;
+    }
+    if (!ok && unlink(tmp) < 0 && errno != ENOENT)
+        syswarn("can't unlink %s", tmp);
+    free(tmp);
+    return ok;
 }
 
 
@@ -171,6 +235,7 @@ main(int argc, char *argv[])
     char *path;
     char *tombstone_path = NULL;
     char *tombstone_path_new = NULL;
+    char *tombstone_path_retry = NULL;
     FILE *lowmark = NULL;
     bool purge_deleted = false;
     bool always_stat = false;
@@ -338,15 +403,19 @@ main(int argc, char *argv[])
        happened, while preserving them blindly would risk dropping
        history for articles still on disk (fastrm failures).  Per-
        token verification keeps confirmed-gone entries (SMERR_NOENT)
-       and entries with transient errors (SMERR_UNINIT, EIO, ...) so
-       the next run can re-evaluate them without silent loss; live
-       articles are dropped.  Cost is one stat per leftover token,
-       only on the rare crash-recovery path. */
+       and drops live articles.  Entries with transient errors (EIO,
+       EACCES, ...) go to expireover.tombstone.retry, which expire
+       never reads, so that the next run can re-evaluate them without
+       silent loss and without expire dropping the history entry of an
+       article still on disk; that file is a third recovery source.
+       Cost is one stat per leftover token, only on the rare
+       crash-recovery path. */
     if (innconf->expiretombstone && innconf->groupbaseexpiry) {
         int fd;
 
         tombstone_path = concatpath(innconf->pathdb, "expireover.tombstone");
         tombstone_path_new = concat(tombstone_path, ".NEW", (char *) 0);
+        tombstone_path_retry = concat(tombstone_path, ".retry", (char *) 0);
         fd = open(tombstone_path_new, O_RDWR | O_CREAT, 0664);
         if (fd < 0) {
             syswarn("can't open tombstone log %s", tombstone_path_new);
@@ -385,18 +454,28 @@ main(int argc, char *argv[])
                Both use verify_tombstone_lines, which preserves
                entries on transient SMretrieve errors so a momentary
                storage outage doesn't silently lose cancel records. */
-            struct buffer kept;
+            struct buffer kept, retry;
             struct stat sb;
             char *raw;
             ssize_t got = 0;
 
             kept.data = NULL;
             kept.size = kept.used = kept.left = 0;
+            retry.data = NULL;
+            retry.size = retry.used = retry.left = 0;
+
+            /* Re-evaluate the entries that could not be verified by a
+               previous run. */
+            raw = slurp_tombstone(tombstone_path_retry, &got);
+            if (raw != NULL) {
+                verify_tombstone_lines(raw, got, &kept, &retry);
+                free(raw);
+            }
 
             /* Recover unconsumed final tombstone first. */
             raw = slurp_tombstone(tombstone_path, &got);
             if (raw != NULL) {
-                verify_tombstone_lines(raw, got, &kept);
+                verify_tombstone_lines(raw, got, &kept, &retry);
                 free(raw);
                 /* Unlink whether or not we extracted entries: the
                    active .NEW (after this run's rename) becomes the
@@ -417,9 +496,25 @@ main(int argc, char *argv[])
                         break;
                     got += n;
                 }
-                verify_tombstone_lines(raw, got, &kept);
+                verify_tombstone_lines(raw, got, &kept, &retry);
                 free(raw);
             }
+
+            /* Save the unverifiable entries before the truncation below
+               discards the .NEW copy of them.  If they cannot be saved,
+               they are dropped: expire then keeps their history entries,
+               which is safe, rather than dropping them for articles that
+               may still be on disk. */
+            if (!write_retry_file(tombstone_path_retry, &retry)) {
+                if (retry.left > 0)
+                    warn("dropping %lu unverifiable tombstone entries",
+                         (unsigned long) count_lines(&retry));
+            } else if (retry.left > 0)
+                warn("%lu tombstone entries could not be verified; kept in"
+                     " %s for the next run",
+                     (unsigned long) count_lines(&retry),
+                     tombstone_path_retry);
+            free(retry.data);
             if (ftruncate(fd, 0) < 0) {
                 syswarn("can't truncate %s", tombstone_path_new);
                 close(fd);
@@ -461,6 +556,8 @@ main(int argc, char *argv[])
             }
             free(kept.data);
         }
+        free(tombstone_path_retry);
+        tombstone_path_retry = NULL;
         if (OVtombstonefile == NULL) {
             free(tombstone_path);
             free(tombstone_path_new);

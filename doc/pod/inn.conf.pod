@@ -618,6 +618,14 @@ the on-disk presence of F<cancels.tombstone>; the next
 B<expireover> run overwrites the seeded file with its full
 content.
 
+When B<expireover> finds entries of a previous run that were never
+consumed (for instance because B<fastrm> failed), it checks each article
+again: entries of articles still on disk are dropped, and entries whose
+check fails for another reason than the article being absent (a
+permission problem or an I/O error) are kept in
+F<expireover.tombstone.retry>, which B<expire> does not read, and checked
+again by the next B<expireover> run.
+
 =item F<cancels.tombstone>
 
 Appended continuously by B<innd> when it processes cancel control
