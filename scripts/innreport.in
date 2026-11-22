@@ -820,10 +820,9 @@ sub Rotate {
 #
 # Time::Local::timelocal() converts the date as local time with the local
 # daylight-saving rules.  A wall-clock time in the repeated hour when daylight
-# saving ends is ambiguous, and the time of a +0000 log line has already been
-# adjusted with the offset in effect at startup (see $local_timezone).
-# The year is the current one, so February 29 is invalid in a non-leap year
-# and the date is then undefined.
+# saving ends is ambiguous.  A +0000 log line was parsed as if it had the
+# startup offset (see $local_timezone).  A February 29 outside a leap year
+# is invalid and leaves the date undefined.
 # Usage: $num = &ConvDate ($date, $wrap_around);
 # Date format is "2012 Aug 22 01:49:40".
 # The second argument is whether wrapping should be taken into account
