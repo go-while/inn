@@ -17,9 +17,10 @@ network_innbind_ipv4, network_innbind_ipv6, network_innbind_all - bind INN socke
 
 These routines bind sockets of I<type> to I<port>, given in host byte
 order.  Load the INN configuration with B<innconf_read> before calling
-them.  With root privileges or a configured I<port> of 1024 or higher,
-they use the regular network binding functions.  Otherwise, they ask
-B<innbind> from I<pathbin> to bind the socket.
+them.  The functions use regular network binding with root privileges
+or when the I<port> setting in F<inn.conf> (C<innconf-E<gt>port>) is 1024
+or higher.  Otherwise, they ask B<innbind> from I<pathbin> to bind the
+socket.  The I<port> argument controls the port requested for the socket.
 
 B<network_innbind_ipv4> and B<network_innbind_ipv6> bind the appropriate
 address family to the numeric I<address>.  Use C<any> or C<all> for

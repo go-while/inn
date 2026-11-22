@@ -14,13 +14,15 @@ MAN1	= ../man/convdate.1 ../man/fastrm.1 ../man/gencancel.1 \
 	../man/innmail.1 ../man/nntpget.1 ../man/pullnews.1 ../man/rnews.1 \
 	../man/shrinkfile.1 ../man/simpleftp.1
 
-MAN3	= ../man/libinn.3 ../man/libinn_clientlib.3 \
-	../man/libinn_confparse.3 ../man/libinn_dbz.3 \
-	../man/libinn_innconf.3 ../man/libinn_inndcomm.3 \
+MAN3	= ../man/libinn.3 ../man/libinn_clientlib.3 ../man/libinn_dbz.3 \
+	../man/libinn_inndcomm.3 \
 	../man/libinnauth.3 ../man/libinnhist.3 ../man/libinnstorage.3 \
-	../man/libinn_list.3 \
-	../man/libinn_network_innbind.3 ../man/libinn_qio.3 \
-	../man/libinn_secrets.3 ../man/libinn_tst.3 ../man/libinn_uwildmat.3
+	../man/libinn_list.3 ../man/libinn_qio.3 \
+	../man/libinn_confparse.3 \
+	../man/libinn_innconf.3 \
+	../man/libinn_network_innbind.3 \
+	../man/libinn_secrets.3 \
+	../man/libinn_tst.3 ../man/libinn_uwildmat.3
 
 MAN5	= ../man/active.5 ../man/active.times.5 ../man/buffindexed.conf.5 \
 	../man/control.ctl.5 ../man/cycbuff.conf.5 ../man/distrib.pats.5 \

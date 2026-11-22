@@ -39,8 +39,10 @@ It reports differences as warnings and returns true when all settings
 match.
 
 B<innconf_check> loads and validates I<path> and reports unknown
-parameters.  Path selection is the same as for B<innconf_read>.  The
-function returns true when the validation succeeds.
+parameters.  Path selection is the same as for B<innconf_read>.  It
+replaces the global C<innconf> with the parsed configuration but skips
+the derived defaults and C<TMPDIR> setup performed by B<innconf_read>.
+It returns true when the checks succeed.
 
 =head1 HISTORY
 

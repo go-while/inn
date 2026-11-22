@@ -52,8 +52,9 @@ Include C<< <stdio.h> >> before C<< <inn/confparse.h> >> for C<FILE>.
 
 B<config_parse_file> parses I<filename> and its included files into a
 tree of opaque C<config_group> objects.  It returns the root of the
-tree, or NULL after reporting a read or syntax error.  Call it with
-I<filename> alone.  The current parser ignores extra arguments.
+tree, or NULL after reporting a read or syntax error.  It accepts an
+optional NULL-terminated list of group type names after I<filename>.
+The current parser ignores that list.
 Interpretation and validation of parameters are deferred to the caller.
 
 B<config_find_group> returns the first group of I<type> after I<group>
