@@ -534,7 +534,8 @@ CCcheckfile(char *av[] UNUSED)
     needpath = NeedPath;
     needstoredgroup = NeedStoredGroup;
     needreplicdata = NeedReplicdata;
-    for (errors = 0, i = 0; (p = strings[i]) != NULL; i++) {
+    errors = SITEreaderrors;
+    for (i = 0; (p = strings[i]) != NULL; i++) {
         if ((error = SITEparseone(p, &fake, (char *) NULL, (char *) NULL))
             != NULL) {
             syslog(L_ERROR, "%s bad_newsfeeds %s", MaxLength(p, p), error);

@@ -738,6 +738,42 @@ sub newsfeeds {
     my %variables;
     my $defsub = '';
 
+    ##  innd refuses a variable value or an entry longer than this once the
+    ##  variables are expanded (SITE_MAXEXPAND in innd/newsfeeds.c).
+    my $max_expand = 1024 * 1024;
+
+    ##  Expand the variables in a string like innd does: a known variable is
+    ##  replaced by its value, with a modifier (! or @) just before it added
+    ##  before each of the elements of the value; an unknown one is left as is.
+    ##  Return undef if the result is longer than $max_expand, as soon as the
+    ##  bytes emitted so far exceed it, without building more.
+    my $expand = sub {
+        my ($str) = @_;
+        my ($out, $total, $pos) = ('', 0, 0);
+
+        while ($str =~ /([!\@]?)\$([A-Za-z0-9]+)/g) {
+            my ($start, $end) = ($-[0], $+[0]);
+            my ($mod, $name) = ($1, $2);
+
+            my $literal = substr($str, $pos, $start - $pos);
+            my $new = "$mod\$$name";
+            if (exists($variables{$name})) {
+                $new = $variables{$name};
+                $new =~ s/,/,$mod/g if $mod ne '';
+                $new = $mod . $new;
+            }
+            $total += length($literal) + length($new);
+            return undef if $total > $max_expand;
+            $out .= $literal . $new;
+            $pos = $end;
+        }
+
+        my $tail = substr($str, $pos);
+        $total += length($tail);
+        return undef if $total > $max_expand;
+        return $out . $tail;
+    };
+
   INPUTNEWSFEEDS:
     while (<$IN>) {
         $line++;
@@ -759,18 +795,36 @@ sub newsfeeds {
         eprint "$file:$line: ends with whitespace\n"
           if /\s+$/;
 
-        ##  Substitute variables.
-        for my $key (keys %variables) {
-            s/\$$key\b/$variables{$key}/;
+        ##  Catch a variable setting, like innd does before any substitution
+        ##  (a setting with an empty value is not one): spaces and tabs are
+        ##  removed from its value, and the variables used in it are replaced
+        ##  by their previous values, which makes $VAR=$VAR,other.* extend the
+        ##  variable.
+        if (/^\$([A-Za-z0-9]+)=(.*)$/) {
+            my ($name, $value) = ($1, $2);
+            $value =~ tr/ \t//d;
+            if ($value ne '') {
+                eprint "$file:$line: variable name too long\n"
+                  if length($name) > 31;
+                $value = $expand->($value);
+                if (!defined($value)) {
+                    eprint "$file:$line: value of variable `$name' longer "
+                      . "than $max_expand bytes once expanded\n";
+                    next INPUTNEWSFEEDS;
+                }
+                $variables{$name} = $value;
+                next INPUTNEWSFEEDS;
+            }
         }
 
-        ##  Catch a variable setting.
-        if (/^\$([A-Za-z0-9]+)=(.*)$/) {
-            eprint "$file:$line: variable name too long\n"
-              if length($1) > 31;
-            $variables{$1} = $2;
+        ##  Substitute variables.
+        my $expanded = $expand->($_);
+        if (!defined($expanded)) {
+            eprint "$file:$line: entry longer than $max_expand bytes "
+              . "once variables are expanded\n";
             next INPUTNEWSFEEDS;
         }
+        $_ = $expanded;
 
         unless (($site, $pats, $flags, $param)
             = /^([^:]+):([^:]*):([^:]*):(.*)$/)
