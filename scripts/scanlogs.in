@@ -124,14 +124,24 @@ if ${ROTATE}; then
         echo "$0: Locked by $(cat ${LOCK})"
         exit 1
     }
-    trap "rm -f ${LOCK}; exit 0" 1 2 3 15
+
+    ##  Resume the server if this run paused it.  It is called when the
+    ##  rotation is done, and also on errors and when a signal is received,
+    ##  so that the server is never left paused by scanlogs.
+    PAUSED=false
+    resumeserver() {
+        if ${PAUSED}; then
+            PAUSED=false
+            ctlinnd -s go "Flushing log and syslog files" 2>&1
+        fi
+    }
+    trap "resumeserver; rm -f ${LOCK}; exit 0" 1 2 3 15
 
     HERE=$(pwd)
     cd ${MOST_LOGS}
     test ! -d ${OLD} && mkdir ${OLD}
 
     ctlinnd -s logmode
-    PAUSED=false
     ctlinnd -s pause "Flushing log and syslog files" 2>&1 && PAUSED=true
 
     ##  First, flush log files to be sure everything has been recorded
@@ -140,6 +150,7 @@ if ${ROTATE}; then
     if [ "$OUTPUT" != "Ok" -a "$OUTPUT" != "In debug mode" ]; then
         echo "$OUTPUT"
         echo 'Cannot flush logs.'
+        resumeserver
         rm -f ${LOCK}
         exit 1
     fi
@@ -193,7 +204,7 @@ if ${ROTATE}; then
         fi
     done
 
-    ${PAUSED} && ctlinnd -s go "Flushing log and syslog files" 2>&1
+    resumeserver
 
     cd ${OLD}
     for F in ${LOGS}; do
