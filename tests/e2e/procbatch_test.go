@@ -3,10 +3,16 @@ package e2e
 // procbatch, which splits a funnel or innfeed-dropped file into backlog files by peer.
 
 import (
+	"bytes"
+	"context"
+	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	testkit "github.com/go-while/nntp-testkit"
 )
 
 // TestProcbatchCheck runs "procbatch -c" on an innfeed-dropped file with the storage tokens
@@ -76,6 +82,111 @@ func TestProcbatchCheck(t *testing.T) {
 				if !strings.Contains(out, w) {
 					t.Errorf("procbatch output lacks %q", w)
 				}
+			}
+		})
+	}
+}
+
+// runUnderSizeLimit runs the INN program name with args like Site.runInput, but through
+// /bin/sh with a file size limit of blocks 512-byte blocks (ulimit -f) and SIGXFSZ ignored,
+// so that a write beyond the limit fails with EFBIG, as it would on a full file system.
+func runUnderSizeLimit(s *Site, blocks int, name string, args ...string) (string, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), testkit.Deadline())
+	defer cancel()
+	script := fmt.Sprintf(`trap '' XFSZ; ulimit -f %d || exit 99; exec "$0" "$@"`, blocks)
+	cmd := exec.CommandContext(ctx, "/bin/sh",
+		append([]string{"-c", script, filepath.Join(s.Prefix, "bin", name)}, args...)...)
+	cmd.Dir = s.Dir
+	cmd.Env = append(os.Environ(), s.Env...)
+	var out bytes.Buffer
+	cmd.Stdout, cmd.Stderr = &out, &out
+	err := cmd.Run()
+	return out.String(), err
+}
+
+// TestProcbatchWriteError: when procbatch cannot write all the entries of a peer to its
+// output file (here because of a file size limit of 4096 bytes, as with a full file system),
+// it fails and keeps its input file, with -u alone and with -m -u as news.daily runs it, and
+// nothing is appended to the backlog file. procbatch used to ignore the write error, append
+// the truncated file to the backlog with -m, remove the input with -u and exit 0, losing the
+// other entries. Without the limit, all the entries reach the backlog file.
+func TestProcbatchWriteError(t *testing.T) {
+	s := NewSite(t, SiteOptions{})
+
+	// 200 entries for peer1, each 64 bytes long in the output file, so that the limit
+	// cuts the file at the end of a line and the truncated file looks complete.
+	var input, output strings.Builder
+	const entries = 200
+	for i := range entries {
+		line := fmt.Sprintf("e2e/test/%05d <procbatch-%024d@e2e.invalid>", i+1, i+1)
+		if len(line)+1 != 64 {
+			t.Fatalf("entry of %d bytes, want 64", len(line)+1)
+		}
+		input.WriteString(line + " peer1\n")
+		output.WriteString(line + "\n")
+	}
+
+	for _, tc := range []struct {
+		name   string
+		limit  bool
+		tape   bool // -m, with -t
+		failed bool // procbatch must fail and keep its input
+	}{
+		{"-u", true, false, true},
+		{"-m -u", true, true, true},
+		{"-m -u without limit", false, true, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			work := t.TempDir()
+			outDir := filepath.Join(work, "out")
+			tapeDir := filepath.Join(work, "tape")
+			for _, d := range []string{outDir, tapeDir} {
+				if err := os.Mkdir(d, 0o755); err != nil {
+					t.Fatal(err)
+				}
+			}
+			in := filepath.Join(work, "innfeed-dropped.A000001")
+			if err := os.WriteFile(in, []byte(input.String()), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			args := []string{"-u", "-d", outDir}
+			if tc.tape {
+				args = append(args, "-m", "-t", tapeDir)
+			}
+			args = append(args, in)
+			var out string
+			var err error
+			if tc.limit {
+				out, err = runUnderSizeLimit(s, 8, "procbatch", args...)
+			} else {
+				out, err = s.run("procbatch", args...)
+			}
+			t.Logf("procbatch %s: %v\n%s", strings.Join(args, " "), err, out)
+
+			_, statErr := os.Stat(in)
+			kept := statErr == nil
+			tape, _ := os.ReadFile(filepath.Join(tapeDir, "peer1"))
+			tmp, _ := os.ReadFile(filepath.Join(outDir, "peer1.tmp"))
+			t.Logf("input kept: %v; peer1.tmp: %d bytes; backlog peer1: %d bytes",
+				kept, len(tmp), len(tape))
+			if tc.failed {
+				if err == nil {
+					t.Errorf("procbatch exited 0 although it could not write all the entries")
+				}
+				if !kept {
+					t.Errorf("procbatch removed its input file although it could not write all the entries")
+				}
+				if len(tape) != 0 {
+					t.Errorf("procbatch appended %d bytes of a truncated file to the backlog", len(tape))
+				}
+				return
+			}
+			if err != nil || kept {
+				t.Errorf("procbatch failed (%v) or kept its input (%v)", err, kept)
+			}
+			if string(tape) != output.String() {
+				t.Errorf("backlog peer1 has %d bytes, want all %d entries (%d bytes)",
+					len(tape), entries, output.Len())
 			}
 		})
 	}
