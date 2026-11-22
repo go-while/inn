@@ -73,6 +73,16 @@ This option is like B<-f> except that if the transfer succeeds, the file
 will be updated with a statistics line, modifying its timestamp so that it
 can be used in later invocations.
 
+The timestamp is not the time at which the transfer ends: it is the time at
+which the list of new articles was requested, as given by the C<DATE> command
+of the remote server (or the local time when the remote server does not know
+that command).  The articles that arrive on the remote server while the
+transfer is running are not in the list, and are therefore fetched by the next
+invocation.  Articles listed in two invocations are fetched twice, unless
+B<-o> is used.  The file is not updated when the transfer fails; the
+Message-IDs of the articles which have not been fetched are then written to
+standard output as usual.
+
 =item B<-v>
 
 If this option is used with B<-o>, then the Message-ID of each article will

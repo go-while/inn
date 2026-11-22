@@ -101,6 +101,15 @@ The newsmaster's e-mail address mentioned in the help message returned
 by B<nnrpd> now uses I<fromhost> (set in F<inn.conf> or overridden in
 F<readers.conf>) as the default domain name instead of I<domain>.
 
+=item *
+
+Fixed B<nntpget -u>, which set the time of its timestamp file to the end of
+the transfer.  The articles arriving on the remote server after the list of
+new articles was built, and before the end of the transfer, were never
+fetched.  The file now gets the time at which the list was requested, taken
+from the C<DATE> command of the remote server, and it is no longer updated
+when the transfer fails.
+
 =back
 
 =item *
