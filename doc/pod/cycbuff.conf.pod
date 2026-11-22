@@ -88,17 +88,26 @@ longer than eight characters, the same limit as a cycbuff name.
 <buffer> is the name of a cycbuff (the <name> part of a cycbuff line),
 and any number of cycbuffs may be specified, separated by commas.
 
-If there is more than one cycbuff in a metacycbuff, there are two ways
+If there is more than one cycbuff in a metacycbuff, there are three ways
 that INN can distribute articles between the cycbuffs.  The default mode,
 C<INTERLEAVE>, stores the articles in each cycbuff in a round-robin fashion,
 one article per cycbuff in the order listed.  If the cycbuffs are of
 wildly different sizes, this can cause some of them to roll over much
 faster than others, and it may not give the best performance depending on
-your disk layout.  The other storage mode, C<SEQUENTIAL>, instead writes to
+your disk layout.
+
+C<WEIGHTED> interleaves writes in proportion to usable space.  For example,
+if one buffer has twice as much usable space as another, it takes roughly
+twice as many bytes.  Article headers, block padding and discarded space at
+the end of a buffer count toward its share.  An article that only fits in
+one member goes to that member.  This mode is intended for pools with
+unequal disk sizes where similar retention times are desirable.
+
+C<SEQUENTIAL> writes to
 each cycbuff in turn until that cycbuff is full and then moves on to the
 next one, returning to the first and starting a new cycle when the last
 one is full.  To specify a mode rather than leaving it at the default, add
-a colon and the mode (C<INTERLEAVE> or C<SEQUENTIAL>) at the end of the
+a colon and the mode (C<INTERLEAVE>, C<WEIGHTED> or C<SEQUENTIAL>) at the end of the
 metacycbuff line.
 
 =back

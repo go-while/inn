@@ -349,6 +349,7 @@ CNFScleanmetacycbuff(void)
 
     for (metacycbuff = metacycbufftab; metacycbuff != (METACYCBUFF *) NULL;) {
         nextmetacycbuff = metacycbuff->next;
+        free(metacycbuff->progress);
         free(metacycbuff->members);
         free(metacycbuff->name);
         free(metacycbuff);
@@ -537,6 +538,7 @@ CNFSparse_metapart_line(char *l)
     metacycbuff = xmalloc(sizeof(METACYCBUFF));
     metacycbuff->members = (CYCBUFF **) NULL;
     metacycbuff->count = 0;
+    metacycbuff->progress = NULL;
     metacycbuff->name = xstrdup(l);
     metacycbuff->next = (METACYCBUFF *) NULL;
     metacycbuff->metamode = INTERLEAVE;
@@ -549,6 +551,8 @@ CNFSparse_metapart_line(char *l)
         }
         if (strcmp(++p, "INTERLEAVE") == 0)
             metacycbuff->metamode = INTERLEAVE;
+        else if (strcmp(p, "WEIGHTED") == 0)
+            metacycbuff->metamode = WEIGHTED;
         else if (strcmp(p, "SEQUENTIAL") == 0)
             metacycbuff->metamode = SEQUENTIAL;
         else {
@@ -1233,6 +1237,41 @@ cnfs_init(SMATTRIBUTE *attr)
          metacycbuff = metacycbuff->next) {
         metacycbuff->memb_next = 0;
         metacycbuff->write_count = 0; /* Let's not forget this */
+        if (metacycbuff->metamode == WEIGHTED) {
+            /* Resume relative to the first member's position within a turn.
+               A member just over the wrap is ahead of one just before it.
+               Absolute cycle numbers can be unrelated on repurposed disks. */
+            double reference = 0;
+            int i;
+
+            metacycbuff->progress =
+                xcalloc(metacycbuff->count, sizeof(*metacycbuff->progress));
+            for (i = 0; i < metacycbuff->count; i++) {
+                CYCBUFF *member = metacycbuff->members[i];
+                off_t capacity = member->len - member->minartoffset;
+                double position;
+
+                if (capacity <= member->blksz) {
+                    warn("CNFS: no article space in weighted member %s",
+                         member->name);
+                    CNFScleancycbuff();
+                    CNFScleanmetacycbuff();
+                    CNFScleanexpirerule();
+                    SMseterror(SMERR_CONFIG, "weighted member too small");
+                    return false;
+                }
+                position = (double) (member->free - member->minartoffset)
+                           / capacity;
+                if (i == 0)
+                    reference = position;
+                position -= reference;
+                if (position > 0.5)
+                    position -= 1;
+                else if (position < -0.5)
+                    position += 1;
+                metacycbuff->progress[i] = position;
+            }
+        }
         if (metacycbuff->metamode == SEQUENTIAL)
             /* mark current cycbuff */
             if (CNFS_setcurrent(metacycbuff) == false) {
@@ -1269,7 +1308,7 @@ cnfs_store(const ARTHANDLE article, const STORAGECLASS class)
     static int iovcnt;
     int tonextblock;
     CNFSEXPIRERULES *metaexprule;
-    off_t left;
+    off_t left, unused = 0;
     size_t totlen;
 
     for (metaexprule = metaexprulestab;
@@ -1287,6 +1326,26 @@ cnfs_store(const ARTHANDLE article, const STORAGECLASS class)
     }
     metacycbuff = metaexprule->dest;
 
+    if (metacycbuff->metamode == WEIGHTED) {
+        int best = -1;
+        for (i = 0; i < metacycbuff->count; i++) {
+            CYCBUFF *member = metacycbuff->members[i];
+            off_t capacity = member->len - member->minartoffset;
+            if (article.len > (uintmax_t) (capacity - member->blksz - 1))
+                continue;
+            if (best < 0
+                || metacycbuff->progress[i] < metacycbuff->progress[best])
+                best = i;
+        }
+        if (best < 0) {
+            SMseterror(SMERR_NOMATCH,
+                       "article too large for weighted metacycbuff");
+            memset(&token, 0, sizeof(token));
+            token.type = TOKEN_EMPTY;
+            return token;
+        }
+        metacycbuff->memb_next = best;
+    }
     cycbuff = metacycbuff->members[metacycbuff->memb_next];
     if (cycbuff == NULL) {
         SMseterror(SMERR_INTERNAL, "no cycbuff found");
@@ -1312,6 +1371,7 @@ cnfs_store(const ARTHANDLE article, const STORAGECLASS class)
     else
         left = cycbuff->len - cycbuff->free - cycbuff->blksz - 1;
     if ((off_t) article.len > left) {
+        unused = cycbuff->len - cycbuff->free;
         for (middle = cycbuff->free;
              middle < cycbuff->len - cycbuff->blksz - 1;
              middle += cycbuff->blksz) {
@@ -1330,7 +1390,7 @@ cnfs_store(const ARTHANDLE article, const STORAGECLASS class)
                 cycbuff->cyclenum = 2; /* cnfs_next() needs this */
         }
         cycbuff->needflush = true;
-        if (metacycbuff->metamode == INTERLEAVE) {
+        if (metacycbuff->metamode != SEQUENTIAL) {
             CNFSflushhead(cycbuff); /* Flush, just for giggles */
             notice("CNFS: cycbuff %s rollover to cycle 0x%x... remain calm",
                    cycbuff->name, cycbuff->cyclenum);
@@ -1414,6 +1474,12 @@ cnfs_store(const ARTHANDLE article, const STORAGECLASS class)
 
     /* Now that the article is written, advance the free pointer & flush */
     cycbuff->free += totlen;
+    if (metacycbuff->metamode == WEIGHTED) {
+        /* Charge the actual disk space consumed, including padding and any
+           unused tail discarded when this article caused a rollover. */
+        metacycbuff->progress[metacycbuff->memb_next] +=
+            ((double) totlen + unused) / (cycbuff->len - cycbuff->minartoffset);
+    }
 
     /*
     ** If cycbuff->free > cycbuff->len, don't worry.  The next cnfs_store()

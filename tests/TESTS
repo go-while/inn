@@ -71,6 +71,7 @@ overview/xref
 perl/minimum-version
 storage/archive
 storage/caf
+storage/cnfs-weighted
 storage/cancel-tombstone
 storage/makehistory
 storage/sm
