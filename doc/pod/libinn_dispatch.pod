@@ -1,0 +1,47 @@
+=head1 NAME
+
+dispatch - dispatch a command vector to its handler
+
+=head1 SYNOPSIS
+
+    #include <inn/dispatch.h>
+
+    typedef void (*dispatch_func)(struct cvector *, void *);
+
+    struct dispatch {
+        const char *command;
+        dispatch_func callback;
+        int min_args;
+        int max_args;
+        const char *description;
+    };
+
+    void dispatch(struct cvector *command, const struct dispatch *table,
+                  size_t count, dispatch_func unknown, dispatch_func syntax,
+                  void *cookie);
+
+=head1 DESCRIPTION
+
+B<dispatch> takes a command vector I<command> from <inn/vector.h>, a table
+I<table> of I<count> command definitions, two error callbacks I<unknown>
+and I<syntax>, and an opaque pointer I<cookie>.  The first string of the
+vector is the command name; the remaining strings are its arguments.  Sort
+the table by the command name in strcasecmp(3) order.  The command name is
+matched case-insensitively.  The I<description> field is available to the
+caller.
+
+B<dispatch> calls I<unknown> if the vector is empty or the command has no
+matching table entry.  It calls I<syntax> if the argument count falls
+outside the inclusive range I<min_args> to I<max_args>.  Otherwise it calls
+the matching entry's I<callback>.  Each callback receives the original
+vector and I<cookie>.
+
+=head1 HISTORY
+
+Written by Russ Allbery in 2003.
+
+=head1 SEE ALSO
+
+libinn(3), strcasecmp(3).
+
+=cut

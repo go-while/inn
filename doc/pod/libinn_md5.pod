@@ -1,0 +1,52 @@
+=head1 NAME
+
+md5_hash, md5_init, md5_update, md5_final - compute an MD5 digest
+
+=head1 SYNOPSIS
+
+    #include <inn/md5.h>
+
+    #define MD5_DIGESTSIZE  16
+
+    struct md5_context;
+
+    void md5_hash(const unsigned char *data, size_t length,
+                  unsigned char *digest);
+    void md5_init(struct md5_context *context);
+    void md5_update(struct md5_context *context, const unsigned char *data,
+                    size_t length);
+    void md5_final(struct md5_context *context);
+
+=head1 DESCRIPTION
+
+These functions implement the RSA Data Security, Inc. MD5 Message-Digest
+Algorithm.  The digest is B<MD5_DIGESTSIZE> bytes (16 bytes) of binary data.
+
+B<md5_hash> takes a pointer I<data> to the input bytes, their I<length> in
+bytes and a pointer I<digest> to a writable buffer of at least
+B<MD5_DIGESTSIZE> bytes for the result.
+
+To digest input in chunks, allocate a B<struct md5_context> and call
+B<md5_init> on I<context>.  Call B<md5_update> for each chunk in order,
+passing I<context>, a pointer I<data> to the bytes and their I<length> in
+bytes.  B<md5_update> buffers any partial block in the context.
+
+Call B<md5_final> after the last chunk.  It completes the computation and
+writes the result to the B<digest> member of I<context>, an array of
+B<unsigned char> with B<MD5_DIGESTSIZE> elements.  Call B<md5_init> again
+before using the same context for another digest.
+
+=head1 HISTORY
+
+Based on the MD5 Message-Digest Algorithm of RSA Data Security, Inc. by way
+of Landon Curt Noll.  Modified and integrated into INN by Clayton O'Neill,
+and then simplified somewhat, converted to INN coding style and commented
+by Russ Allbery.
+
+=head1 SEE ALSO
+
+libinn(3).
+
+RFC 1321.
+
+=cut
