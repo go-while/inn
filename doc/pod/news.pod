@@ -133,6 +133,13 @@ files behind after a failed creation, and the buffindexed overview method
 validates its F<group.index> file and no longer frees memory twice when
 mapping overview data fails.  Many thanks to Kevin Bowling for the patches.
 
+=item *
+
+B<actsyncd> accepts a debug level for FTP, HTTP and HTTPS sources.
+It retrieves the remote active file before running a trial comparison.
+In debug mode without I<debug_outfmt>, it now always uses S<B<-o c>>
+(before, the output format came from the C<flags=> line).
+
 =back
 
 =head1 Changes in 2.7.5 (not yet released)
