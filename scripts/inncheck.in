@@ -999,6 +999,7 @@ sub readers_conf {
                 'pythonfilter'    => 'boolean',
                 'virtualhost'     => 'boolean',
                 'addcanlockuser'  => 'string',
+                'addprocesstitleuser' => 'boolean',
                 # inn.conf parameters:
                 'addinjectiondate'           => 'boolean',
                 'addinjectionpostingaccount' => 'boolean',
