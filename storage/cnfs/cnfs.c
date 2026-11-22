@@ -1237,10 +1237,8 @@ cnfs_init(SMATTRIBUTE *attr)
          metacycbuff = metacycbuff->next) {
         metacycbuff->memb_next = 0;
         metacycbuff->write_count = 0; /* Let's not forget this */
-        if (metacycbuff->metamode == WEIGHTED) {
-            /* Resume relative to the first member's position within a turn.
-               A member just over the wrap is ahead of one just before it.
-               Absolute cycle numbers can be unrelated on repurposed disks. */
+        if (SMopenmode && metacycbuff->metamode == WEIGHTED) {
+            CYCBUFF *first = metacycbuff->members[0];
             double reference = 0;
             int i;
 
@@ -1265,10 +1263,23 @@ cnfs_init(SMATTRIBUTE *attr)
                 if (i == 0)
                     reference = position;
                 position -= reference;
-                if (position > 0.5)
-                    position -= 1;
-                else if (position < -0.5)
-                    position += 1;
+                /* Equal or neighboring cycles preserve the distance even
+                   when an article used more than half a member.  Widely
+                   separated cycles can belong to previously unrelated disks.
+                   For those, choose the nearest phase, including when the
+                   numeric cycle counter wraps. */
+                if (member->cyclenum != first->cyclenum) {
+                    if (member->cyclenum > first->cyclenum
+                        && member->cyclenum - first->cyclenum == 1)
+                        position += 1;
+                    else if (first->cyclenum > member->cyclenum
+                             && first->cyclenum - member->cyclenum == 1)
+                        position -= 1;
+                    else if (position > 0.5)
+                        position -= 1;
+                    else if (position < -0.5)
+                        position += 1;
+                }
                 metacycbuff->progress[i] = position;
             }
         }
