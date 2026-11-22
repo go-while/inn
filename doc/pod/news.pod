@@ -133,6 +133,12 @@ files behind after a failed creation, and the buffindexed overview method
 validates its F<group.index> file and no longer frees memory twice when
 mapping overview data fails.  Many thanks to Kevin Bowling for the patches.
 
+=item *
+
+Fixed NEWNEWS in B<nnrpd> when the server name in the Xref header field is
+only one character long.  Articles posted to a single newsgroup were left
+out of the reply.
+
 =back
 
 =head1 Changes in 2.7.5 (not yet released)
