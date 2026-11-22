@@ -501,6 +501,7 @@ innd/README                           Overview of the innd internals
 innd/art.c                            Process a received article
 innd/cc.c                             Control channel routines
 innd/chan.c                           I/O channel routines
+innd/globals.c                        Shared innd global variables
 innd/icd.c                            Read and write the active file
 innd/innd.c                           Main and utility routines
 innd/innd.h                           Header file for server

@@ -155,80 +155,70 @@ enum timer {
     TMR_MAX
 };
 
-/*
-**  Do not change "extern" to "EXTERN" below.  The ones marked with "extern"
-**  are initialized in nnrpd.c.  The ones marked with "EXTERN" are not
-**  explicitly initialized in nnrpd.c.
-*/
-#if defined(MAINLINE)
-#    define EXTERN /* NULL */
-#else
-#    define EXTERN extern
-#endif /* defined(MAINLINE) */
-
-EXTERN bool PERMauthorized;
-EXTERN bool PERMcanauthenticate;
+/* Global data. */
+extern bool PERMauthorized;
+extern bool PERMcanauthenticate;
 #if defined(HAVE_OPENSSL) || defined(HAVE_SASL)
-EXTERN bool PERMcanauthenticatewithoutSSL;
+extern bool PERMcanauthenticatewithoutSSL;
 #endif
-EXTERN bool PERMcanpost;
-EXTERN bool PERMcanpostgreeting;
-EXTERN bool PERMcanread;
-EXTERN bool PERMneedauth;
-EXTERN bool PERMspecified;
-EXTERN bool PERMgroupmadeinvalid;
-EXTERN ACCESSGROUP *PERMaccessconf;
-EXTERN bool Tracing;
-EXTERN bool Offlinepost;
-EXTERN bool initialSSL;
+extern bool PERMcanpost;
+extern bool PERMcanpostgreeting;
+extern bool PERMcanread;
+extern bool PERMneedauth;
+extern bool PERMspecified;
+extern bool PERMgroupmadeinvalid;
+extern ACCESSGROUP *PERMaccessconf;
+extern bool Tracing;
+extern bool Offlinepost;
+extern bool initialSSL;
 #if defined(HAVE_BLACKLIST) || defined(HAVE_BLOCKLIST)
-EXTERN bool BlocklistEnabled;
+extern bool BlocklistEnabled;
 #endif
-EXTERN bool hasSentCapabilities;
-EXTERN char **PERMreadlist;
-EXTERN char **PERMpostlist;
-EXTERN struct client Client;
-EXTERN char Username[SMBUF];
+extern bool hasSentCapabilities;
+extern char **PERMreadlist;
+extern char **PERMpostlist;
+extern struct client Client;
+extern char Username[SMBUF];
 extern char *ACTIVETIMES;
 extern char *HISTORY;
 extern char *ACTIVE;
 extern char *NEWSGROUPS;
 extern char *NNRPACCESS;
-EXTERN char PERMuser[SMBUF];
-EXTERN FILE *locallog;
-EXTERN ARTNUM ARTnumber;       /* Current article number. */
-EXTERN ARTNUM ARThigh;         /* Current high number for group. */
-EXTERN ARTNUM ARTlow;          /* Current low number for group. */
-EXTERN unsigned long ARTcount; /* Number of articles in group. */
-EXTERN long MaxBytesPerSecond; /* Maximum bytes per sec a client can use,
+extern char PERMuser[SMBUF];
+extern FILE *locallog;
+extern ARTNUM ARTnumber;       /* Current article number. */
+extern ARTNUM ARThigh;         /* Current high number for group. */
+extern ARTNUM ARTlow;          /* Current low number for group. */
+extern unsigned long ARTcount; /* Number of articles in group. */
+extern long MaxBytesPerSecond; /* Maximum bytes per sec a client can use,
                                   defaults to 0. */
-EXTERN long ARTget;
-EXTERN long ARTgettime;
-EXTERN long ARTgetsize;
-EXTERN long OVERcount;    /* Number of (X)OVER commands. */
-EXTERN long OVERhit;      /* Number of (X)OVER records found in overview. */
-EXTERN long OVERmiss;     /* Number of (X)OVER records found in articles. */
-EXTERN long OVERtime;     /* Number of ms spent sending (X)OVER data. */
-EXTERN long OVERsize;     /* Number of bytes of (X)OVER data sent. */
-EXTERN long OVERdbz;      /* Number of ms spent reading dbz data. */
-EXTERN long OVERseek;     /* Number of ms spent seeking history. */
-EXTERN long OVERget;      /* Number of ms spent reading history. */
-EXTERN long OVERartcheck; /* Number of ms spent article check. */
-EXTERN double IDLEtime;
-EXTERN unsigned long GRParticles;
-EXTERN long GRPcount;
-EXTERN char *GRPcur;
-EXTERN long POSTreceived;
-EXTERN long POSTrejected;
+extern long ARTget;
+extern long ARTgettime;
+extern long ARTgetsize;
+extern long OVERcount;    /* Number of (X)OVER commands. */
+extern long OVERhit;      /* Number of (X)OVER records found in overview. */
+extern long OVERmiss;     /* Number of (X)OVER records found in articles. */
+extern long OVERtime;     /* Number of ms spent sending (X)OVER data. */
+extern long OVERsize;     /* Number of bytes of (X)OVER data sent. */
+extern long OVERdbz;      /* Number of ms spent reading dbz data. */
+extern long OVERseek;     /* Number of ms spent seeking history. */
+extern long OVERget;      /* Number of ms spent reading history. */
+extern long OVERartcheck; /* Number of ms spent article check. */
+extern double IDLEtime;
+extern unsigned long GRParticles;
+extern long GRPcount;
+extern char *GRPcur;
+extern long POSTreceived;
+extern long POSTrejected;
 
-EXTERN bool BACKOFFenabled;
-EXTERN char *VirtualPath;
-EXTERN int VirtualPathlen;
-EXTERN struct history *History;
-EXTERN struct line NNTPline;
-EXTERN struct vector *OVextra;
-EXTERN int overhdr_xref;
-EXTERN bool LLOGenable;
+extern bool BACKOFFenabled;
+extern char *VirtualPath;
+extern int VirtualPathlen;
+extern struct history *History;
+extern struct line NNTPline;
+extern struct vector *OVextra;
+extern int overhdr_xref;
+extern bool LLOGenable;
 
 extern const char *NNRPinstance;
 extern bool laxmid;
