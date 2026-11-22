@@ -1008,8 +1008,11 @@ hisv6_traverse(struct hisv6 *h, struct hisv6_walkstate *cookie,
                                 time_t, time_t, time_t, const TOKEN *))
 {
     /* An empty history is a valid one:  the traversal only fails when a
-       line cannot be read or processed. */
+       line cannot be read or processed, or when no line at all is valid. */
     bool r = true;
+    bool valid = false;
+    unsigned long skipped = 0;
+    size_t lastskipped = 0;
     QIOSTATE *qp;
     void *p;
     size_t line;
@@ -1036,6 +1039,7 @@ again:
         status = hisv6_splitline(p, &error, &hash, &arrived, &posted, &expires,
                                  &token);
         if (status > 0) {
+            valid = true;
             r = (*callback)(h, cookie, &hash, arrived, posted, expires,
                             (status & HISV6_HAVE_TOKEN) ? &token : NULL);
             if (r == false)
@@ -1047,6 +1051,10 @@ again:
             /* if we're not ignoring errors set the status */
             if (!cookie->ignore)
                 r = false;
+            else {
+                skipped++;
+                lastskipped = line;
+            }
         }
         if (r == false)
             goto fail;
@@ -1070,6 +1078,8 @@ again:
                        the following line, so this is not the end of the
                        file:  stopping here would silently leave out the
                        rest of the history. */
+                    skipped++;
+                    lastskipped = line;
                     ++line;
                     goto again;
                 }
@@ -1094,6 +1104,23 @@ again:
             }
             cookie->paused = true;
             goto again;
+        }
+
+        /* A non-empty file in which no line could be used is not a history,
+           or a badly damaged one:  do not take it for an empty history,
+           which expire would install in its place. */
+        if (!valid && qp->_count > 0) {
+            hisv6_seterror(h, concat("no valid line in history file ",
+                                     h->histpath, NULL));
+            r = false;
+        } else if (skipped > 0) {
+            char buf[32];
+
+            snprintf(buf, sizeof(buf), "%lu", skipped);
+            hisv6_errloc(location, lastskipped, (off_t) -1);
+            hisv6_seterror(h, concat(buf, " malformed lines skipped, the",
+                                     " last one: ", h->histpath, location,
+                                     NULL));
         }
     }
 fail:
