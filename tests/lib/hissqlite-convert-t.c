@@ -6,8 +6,10 @@
 **  resulting hissqlite database through the public HIS API: the faithful
 **  migration must preserve tokens, timestamps and -- crucially -- the
 **  remembered (token-less) entries that a from-spool rebuild cannot
-**  reconstruct.  Also checks the refuse-to-overwrite guard and that the
-**  temporary build file is cleaned up.
+**  reconstruct.  Also checks the refuse-to-overwrite guard, that the
+**  temporary build files are cleaned up, that a conversion leaves alone a
+**  temporary file it does not own, and that of two conversions run at the same
+**  time to the same destination, exactly one publishes a complete database.
 **
 **  This drives the real binary (via system()) rather than the library, so it
 **  needs inn.conf: a minimal one is written to the temp dir and pointed at
@@ -36,10 +38,17 @@ main(void)
 
 #else
 
+#    include <dirent.h>
+#    include <fcntl.h>
 #    include <sys/stat.h>
 #    include <sys/wait.h>
 
 #    define BASE ((time_t) 1600000000)
+
+/* Entries of the history converted by two runs at the same time: enough for
+   both runs to pass the initial check on the destination before either one
+   publishes its database. */
+#    define BULK 20000
 
 static const char convert[] = "../../history/hissqlite/hissqlite-convert";
 
@@ -58,10 +67,66 @@ run_convert(const char *src, const char *dst)
     return WEXITSTATUS(status);
 }
 
+/* Start "<convert> <src> <dst>" in the background with output suppressed and
+   return its process ID. */
+static pid_t
+start_convert(const char *src, const char *dst)
+{
+    pid_t pid;
+    int fd;
+
+    pid = fork();
+    if (pid < 0)
+        sysbail("can't fork");
+    if (pid == 0) {
+        fd = open("/dev/null", O_WRONLY);
+        if (fd >= 0) {
+            dup2(fd, 1);
+            dup2(fd, 2);
+        }
+        execl(convert, convert, src, dst, (char *) NULL);
+        _exit(127);
+    }
+    return pid;
+}
+
+/* Wait for the process started by start_convert and return its exit code, or
+   -1 if it did not exit normally. */
+static int
+wait_convert(pid_t pid)
+{
+    int status;
+
+    if (waitpid(pid, &status, 0) != pid)
+        sysbail("can't wait for %lu", (unsigned long) pid);
+    return WIFEXITED(status) ? WEXITSTATUS(status) : -1;
+}
+
+/* Count the entries of dir whose name starts with prefix, apart from the
+   entry named except (which may be NULL). */
+static int
+count_entries(const char *dir, const char *prefix, const char *except)
+{
+    DIR *d;
+    struct dirent *e;
+    int n = 0;
+
+    d = opendir(dir);
+    if (d == NULL)
+        sysbail("can't open %s", dir);
+    while ((e = readdir(d)) != NULL)
+        if (strncmp(e->d_name, prefix, strlen(prefix)) == 0
+            && (except == NULL || strcmp(e->d_name, except) != 0))
+            n++;
+    closedir(d);
+    return n;
+}
+
 int
 main(void)
 {
     char tmpdir[64], conf[128], src[128], dst[128], dstdb[160], tempdb[160];
+    char dst2[128], dst2temp[160], bulk[128], dst3[128], msgid[64];
     struct history *h;
     FILE *f;
     TOKEN t1, t2, got;
@@ -77,7 +142,7 @@ main(void)
     if (access(convert, X_OK) != 0)
         skip_all("hissqlite-convert not built");
 
-    test_init(8);
+    test_init(13);
 
     strlcpy(tmpdir, "hissqlite-conv-XXXXXX", sizeof(tmpdir));
     if (mkdtemp(tmpdir) == NULL)
@@ -87,6 +152,10 @@ main(void)
     snprintf(dst, sizeof(dst), "%s/dst", tmpdir);
     snprintf(dstdb, sizeof(dstdb), "%s/dst.sqlite", tmpdir);
     snprintf(tempdb, sizeof(tempdb), "%s/dst.new.sqlite", tmpdir);
+    snprintf(dst2, sizeof(dst2), "%s/dst2", tmpdir);
+    snprintf(dst2temp, sizeof(dst2temp), "%s/dst2.new.sqlite", tmpdir);
+    snprintf(bulk, sizeof(bulk), "%s/bulk", tmpdir);
+    snprintf(dst3, sizeof(dst3), "%s/dst3", tmpdir);
 
     /* Minimal inn.conf so both this process and the convert binary can read a
        valid configuration (convert calls innconf_read). */
@@ -187,6 +256,75 @@ main(void)
 
     /* The temporary build file must not survive a successful conversion. */
     ok(8, access(tempdb, F_OK) != 0);
+
+    /* A file at the temporary name an older version used, for instance the
+       database another conversion is building, is left alone. */
+    f = fopen(dst2temp, "w");
+    if (f == NULL)
+        sysbail("can't write %s", dst2temp);
+    fputs("not ours\n", f);
+    fclose(f);
+    ok(9, run_convert(src, dst2) == 0);
+    {
+        char buf[32] = "";
+
+        f = fopen(dst2temp, "r");
+        if (f != NULL) {
+            if (fgets(buf, sizeof(buf), f) == NULL)
+                buf[0] = '\0';
+            fclose(f);
+        }
+        ok(10, strcmp(buf, "not ours\n") == 0);
+    }
+
+    /* Two conversions to the same destination at the same time: exactly one
+       publishes, and what it publishes is complete. */
+    h = HISopen(bulk, "hisv6", HIS_CREAT | HIS_RDWR);
+    if (h == NULL)
+        bail("can't create hisv6 source %s", bulk);
+    {
+        int i;
+
+        for (i = 0; i < BULK; i++) {
+            snprintf(msgid, sizeof(msgid), "<bulk%d@conv>", i);
+            if (!HISwrite(h, msgid, BASE + i, BASE + i, (time_t) 0, &t1))
+                bail("can't seed %s", bulk);
+        }
+    }
+    HISsync(h);
+    HISclose(h);
+    {
+        pid_t one, two;
+        int rc1, rc2, i, found = 0;
+
+        one = start_convert(bulk, dst3);
+        two = start_convert(bulk, dst3);
+        rc1 = wait_convert(one);
+        rc2 = wait_convert(two);
+        ok(11, (rc1 == 0) != (rc2 == 0));
+        if ((rc1 == 0) == (rc2 == 0))
+            diag("exit codes %d and %d", rc1, rc2);
+
+        h = HISopen(dst3, "hissqlite", HIS_RDWR);
+        if (h != NULL) {
+            for (i = 0; i < BULK; i++) {
+                snprintf(msgid, sizeof(msgid), "<bulk%d@conv>", i);
+                if (HIScheck(h, msgid))
+                    found++;
+            }
+            HISclose(h);
+        }
+        ok(12, found == BULK);
+        if (found != BULK)
+            diag("%d of %d entries in the published database", found, BULK);
+    }
+
+    /* No temporary directory or file is left behind, apart from the one
+       created by this test. */
+    ok(13, count_entries(tmpdir, "dst.new.", NULL)
+                   + count_entries(tmpdir, "dst2.new.", "dst2.new.sqlite")
+                   + count_entries(tmpdir, "dst3.new.", NULL)
+               == 0);
 
     {
         char cmd[160];
