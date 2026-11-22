@@ -19,6 +19,8 @@ if [ "x${CURRENT_UID}" != "x${NEWSUSER}" ]; then
     exit 1
 fi
 
+##  Wait up to 60 seconds for the process $1 to exit.  The exit status tells
+##  whether it is gone.
 waitforpid() {
     i=12
     while [ $i -gt 0 ]; do
@@ -28,6 +30,10 @@ waitforpid() {
         i=$(expr $i - 1)
     done
     printf "\n"
+    if kill -0 $1 2>/dev/null; then
+        return 1
+    fi
+    return 0
 }
 
 case X"$1" in
@@ -47,13 +53,24 @@ Xstop)
     printf "Stopping innd: "
     ${PATHBIN}/ctlinnd shutdown 'rc.news stop'
 
-    # Wait for innd to exit (up to 60 sec)
+    # Wait for innd to exit (up to 60 sec).  When it is still running, do not
+    # stop what it depends on, and keep its PID file so that it is not started
+    # a second time.
     pid=$(cat ${SERVERPID} 2>/dev/null)
     if [ "$pid" != "" ]; then
-        waitforpid $pid
+        waitforpid $pid || {
+            echo "innd (PID $pid) is still running after 60 seconds;" \
+                "not stopping the other news processes." 1>&2
+            exit 1
+        }
     else
         printf "\n"
     fi
+
+    # The exit status is non-zero when a process is still running, whose PID
+    # file is then kept.
+    STATUS=0
+    KEEPPIDS=
 
     case "$OVMETHOD" in
     ovdb)
@@ -63,7 +80,11 @@ Xstop)
             if [ "$pid" != "" ]; then
                 printf "Stopping ovdb_server: "
                 kill $pid
-                waitforpid $pid
+                waitforpid $pid || {
+                    echo "ovdb_server (PID $pid) is still running." 1>&2
+                    STATUS=1
+                    KEEPPIDS="${KEEPPIDS} ${PATHRUN}/ovdb_server.pid"
+                }
             fi
         fi
         if [ -f ${PATHRUN}/ovdb_monitor.pid ]; then
@@ -71,7 +92,11 @@ Xstop)
             if [ "$pid" != "" ]; then
                 printf "Stopping ovdb_monitor: "
                 kill $pid
-                waitforpid $pid
+                waitforpid $pid || {
+                    echo "ovdb_monitor (PID $pid) is still running." 1>&2
+                    STATUS=1
+                    KEEPPIDS="${KEEPPIDS} ${PATHRUN}/ovdb_monitor.pid"
+                }
             fi
         fi
         ;;
@@ -82,7 +107,11 @@ Xstop)
             if [ "$pid" != "" ]; then
                 printf "Stopping ovsqlite-server: "
                 kill $pid
-                waitforpid $pid
+                waitforpid $pid || {
+                    echo "ovsqlite-server (PID $pid) is still running." 1>&2
+                    STATUS=1
+                    KEEPPIDS="${KEEPPIDS} ${PATHRUN}/ovsqlite.pid"
+                }
             fi
         fi
         ;;
@@ -93,12 +122,18 @@ Xstop)
     fi
 
     # Delete all of the PID files that we know about to avoid having them
-    # stick around after a fresh start.
+    # stick around after a fresh start, except for the ones of the processes
+    # which are still running.
     rm -f ${PATHRUN}/cnfsstat.pid $WATCHPID $SERVERPID
-    rm -f ${PATHRUN}/ovdb_server.pid ${PATHRUN}/ovdb_monitor.pid
-    rm -f ${PATHRUN}/ovsqlite.pid
+    for F in ${PATHRUN}/ovdb_server.pid ${PATHRUN}/ovdb_monitor.pid \
+        ${PATHRUN}/ovsqlite.pid; do
+        case " ${KEEPPIDS} " in
+        *" ${F} "*) ;;
+        *) rm -f ${F} ;;
+        esac
+    done
 
-    exit 0
+    exit ${STATUS}
     ;;
 esac
 
