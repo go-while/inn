@@ -6,9 +6,9 @@ package e2e
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
-	"syscall"
 	"testing"
 	"time"
 
@@ -90,8 +90,11 @@ func TestStatusHead(t *testing.T) {
 			}
 			if c.fifo {
 				o.BeforeStart = func(tb testing.TB, s *Site) {
-					if err := syscall.Mkfifo(filepath.Join(s.Dir, "etc", "inn_status.head"), 0o644); err != nil {
-						tb.Fatal(err)
+					// mkfifo(1) instead of syscall.Mkfifo, which Go does
+					// not provide on every platform (illumos).
+					fifo := filepath.Join(s.Dir, "etc", "inn_status.head")
+					if out, err := exec.Command("mkfifo", fifo).CombinedOutput(); err != nil {
+						tb.Fatalf("mkfifo %s: %v: %s", fifo, err, out)
 					}
 				}
 			}
