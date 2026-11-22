@@ -137,13 +137,10 @@ mapping overview data fails.  Many thanks to Kevin Bowling for the patches.
 
 B<scanlogs> no longer leaves B<innd> paused when it cannot flush the log files
 or when it is interrupted by a signal during the rotation of the logs.  The
-server is resumed in these cases too, and the lock is released as before.
-
-=back
-
-=head1 Changes in 2.7.5 (not yet released)
-
-=over 2
+server is resumed in these cases too, with a reason specific to the run so
+that a pause made by someone else is not released, and the lock is released
+as before.  When the server cannot be resumed, B<scanlogs> reports it and
+exits with a non-zero status.
 
 =item *
 
