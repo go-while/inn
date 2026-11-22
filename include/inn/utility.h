@@ -27,8 +27,8 @@ void inn_encode_hex(const unsigned char *, size_t, char *, size_t);
    digit; upper- and lower-case digits are allowed.  If there are an uneven
    number of input characters, the input is zero-padded at the end (so the
    input string "F" is equivalent to the string "F0").  The output buffer must
-   be at least (input - 1) / 2 to hold the full representation.  The result is
-   truncated if there isn't enough room. */
+   be at least (n + 1) / 2 bytes to hold the full representation of n hex
+   digits.  The result is truncated if there isn't enough room. */
 void inn_decode_hex(const char *, unsigned char *, size_t);
 
 END_DECLS

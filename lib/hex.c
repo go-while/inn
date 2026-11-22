@@ -49,8 +49,8 @@ inn_encode_hex(const unsigned char *data, size_t length, char *buffer,
 **  characters, the input is zero-padded at the *end* (so the string "F" is
 **  equivalent to the string "F0").  Lowercase hex digits are tolerated, even
 **  though inn_encode_hex doesn't produce them.  buflen is the length of the
-**  output buffer and must be at least (input - 1) / 2.  If it is too short
-**  to hold the full data, the result will be truncated.
+**  output buffer and must be at least (n + 1) / 2 for n valid hex digits.
+**  If it is too short to hold the full data, the result will be truncated.
 */
 void
 inn_decode_hex(const char *data, unsigned char *buffer, size_t buflen)
