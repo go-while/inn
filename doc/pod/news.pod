@@ -101,6 +101,12 @@ The newsmaster's e-mail address mentioned in the help message returned
 by B<nnrpd> now uses I<fromhost> (set in F<inn.conf> or overridden in
 F<readers.conf>) as the default domain name instead of I<domain>.
 
+=item *
+
+Fixed a memory leak in B<batcher>: the memory used to convert each article
+to its native format was never released, so that the memory used grew with
+the total size of the articles batched in a run.
+
 =back
 
 =item *

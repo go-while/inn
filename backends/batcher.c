@@ -394,6 +394,7 @@ main(int ac, char *av[])
         /* Write the article.  In case of interrupts, retry the read but not
          * the fwrite because we can't check that reliably and portably. */
         written = fwrite(artdata, 1, BytesInArt, F);
+        free(artdata);
         if (written != BytesInArt || ferror(F))
             break;
 
