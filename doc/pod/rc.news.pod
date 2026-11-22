@@ -60,8 +60,9 @@ its expiry process, run B<expirerm> if there are articles to unlink.
 When started, if overview data appears to have just been rebuilt and
 F<active> needs to be renumbered, then actually renumber it.  B<makehistory>
 leaves a file named F<.rebuildoverview> in I<pathrun> for that; B<innd>
-removes it once it has renumbered F<active>, so that the renumbering is
-requested again at the next start if B<innd> fails to start.
+removes it once it has renumbered F<active> (it keeps it when overview is
+disabled), so that the renumbering is requested again at the next start if
+B<innd> fails before the renumbering is done.
 
 =back
 
