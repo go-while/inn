@@ -283,8 +283,17 @@ ${DOSTAT} && {
     echo ''
 }
 
-##  Lock out others.
-trap 'rm -f ${LOCK} ; exit 1' 1 2 3 15
+##  Lock out others.  The lock is only removed by the run which holds it:  a
+##  signal received after it is released below, or while another run has taken
+##  it, must not remove it.  The release is done by the same function, before
+##  the traps are reset, so that a signal at that point cannot leave the lock
+##  of this run behind.
+unlock() {
+    LOCKPID=
+    { read LOCKPID <${LOCK}; } 2>/dev/null
+    test "${LOCKPID}" = "$$" && rm -f ${LOCK}
+}
+trap 'unlock ; exit 1' 1 2 3 15
 shlock -p $$ -f ${LOCK} || {
     (
         echo "$0: Locked by $(cat ${LOCK})"
@@ -498,7 +507,8 @@ esac
 ##  simultaneous news.daily's running.  We do this so innwatch can start
 ##  monitoring again asap after the expire is done -- removing the
 ##  articles isn't critical, nor is the renumber.
-rm ${LOCK}
+unlock
+trap - 1 2 3 15
 
 ##  Remove the articles that are supposed to go.
 if [ ${DOEXPIRE} = true -a ${DOGROUPBASEEXPIRY} != true ]; then
