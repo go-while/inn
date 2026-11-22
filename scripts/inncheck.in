@@ -1207,16 +1207,33 @@ sub check_all_perms {
         checkperm($paths{$_}, $modes{$_})
           if defined $modes{$_};
     }
-    if (-f $paths{'history'}) {
-        checkperm($paths{'history'}, [0600, $INN::Config::filemode]);
+    ##  Check the history database of the configured history method: after a
+    ##  conversion with hissqlite-convert, the files of the previous method
+    ##  may still be there.
+    my $hismethod = $INN::Config::hismethod;
+    my $hisfile;
+    $hismethod = '' if !defined $hismethod;
+    if ($hismethod eq 'hissqlite') {
+        # No check for history.sqlite-wal or history.sqlite-shm.
+        $hisfile = $paths{'history'} . ".sqlite";
+    } elsif ($hismethod eq 'hisv6') {
         # No check for history.dir, history.index or history.hash as
         # it depends on the history type.
+        $hisfile = $paths{'history'};
+    }
+    if (defined $hisfile) {
+        if (-e $hisfile && !-f _) {
+            eprint "$pfx$hisfile:0: not a regular file\n";
+        } else {
+            checkperm($hisfile, [0600, $INN::Config::filemode]);
+        }
+    } elsif (-f $paths{'history'}) {
+        checkperm($paths{'history'}, [0600, $INN::Config::filemode]);
     } elsif (-f $paths{'history'} . ".sqlite") {
         checkperm(
             $paths{'history'} . ".sqlite",
             [0600, $INN::Config::filemode],
         );
-        # No check for history.sqlite-wal or history.sqlite-shm.
     } else {
         eprint $paths{'history'} . "{.sqlite}:0: missing history database\n";
     }
