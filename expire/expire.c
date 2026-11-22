@@ -1039,7 +1039,8 @@ main(int ac, char *av[])
         fclose(EXPfopen(false, buff, "w", true, Server, false));
     }
 
-    CleanupAndExit(Server, !Bad, Bad ? 1 : 0);
+    /* An in-place expiration does not pause the server. */
+    CleanupAndExit(Server, !Bad && !inplace, Bad ? 1 : 0);
     /* NOTREACHED */
     abort();
 }
