@@ -1,0 +1,40 @@
+=head1 NAME
+
+inn_msync_page - synchronize a range of mapped pages
+
+=head1 SYNOPSIS
+
+    #include <inn/mmap.h>
+
+    int inn_msync_page(void *p, size_t length, int flags);
+
+=head1 DESCRIPTION
+
+B<inn_msync_page> is a macro; the prototype above shows how to call it.
+On systems where msync(2) takes only two arguments it is a function-like
+macro, so portable code calls it and does not take its address.
+
+B<inn_msync_page> synchronizes the pages covering the range of mapped
+memory that starts at the address I<p> and is I<length> bytes long.
+The implementation rounds the start down and the end up to page boundaries
+before calling msync(2).
+
+I<flags> is passed to msync(2) and can be a combination of the flags that
+it accepts, such as B<MS_ASYNC>, B<MS_SYNC> or B<MS_INVALIDATE>.  On systems
+where msync(2) takes only two arguments, B<inn_msync_page> ignores I<flags>
+and passes none.
+
+B<inn_msync_page> returns the result of msync(2), and errno is set by
+msync(2) when that result is C<-1>.  It also returns C<-1>, without calling
+msync(2), if INN could not obtain the page size.
+
+=head1 HISTORY
+
+Written by Alex Kiernan <alex.kiernan@thus.net> for S<InterNetNews 2.4.0>.
+Updated by Russ Allbery <eagle@eyrie.org>.
+
+=head1 SEE ALSO
+
+libinn(3), msync(2).
+
+=cut

@@ -1,0 +1,47 @@
+=head1 NAME
+
+inn_encode_hex, inn_decode_hex - convert bytes to and from hexadecimal
+
+=head1 SYNOPSIS
+
+    #include <inn/utility.h>
+
+    void inn_encode_hex(const unsigned char *data, size_t length,
+                        char *buffer, size_t buflen);
+
+    void inn_decode_hex(const char *data, unsigned char *buffer,
+                        size_t buflen);
+
+=head1 DESCRIPTION
+
+B<inn_encode_hex> converts the I<length> bytes of I<data> to uppercase ASCII
+hexadecimal and stores the result in I<buffer>.  I<buflen> is the capacity
+of I<buffer> in bytes.  To hold the complete representation, I<buffer>
+needs two bytes per input byte and one for the terminating nul.
+If I<buflen> is smaller, the output is truncated but still nul-terminated
+when I<buflen> is nonzero.  The truncation can end after the first digit of
+a byte: when I<buflen> is even, an odd number of digits fits in the buffer.
+A zero I<buflen> produces no output.
+
+B<inn_decode_hex> converts the nul-terminated ASCII hexadecimal string
+I<data> to bytes in I<buffer>, in the same order as in the string.  I<buflen>
+is the capacity of I<buffer> in bytes.  Both letter cases are accepted.
+Conversion ends at the first non-hexadecimal character or when I<buffer>
+is full.  If I<data> has n hexadecimal digits before that character,
+I<buffer> needs (n + 1) / 2 bytes (integer division) to hold the complete
+result.  If I<buflen> is smaller, the digits beyond I<buffer> are ignored
+silently.  An unpaired final digit is written as the high half of a byte
+with a zero low half, so C<F> yields C<0xF0>.  I<buffer> is zeroed before
+decoding, and a zero I<buflen> produces no output.
+
+Neither routine returns a byte count.
+
+=head1 HISTORY
+
+Written by Russ Allbery <eagle@eyrie.org> for S<InterNetNews 2.5.0>.
+
+=head1 SEE ALSO
+
+libinn(3).
+
+=cut

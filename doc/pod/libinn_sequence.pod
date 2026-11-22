@@ -1,0 +1,38 @@
+=head1 NAME
+
+seq_lcompare - compare wrapping sequence numbers
+
+=head1 SYNOPSIS
+
+    #include <inn/sequence.h>
+
+    int seq_lcompare(unsigned long i1, unsigned long i2);
+
+=head1 DESCRIPTION
+
+B<seq_lcompare> compares the two unsigned long sequence numbers I<i1> and
+I<i2> using wrapping sequence-space arithmetic.  The size of the sequence
+space is determined by the width of C<unsigned long> on the current system.
+
+The function returns C<0> if I<i1> and I<i2> are equal, C<-1> if I<i1>
+precedes I<i2>, or C<1> if I<i1> follows I<i2>.  A forward distance of less
+than half of the sequence space determines the ordering, including across
+the wrap from C<ULONG_MAX> to zero.  When the values are exactly half a
+sequence space apart, the ordering is undefined and the function returns
+C<INT_MAX>.
+
+Callers must compare the result with C<1> (or C<-1>, or C<0>) and not merely
+test whether it is positive or nonzero: C<INT_MAX> is a positive value
+that means "undefined", not "follows".  For instance, the history code
+tests C<seq_lcompare(t, h-E<gt>nextcheck) == 1>.
+
+=head1 HISTORY
+
+Written by Alex Kiernan <alex.kiernan@thus.net> for S<InterNetNews 2.4.0>.
+The implementation follows RFC 1982.
+
+=head1 SEE ALSO
+
+libinn(3), RFC 1982.
+
+=cut
