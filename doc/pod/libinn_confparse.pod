@@ -1,0 +1,92 @@
+=head1 NAME
+
+config_parse_file, config_find_group, config_next_group, config_group_type, config_group_tag, config_param_boolean, config_param_signed_number, config_param_unsigned_number, config_param_real, config_param_string, config_param_list, config_params, config_error_group, config_error_param, config_free, print_boolean, print_signed_number, print_unsigned_number, print_string, print_list - read and print INN configuration values
+
+=head1 SYNOPSIS
+
+    #include <inn/confparse.h>
+
+    struct config_group *config_parse_file(const char *filename, ...);
+    struct config_group *config_find_group(struct config_group *group,
+                                           const char *type);
+    struct config_group *config_next_group(struct config_group *group);
+    const char *config_group_type(struct config_group *group);
+    const char *config_group_tag(struct config_group *group);
+
+    bool config_param_boolean(struct config_group *group, const char *key,
+                              bool *result);
+    bool config_param_signed_number(struct config_group *group,
+                                    const char *key, long *result);
+    bool config_param_unsigned_number(struct config_group *group,
+                                      const char *key,
+                                      unsigned long *result);
+    bool config_param_real(struct config_group *group, const char *key,
+                           double *result);
+    bool config_param_string(struct config_group *group, const char *key,
+                             const char **result);
+    bool config_param_list(struct config_group *group, const char *key,
+                           const struct vector **result);
+    struct vector *config_params(struct config_group *group);
+
+    void config_error_group(struct config_group *group, const char *format,
+                            ...);
+    void config_error_param(struct config_group *group, const char *key,
+                            const char *format, ...);
+    void config_free(struct config_group *group);
+
+    void print_boolean(FILE *file, const char *key, bool value,
+                       enum confparse_quoting quoting);
+    void print_signed_number(FILE *file, const char *key, long value,
+                             enum confparse_quoting quoting);
+    void print_unsigned_number(FILE *file, const char *key,
+                               unsigned long value,
+                               enum confparse_quoting quoting);
+    void print_string(FILE *file, const char *key, const char *value,
+                      enum confparse_quoting quoting);
+    void print_list(FILE *file, const char *key, const struct vector *value,
+                    enum confparse_quoting quoting);
+
+=head1 DESCRIPTION
+
+Include C<< <stdio.h> >> before C<< <inn/confparse.h> >> for C<FILE>.
+
+B<config_parse_file> parses I<filename> and its included files into a
+tree of opaque C<config_group> objects.  It returns the root of the
+tree, or NULL after reporting a read or syntax error.  Call it with
+I<filename> alone.  The current parser ignores extra arguments.
+Interpretation and validation of parameters are deferred to the caller.
+
+B<config_find_group> returns the first group of I<type> after I<group>
+in a depth-first traversal.  Start at the root to search the whole tree.
+B<config_next_group> searches for the next group with the same type as
+I<group>.  Both return NULL when there is no matching group.
+B<config_group_type> and B<config_group_tag> return the type and optional
+tag of I<group>.  The tag is NULL when absent.
+
+The B<config_param_*> functions look up I<key> in I<group> and then its
+ancestors.  On successful conversion to the requested type they store the
+value in I<result> and return true.  An absent or invalid value leaves
+I<result> unchanged and returns false.  B<config_params> returns a new
+vector of distinct parameter names, including inherited names.  Use
+B<vector_free> on that vector.
+
+B<config_error_group> reports a warning with the file and line for
+I<group>.  B<config_error_param> uses the location of I<key> in I<group>
+when available.  Both accept a printf-style I<format> and arguments.
+B<config_free> releases the tree rooted at I<group>, including the
+storage behind borrowed group, tag, string and list results.
+
+The B<print_*> routines write I<value> to I<file>.  I<quoting> selects
+plain output (C<CONFPARSE_QUOTE_NONE>) or an assignment for the shell,
+Perl or Tcl (C<CONFPARSE_QUOTE_SHELL>, C<CONFPARSE_QUOTE_PERL> or
+C<CONFPARSE_QUOTE_TCL>).  I<key> supplies the name for the assignment.
+
+=head1 HISTORY
+
+The shared INN configuration parser was introduced in 2001.
+
+=head1 SEE ALSO
+
+inn.conf(5), libinn(3), libinn_innconf(3), libinn_secrets(3).
+
+=cut
