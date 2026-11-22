@@ -192,7 +192,46 @@ writedump(FILE *f)
     return 0;
 }
 
-/* Write dump to a named file. Substitute %d in file name with system time. */
+/* Expand the dump file name n into buf, which is size bytes long.  "%d" is
+   replaced with the current system time as a decimal number, and "%%" with
+   a single "%".  Any other character, including any other "%" sequence, is
+   copied unchanged.  The name is never used as a format string.  Return
+   false, leaving buf in an unspecified state, if the result (with its
+   terminating nul) does not fit in size bytes. */
+
+static bool
+expandname(char *buf, size_t size, const char *n, time_t now)
+{
+    char num[32];
+    size_t used = 0, len;
+    const char *s;
+
+    snprintf(num, sizeof(num), "%llu", (unsigned long long) now);
+    while (*n != '\0') {
+        if (n[0] == '%' && n[1] == 'd') {
+            s = num;
+            len = strlen(num);
+            n += 2;
+        } else if (n[0] == '%' && n[1] == '%') {
+            s = n;
+            len = 1;
+            n += 2;
+        } else {
+            s = n;
+            len = 1;
+            n++;
+        }
+        if (len >= size - used)
+            return false;
+        memcpy(buf + used, s, len);
+        used += len;
+    }
+    buf[used] = '\0';
+    return true;
+}
+
+/* Write dump to a named file.  Substitute %d in file name with system time,
+   and %% with %.  A file name of "-" stands for stdout. */
 
 static void
 writedumpfile(const char *n)
@@ -204,13 +243,13 @@ writedumpfile(const char *n)
         writedump(stdout);
         return;
     }
-#if __GNUC__ > 4 || defined(__llvm__) || defined(__clang__)
-#    pragma GCC diagnostic ignored "-Wformat-nonliteral"
-#endif
-    snprintf(buf, sizeof(buf), n, (unsigned long) time(0));
-#if __GNUC__ > 4 || defined(__llvm__) || defined(__clang__)
-#    pragma GCC diagnostic warning "-Wformat-nonliteral"
-#endif
+    if (!expandname(buf, sizeof(buf), n, time(NULL))) {
+        fprintf(stderr,
+                "writedumpfile: dump file name too long for ninpaths"
+                " (at most %d bytes)\n",
+                MAXFNAME - 1);
+        return;
+    }
     d = fopen(buf, "w");
     if (d) {
         if (writedump(d) < 0)

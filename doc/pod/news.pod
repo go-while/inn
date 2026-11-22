@@ -133,6 +133,14 @@ files behind after a failed creation, and the buffindexed overview method
 validates its F<group.index> file and no longer frees memory twice when
 mapping overview data fails.  Many thanks to Kevin Bowling for the patches.
 
+=item *
+
+The dump file name given to B<ninpaths> with B<-d> is no longer used as a
+C<printf> format string.  The C<%d> it can contain is still replaced with the
+current time, no longer limited to the range of a C<%d> integer, and C<%%>
+gives a single C<%>.  Other C<%> sequences are kept as is, and an expanded name
+longer than 1023 bytes is reported instead of being silently truncated.
+
 =back
 
 =head1 Changes in 2.7.5 (not yet released)
