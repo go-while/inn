@@ -1,5 +1,7 @@
 /* Test suite for lib/hashtab.c. */
 
+#define LIBTEST_NEW_FORMAT 1
+
 #include "portable/system.h"
 
 #include <sys/stat.h>
@@ -73,42 +75,49 @@ main(void)
     strange = xstrdup("strange");
     change = xstrdup("change");
 
-    test_init(38);
+    plan(38);
     hash =
         hash_create(4, hash_string, string_key, string_equal, string_delete);
-    ok(1, hash != NULL);
+    ok(hash != NULL, "create a table with an even requested size");
     if (hash == NULL)
         die("Unable to create hash, cannot continue");
 
-    ok(2, hash_insert(hash, "test", test));
-    ok(3, hash_collisions(hash) == 0);
-    ok(4, hash_expansions(hash) == 0);
-    ok(5, hash_searches(hash) == 1);
-    ok(6, hash_count(hash) == 1);
+    ok(hash_insert(hash, "test", test), "insert the first entry");
+    ok(hash_collisions(hash) == 0, "first insertion has no collisions");
+    ok(hash_expansions(hash) == 0,
+       "first insertion does not expand the table");
+    ok(hash_searches(hash) == 1, "first insertion counts one search");
+    ok(hash_count(hash) == 1, "table contains one entry");
     word = hash_lookup(hash, "test");
-    ok(7, word != NULL && !strcmp("test", word));
-    ok(8, hash_delete(hash, "test"));
+    ok(word != NULL && !strcmp("test", word), "look up the entry");
+    ok(hash_delete(hash, "test"), "delete the entry");
     test = xstrdup("test");
-    ok(9, hash_lookup(hash, "test") == NULL);
-    ok(10, !hash_delete(hash, "test"));
-    ok(11, !hash_replace(hash, "test", testing));
-    ok(12, hash_count(hash) == 0);
-    ok(13, hash_insert(hash, "test", test));
-    ok(14, hash_insert(hash, "testing", testing));
-    ok(15, hash_insert(hash, "strange", strange));
-    ok(16, hash_expansions(hash) == 0);
-    ok(17, hash_insert(hash, "change", change));
-    ok(18, hash_expansions(hash) == 1);
-    ok(19, hash_count(hash) == 4);
+    ok(hash_lookup(hash, "test") == NULL, "deleted key is absent");
+    ok(!hash_delete(hash, "test"), "cannot delete the absent key");
+    ok(!hash_replace(hash, "test", testing),
+       "cannot replace the absent key");
+    ok(hash_count(hash) == 0, "table is empty after deletion");
+    ok(hash_insert(hash, "test", test), "reinsert the deleted key");
+    ok(hash_insert(hash, "testing", testing),
+       "insert a key with the same prefix");
+    ok(hash_insert(hash, "strange", strange), "insert another key");
+    ok(hash_expansions(hash) == 0,
+       "first three entries do not expand the table");
+    ok(hash_insert(hash, "change", change), "insert the fourth entry");
+    ok(hash_expansions(hash) == 1, "fourth entry expands the table");
+    ok(hash_count(hash) == 4, "expanded table contains four entries");
     word = hash_lookup(hash, "testing");
-    ok(20, word != NULL && !strcmp("testing", word));
+    ok(word != NULL && !strcmp("testing", word),
+       "lookup survives expansion");
     word = hash_lookup(hash, "strange");
-    ok(21, word != NULL && !strcmp("strange", word));
-    ok(22, hash_lookup(hash, "thingie") == NULL);
-    ok(23, !hash_delete(hash, "thingie"));
-    ok(24, hash_delete(hash, "strange"));
-    ok(25, hash_lookup(hash, "strange") == NULL);
-    ok(26, hash_count(hash) == 3);
+    ok(word != NULL && !strcmp("strange", word),
+       "second lookup survives expansion");
+    ok(hash_lookup(hash, "thingie") == NULL, "unknown key is absent");
+    ok(!hash_delete(hash, "thingie"), "cannot delete an unknown key");
+    ok(hash_delete(hash, "strange"), "delete the third key");
+    ok(hash_lookup(hash, "strange") == NULL,
+       "third key is absent after deletion");
+    ok(hash_count(hash) == 3, "table contains three entries after deletion");
 
     hash_traverse(hash, string_traverse, &wordrefs[0]);
     reported = false;
@@ -116,8 +125,8 @@ main(void)
         if (wordrefs[i].count != 1 && !reported) {
             reported = true;
         }
-    ok(27, !reported);
-    ok(28, wordrefs[3].count == 0);
+    ok(!reported, "traversal visits every remaining entry once");
+    ok(wordrefs[3].count == 0, "traversal does not visit the deleted entry");
 
     hash_free(hash);
 
@@ -131,23 +140,29 @@ main(void)
     bar = xstrdup("bar");
     hash =
         hash_create(5, hash_string, string_key, string_equal, string_delete);
-    ok(29, hash != NULL);
+    ok(hash != NULL, "create a table with an odd requested size");
     if (hash == NULL)
         die("Unable to create hash, cannot continue");
-    ok(30, hash_insert(hash, "test", test));
-    ok(31, hash_insert(hash, "testing", testing));
-    ok(32, hash_insert(hash, "strange", strange));
-    ok(33, hash_insert(hash, "change", change));
-    ok(34, hash_insert(hash, "foo", foo));
-    ok(35, hash_insert(hash, "bar", bar));
-    ok(36, hash_count(hash) == 6);
+    ok(hash_insert(hash, "test", test),
+       "insert first entry into odd-sized table");
+    ok(hash_insert(hash, "testing", testing),
+       "insert second entry into odd-sized table");
+    ok(hash_insert(hash, "strange", strange),
+       "insert third entry into odd-sized table");
+    ok(hash_insert(hash, "change", change),
+       "insert fourth entry into odd-sized table");
+    ok(hash_insert(hash, "foo", foo),
+       "insert fifth entry into odd-sized table");
+    ok(hash_insert(hash, "bar", bar),
+       "insert sixth entry into odd-sized table");
+    ok(hash_count(hash) == 6, "odd-sized table contains six entries");
     hash_free(hash);
 
     words = fopen("/usr/dict/words", "r");
     if (words == NULL)
         words = fopen("/usr/share/dict/words", "r");
     if (words == NULL) {
-        skip_block(37, 2, "/usr/share/dict/words not available");
+        skip_block(2, "/usr/share/dict/words not available");
         exit(0);
     }
 
@@ -165,7 +180,7 @@ main(void)
             }
         }
     }
-    ok(37, !reported);
+    ok(!reported, "insert every dictionary word");
 
     if (fseek(words, 0, SEEK_SET) < 0) {
         fclose(words);
@@ -183,7 +198,7 @@ main(void)
             }
         }
     }
-    ok(38, !reported);
+    ok(!reported, "retrieve every dictionary word");
 
     hash_free(hash);
     fclose(words);
