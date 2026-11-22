@@ -44,20 +44,36 @@ the content of I<batchfile>C<.doit> followed by that of I<batchfile>C<.work>.
 Then I<batchfile>C<.work> is renamed to I<batchfile>C<.work.merged>, which
 means that I<batchfile>C<.new> is complete.  Finally I<batchfile>C<.new> is
 renamed to I<batchfile>C<.doit> and I<batchfile>C<.work.merged> is removed.
-The next run completes the last steps if they were interrupted.  Do not
-remove these files by hand while B<controlbatch> may be running.
+The next run completes the last steps if they were interrupted, looking at
+the files which are there:  I<batchfile>C<.work.merged> together with
+I<batchfile>C<.new> means that I<batchfile>C<.new> has to be published, and
+I<batchfile>C<.work.merged> alone is removed only if I<batchfile>C<.doit> ends
+with its content (otherwise B<controlbatch> stops with an error and keeps
+all the files, so that you can check them).  Do not remove these files by
+hand while B<controlbatch> may be running.
 
 I<batchfile>C<.work> stays where it is until a flush of the site succeeds,
-because B<innd> may still be writing to it; the batch file and I<batchfile>C<.doit>
-are processed meanwhile.  If B<innd> is stopped for good or the site has been
-removed from F<newsfeeds> (for instance during a migration), the flush
-can never succeed.  Once you are sure that B<innd> is not running, or no
-longer feeds this site, drain it by hand while no B<controlbatch> is running:
+because B<innd> may still be writing to it; the batch file and
+I<batchfile>C<.doit> are processed meanwhile.  If B<innd> is stopped for
+good or the site has been removed from F<newsfeeds> (for instance during
+a migration), the flush can never succeed.  Once you are sure that B<innd>
+is not running, or no longer feeds this site, hand it over by hand with the
+same staging and replacement, while no B<controlbatch> is running.  In
+I<pathoutgoing>, first run B<controlbatch> once (its recovery of an
+interrupted handoff runs even if the flush fails) and check that
+I<batchfile>C<.new> and I<batchfile>C<.work.merged> are gone; if
+I<batchfile> itself is not empty and there is no I<batchfile>C<.work>,
+rename it to I<batchfile>C<.work>.  Then:
 
-    cat batchfile.work >> batchfile.doit && rm batchfile.work
+    cat batchfile.doit batchfile.work > batchfile.new
+    mv batchfile.work batchfile.work.merged
 
-in I<pathoutgoing> (use the real name of the files), and run B<controlbatch>
-again.  Do the same with I<batchfile> itself if it is not empty.
+(leave I<batchfile>C<.doit> out of the first command if it does not exist,
+and use the real names of the files).  Run B<controlbatch> again: it
+publishes I<batchfile>C<.new>, removes I<batchfile>C<.work.merged> and
+processes the articles.  If the first command is interrupted, remove
+I<batchfile>C<.new> and start again; if the second one is, B<controlbatch>
+finishes the job.
 
 I<batchfile>C<.doit> is removed only if B<controlchan> succeeds.  Otherwise,
 it is kept so that it is processed again during the next run, and the number

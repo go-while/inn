@@ -93,10 +93,16 @@ handofffailed() {
 
 recoverwork() {
     if [ -e "${batchfile}.work.merged" ]; then
-        # Step 2 was done.  If batchfile.new is there, it is complete and
-        # step 3 was not done; otherwise, it was.
         if [ -f "${batchfile}.new" ]; then
+            # The rename of batchfile.work was done, so batchfile.new is
+            # complete:  publish it.
             mv -f "${batchfile}.new" "${batchfile}.doit" || return 1
+        else
+            # batchfile.new was published.  Make sure that batchfile.doit
+            # does end with batchfile.work.merged before removing it.
+            size=$(wc -c <"${batchfile}.work.merged" | tr -d ' ')
+            tail -c "${size}" "${batchfile}.doit" 2>/dev/null \
+                | cmp -s - "${batchfile}.work.merged" || return 1
         fi
         rm -f "${batchfile}.work.merged"
     else
@@ -117,14 +123,11 @@ addwork() {
         handofffailed
         return 1
     }
-    mv -f "${batchfile}.work" "${batchfile}.work.merged" || {
-        rm -f "${batchfile}.new"
-        handofffailed
-        return 1
-    }
-    # batchfile.doit must not be processed without batchfile.work, which
-    # is now only in batchfile.new:  the next run will finish this step.
-    mv -f "${batchfile}.new" "${batchfile}.doit" || {
+    # From the rename on, batchfile.new may be the only complete copy:  it is
+    # kept when something fails, and the next run decides from the files
+    # which are there.  batchfile.doit must not be processed meanwhile.
+    mv -f "${batchfile}.work" "${batchfile}.work.merged" \
+        && mv -f "${batchfile}.new" "${batchfile}.doit" || {
         handofffailed
         rm -f "${batchlock}"
         exit 1
@@ -135,7 +138,8 @@ addwork() {
 
 recoverwork || {
     echo "${0}: cannot finish adding ${BATCH}/${batchfile}.work to" \
-        "${BATCH}/${batchfile}.doit" >&2
+        "${BATCH}/${batchfile}.doit; ${batchfile}.work.merged and" \
+        "${batchfile}.new are kept, see controlbatch(8)" >&2
     rm -f "${batchlock}"
     exit 1
 }
