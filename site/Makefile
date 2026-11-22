@@ -166,12 +166,16 @@ $D$(PATH_ACTIVE_TIMES):
 ##  rebuilding from the spool could take hours and would lose the remembered
 ##  entries, so hissqlite-convert is advised instead.  A DESTDIR (packaging)
 ##  install just creates the placeholder text file at the default location if
-##  it is not there yet, as before, and leaves database initialization to the
-##  package's post-install.
+##  nothing is there yet (a file, a directory or a symbolic link is left
+##  alone), as before, and leaves database initialization to the package's
+##  post-install.  install-history is declared phony so that a file of that
+##  name in this directory cannot make make skip it.
+.PHONY: install-history
 install-history:
 	@ME=`$(WHOAMI)` ; \
 	if [ -n "$D" ] ; then \
-	    if [ ! -f "$D$(PATH_HISTORY)" ] ; then \
+	    if [ ! -f "$D$(PATH_HISTORY)" ] && [ ! -d "$D$(PATH_HISTORY)" ] \
+	        && [ ! -h "$D$(PATH_HISTORY)" ] ; then \
 	        touch "$D$(PATH_HISTORY)" ; \
 	        if [ x"$$ME" = xroot ] ; then \
 	            chown $(RUNASUSER) "$D$(PATH_HISTORY)" ; \
