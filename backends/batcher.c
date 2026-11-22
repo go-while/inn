@@ -349,8 +349,8 @@ main(int ac, char *av[])
                 if (BATCHstatus == -1)
                     syswarn("%s cannot close batch %d", Host, BATCHcount);
                 else
-                    syswarn("%s batch %d exit status %d", Host, BATCHcount,
-                            BATCHstatus);
+                    warn("%s batch %d exit status %d", Host, BATCHcount,
+                         BATCHstatus);
                 break;
             }
             ArtsInCB = 0;

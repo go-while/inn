@@ -421,17 +421,16 @@ main(int ac, char *av[])
         if (GotAlarm)
             warn("%s connect failed: timeout", REMhost);
         else
-            syswarn("%s connect failed: %s", REMhost,
-                    buff[0] ? REMclean(buff) : strerror(i));
+            warn("%s connect failed: %s", REMhost,
+                 buff[0] ? REMclean(buff) : strerror(i));
         exit(1);
     }
 
     if (Debug)
         fprintf(stderr, "< %s\n", REMclean(buff));
     if (NNTPsendpassword(REMhost, From, To) < 0 || GotAlarm) {
-        i = errno;
-        syswarn("%s authentication failed: %s", REMhost,
-                GotAlarm ? "timeout" : strerror(i));
+        warn("%s authentication failed%s", REMhost,
+             GotAlarm ? ": timeout" : "");
         /* Don't send quit; we want the remote to print a message. */
         exit(1);
     }
@@ -518,7 +517,7 @@ main(int ac, char *av[])
                 syswarn("error reading %s, skipping", XBATCHname);
                 break;
             } else if (0 == err) {
-                syswarn("unexpected EOF reading %s, truncated", XBATCHname);
+                warn("unexpected EOF reading %s, truncated", XBATCHname);
                 XBATCHsize = p - XBATCHbuffer;
                 break;
             }

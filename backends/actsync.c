@@ -1092,7 +1092,7 @@ get_active(char *host, int hostid, int *len, struct grp *grp, int *errs)
     if (QIOerror(qp))
         sysdie("cannot read temp file for %s at line %d", host, cnt);
     else if (QIOtoolong(qp))
-        sysdie("line %d from host %s is too long", cnt, host);
+        die("line %d from host %s is too long", cnt, host);
 
     /* all done */
     if (is_file) {

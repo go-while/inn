@@ -148,7 +148,7 @@ SITEconnect(char *host)
         sysdie("cannot connect to %s", host);
 
     if (NNTPsendpassword(host, From, To) < 0)
-        sysdie("cannot authenticate to %s", host);
+        die("cannot authenticate to %s", host);
 
     /* Build the structure. */
     sp = xmalloc(sizeof(SITE));
@@ -427,7 +427,7 @@ main(int ac, char *av[])
                 printf("%s\n", mesgid);
                 break;
             }
-            syswarn("%s to %s", buff, mesgid);
+            warn("%s to %s", buff, mesgid);
             STATrejected++;
         }
     }
