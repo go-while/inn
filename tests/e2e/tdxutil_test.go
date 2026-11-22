@@ -53,17 +53,28 @@ func TestTdxUtilRebuildFromSpool(t *testing.T) {
 	s.Inject(t, "e2e.test", 3)
 	s.Inject(t, "e2e.deep.sub.group", 2)
 
-	before := map[string][]string{}
-	for _, g := range []string{"e2e.test", "e2e.deep.sub.group"} {
-		before[g] = overviewLines(t, s, g)
-		if len(before[g]) == 0 {
+	groupNames := []string{"e2e.test", "e2e.deep.sub.group"}
+	wantOverview := make(map[string][]string, len(groupNames))
+	empty := t.TempDir()
+	for _, g := range groupNames {
+		n := len(overviewLines(t, s, g))
+		if n == 0 {
 			t.Fatalf("OVER of %s before the rebuild: no lines", g)
 		}
-	}
 
-	// Lose the overview of both groups: rebuild them from an empty directory.
-	empty := t.TempDir()
-	for g := range before {
+		// Compare the two path forms of -R. The metadata produced by a
+		// rebuild need not match innd's on versions before the :bytes and
+		// :lines fixes, which TestTdxUtilRebuildBytesLines checks separately.
+		dir := filepath.Join(s.Dir, "spool", "articles",
+			strings.ReplaceAll(g, ".", string(filepath.Separator)))
+		s.Run(t, "tdx-util", "-R", dir, "-n", g)
+		wantOverview[g] = overviewLines(t, s, g)
+		if got := len(wantOverview[g]); got != n {
+			t.Fatalf("OVER of %s after a rebuild from %s: got %d lines, want %d",
+				g, dir, got, n)
+		}
+
+		// Lose the overview so the next rebuild must restore it.
 		s.Run(t, "tdx-util", "-R", empty, "-n", g)
 		if got := overviewLines(t, s, g); len(got) != 0 {
 			t.Fatalf("OVER of %s after a rebuild from an empty directory: %q", g, got)
@@ -71,7 +82,8 @@ func TestTdxUtilRebuildFromSpool(t *testing.T) {
 	}
 
 	// Rebuild them from the spool without giving a path.
-	for g, want := range before {
+	for _, g := range groupNames {
+		want := wantOverview[g]
 		out, err := s.TryRun("tdx-util", "-R", "-", "-n", g)
 		if err != nil {
 			t.Fatalf("tdx-util -R - -n %s: %v\n%s", g, err, out)
@@ -97,7 +109,7 @@ func TestTdxUtilRebuildFromSpool(t *testing.T) {
 	if left := newFiles(t, s); len(left) > 0 {
 		t.Errorf("unfinished rebuilds left in the overview: %q", left)
 	}
-	if got := overviewLines(t, s, "e2e.test"); len(got) != len(before["e2e.test"]) {
+	if got := overviewLines(t, s, "e2e.test"); !slices.Equal(got, wantOverview["e2e.test"]) {
 		t.Errorf("OVER of e2e.test after a failed rebuild: %q", got)
 	}
 }
