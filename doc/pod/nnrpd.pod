@@ -40,9 +40,10 @@ options should not be used with I<nnrpdflags>.  See also the discussion
 of I<nnrpdflags> in inn.conf(5).
 
 When I<nnrpdloadlimit> in F<inn.conf> is not C<0>, it will also reject
-connections if the load average is greater than that value (typically
-C<16>).  B<nnrpd> can also prevent high-volume posters from abusing
-your resources.  See the discussion of exponential backoff in inn.conf(5).
+connections if the one-minute load average, rounded to the nearest integer,
+is greater than that value (typically C<16>).  B<nnrpd> can also prevent
+high-volume posters from abusing your resources.  See the discussion of
+exponential backoff in inn.conf(5).
 
 B<nnrpd> injects articles into the local server running B<innd> through a
 UNIX domain socket, or an INET domain socket if not supported.  If another
@@ -70,9 +71,9 @@ has to be a valid IPv6 address belonging to an interface of the local
 host.  It can also be C<::0>, saying to bind to all IPv6 addresses.
 
 By default, B<nnrpd> in daemon mode listens to both IPv4 and IPv6
-addresses.  With this option, it will listen only to the specified
-IPv6 addresses.  On some systems however, a value of C<::0> will cause
-it to listen to all IPv4 addresses as well.
+addresses.  Use B<-6> alone to select an IPv6 listener, or combine it
+with B<-4> to listen on a specified IPv4 address as well.  On some systems,
+a value of C<::0> will also cause it to listen to all IPv4 addresses.
 
 =item B<-b> I<address>
 

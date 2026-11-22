@@ -434,9 +434,10 @@ information on how to set the default.
 
 =item status (off | I<interval>)
 
-Adjust the frequency with which B<innd> reports status information to
-syslog.  Status reporting is turned off if C<off> or C<0> is given as the
-argument.  Otherwise, status will be reported every I<interval> seconds.
+Adjust how often B<innd> writes the status report and, if I<logstatus> is
+true, logs the status to syslog.  Status reporting is turned off if C<off>
+or C<0> is given as the argument.  Otherwise, status will be reported
+every I<interval> seconds.
 See I<status> in inn.conf(5) for information on how to set the default.
 
 =item throttle I<reason>

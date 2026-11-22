@@ -297,13 +297,13 @@ whitespace.  The valid flags are:
 
 =item B<E<lt>> I<size>
 
-An article will only be sent to this site if it is less than I<size> bytes
-long.  The default is no limit.
+An article will only be sent to this site if it is at most I<size> bytes
+long.  A size of C<0> disables this test.  The default is no limit.
 
 =item B<E<gt>> I<size>
 
-An article will only be sent to this site if it is greater than I<size>
-bytes long.  The default is no limit.
+An article will only be sent to this site if it is at least I<size>
+bytes long.  A size of C<0> disables this test.  The default is no limit.
 
 =item B<A> I<checks>
 
@@ -477,10 +477,9 @@ header field added by the local server.
 
 =item B<P> I<priority>
 
-The nice priority that this channel or program feed should receive.  This
-should be a positive number between 0 and 20 and is the priority that the
-new process will run with.  This flag can be used to raise the priority to
-normal if you're using the I<nicekids> parameter in F<inn.conf>.
+The nice(2) increment for this channel or program feed, in place of
+I<nicekids> in F<inn.conf>.  A value of C<0> preserves the nice value
+inherited from B<innd>.
 
 =item B<Q> I<hashfeed>
 

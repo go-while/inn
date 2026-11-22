@@ -72,7 +72,8 @@ maximum number of connections to allow), if the value is not defined in the
 peer entry, then the enclosing groups are examined for the entry (starting
 at the closest enclosing group).  If there are no enclosing groups, or the
 enclosing groups don't define the key/value, then the value at global scope
-is used.  A small example could be:
+is used.  Place global and group defaults before the peers or nested groups
+that should inherit them.  A small example could be:
 
     # Global value applied to all peers that have no value of their own.
     max-connections: 5
