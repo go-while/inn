@@ -53,6 +53,15 @@ per envelope-from address, to the mailing-lists which use it, so that each
 list gets the article with its own envelope-from address.  The To header
 field body of each e-mail has the addresses of these mailing-lists.
 
+B<news2mail> retrieves an article with B<sm> once for all these e-mails.
+If it cannot (for instance because the article expired or was cancelled
+in the meantime), nothing is mailed for that article.
+When it cannot retrieve an article, or when the mail transport reports a
+failure for an e-mail, B<news2mail> logs the token of the article and, for
+a failed e-mail, its envelope-from address and recipients, to syslog and its
+standard error output.  It then goes on with the next articles and exits with
+status 1 when it ends, so that B<innd> logs an error.
+
 In F<newsfeeds>, the channel feed should look like:
 
     news2mail!:!*:Ac,Tc,Wn*:<pathbin>/news2mail

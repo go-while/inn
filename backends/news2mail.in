@@ -45,6 +45,7 @@ my $cfFile = $INN::Config::pathetc . "/news2mail.cf";
 my $sm = $INN::Config::pathbin . "/sm";
 my %maddr = ();
 my %saddr = ();
+my $failures = 0;
 my $use_syslog = 0;
 
 eval { require Sys::Syslog; import Sys::Syslog; $use_syslog = 1; };
@@ -104,17 +105,61 @@ while (<STDIN>) {
         push(@senders, $sa) if (!defined($rcpts{$sa}));
         push(@{ $rcpts{$sa} }, $maddr{$ln});
     }
+
+    # Retrieve the article once for all the e-mails, and mail nothing if it
+    # cannot be retrieved: it may have expired or been cancelled.
+    my $article = retrieve($token);
+    if (!defined($article)) {
+        $failures++;
+        next;
+    }
     foreach my $sa (@senders) {
-        mailto($token, $sa, @{ $rcpts{$sa} });
+        $failures++ if (!mailto($token, $article, $sa, @{ $rcpts{$sa} }));
     }
 }
 
 syslog("info", "end") if ($use_syslog);
 
-exit 0;
+# Exit with an error status if some articles have not been mailed, which innd
+# logs as an error; the failures have been reported above.
+exit($failures ? 1 : 0);
 
+# Report an error, in the syslog and on standard error (the errlog file of
+# INN).
+sub report {
+    my ($msg) = @_;
+
+    syslog('err', '%s', $msg) if ($use_syslog);
+    warn "news2mail: $msg\n";
+}
+
+# Retrieve an article with sm.  Return a reference to the array of its lines,
+# or undef when sm fails or returns nothing.
+sub retrieve {
+    my ($t) = @_;
+
+    my $pid = open(my $smgr, '-|', $sm, '-q', $t);
+    if (!$pid) {
+        report("cannot run $sm: $!");
+        return undef;
+    }
+    my @lines = <$smgr>;
+    if (!close($smgr)) {
+        report("$sm -q $t failed (status $?), nothing mailed");
+        return undef;
+    }
+    if (!@lines) {
+        report("$sm -q $t returned an empty article, nothing mailed");
+        return undef;
+    }
+    return \@lines;
+}
+
+# Mail an article, given as a reference to the array of its lines, from the
+# envelope sender $s to the addresses @a.  Return true on success, and false
+# when the mail transport does not accept the message.
 sub mailto {
-    my ($t, $s, @a) = @_;
+    my ($t, $article, $s, @a) = @_;
 
     my $sendmail = $INN::Config::mta;
     # Remove %s and -f from the mta command line (we'll explicitly set
@@ -131,50 +176,56 @@ sub mailto {
 
     syslog('debug', join(' ', @command)) if ($use_syslog);
 
+    # Do not die if the transport exits before reading the whole message:
+    # the failure is reported when closing it.
+    local $SIG{PIPE} = 'IGNORE';
+
     unless (open(SM, '|-', @command)) {
-        syslog('error', join(' ', '|', @command), 'failed!') if ($use_syslog);
+        syslog('err', join(' ', '|', @command), 'failed!') if ($use_syslog);
         die "bad $sendmail";
     }
 
-    my $smgr = "$sm -q $t |";
-
-    unless (open(SMGR, $smgr)) {
-        syslog('error', "$smgr failed!") if ($use_syslog);
-        die "bad $smgr";
-    }
-
     # Headers.
-    while (<SMGR>) {
-        chomp;
+    my $inheaders = 1;
+    foreach my $text (@{$article}) {
+        # Body.
+        if (!$inheaders) {
+            print SM $text;
+            next;
+        }
+
+        chomp(my $line = $text);
 
         # Empty line signals the end of header field.
         # Do not add an Auto-Submitted header field when gatewaying.
-        if (/^$/) {
+        if ($line =~ /^$/) {
             print SM "To: " . join(",\n\t", @a) . "\n";
             print SM "\n";
-            last;
+            $inheaders = 0;
+            next;
         }
 
         # Skip unnecessary header fields.
-        next if /^X-/i;
-        next if /^To:/i;
-        next if /^NNTP-Posting-Date:/i;
-        next if /^NNTP-Posting-Host:/i;
-        next if /^Lines:/i;
-        next if /^Xref:/i;
-        next if /^Path:/i;
+        next if $line =~ /^X-/i;
+        next if $line =~ /^To:/i;
+        next if $line =~ /^NNTP-Posting-Date:/i;
+        next if $line =~ /^NNTP-Posting-Host:/i;
+        next if $line =~ /^Lines:/i;
+        next if $line =~ /^Xref:/i;
+        next if $line =~ /^Path:/i;
 
         # Convert Newsgroups header field into X-Newsgroups header field.
-        s/^Newsgroups:/X-Newsgroups:/i;
+        $line =~ s/^Newsgroups:/X-Newsgroups:/i;
 
-        print SM "$_\n";
+        print SM "$line\n";
     }
 
-    # Body.
-    while (<SMGR>) {
-        print SM $_;
+    # The transport exits with a non-zero status when it cannot take the
+    # message, which close() reports.
+    if (!close(SM)) {
+        report("mailing $t from <$s> to " . join(' ', @a)
+            . " failed (status $?)");
+        return 0;
     }
-
-    close(SMGR);
-    close(SM);
+    return 1;
 }

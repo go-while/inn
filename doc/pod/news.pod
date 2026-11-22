@@ -221,6 +221,8 @@ it.  Previously, a single e-mail was sent to all the lists, with the
 envelope-from address of one of them if it was the only one set, and the
 C<news> user otherwise.  Note that a crosspost may therefore now give several
 e-mails.  Thanks to D. Stussy for the bug report.
+B<news2mail> also retrieves the article only once, mails nothing when it
+cannot, and logs the e-mails that the mail transport does not accept.
 
 =back
 
