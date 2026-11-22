@@ -1657,7 +1657,8 @@ passwd.nntp on the slave if it asks for authentication).
 You may also set pathhost on the slave to the same value as on the
 master.  If an incoming Path already starts with that name, sharing
 pathhost avoids an extra hop when the slave has no pathcluster and does
-not need to add a pathalias.  Those settings can still change Path.
+not need to add a pathalias.  A pathcluster or a pathalias on the slave still
+changes Path.
 
 Both servers must carry the same newsgroups: an article is not filed in
 a newsgroup that does not exist on the slave.  Either let both servers
