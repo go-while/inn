@@ -946,6 +946,7 @@ tests/data/etc/buffindexed.conf       buffindexed configuration for testing
 tests/data/etc/inn-bfx.conf           Basic inn.conf for testing buffindexed
 tests/data/etc/inn-tdx.conf           Basic inn.conf for testing tradindexed
 tests/data/etc/inn.conf               Basic inn.conf file for testing
+tests/data/etc/nnrpd.track            Host selection rules for testing nnrpd
 tests/data/etc/ovdb.conf              ovdb configuration for testing
 tests/data/etc/passwd                 DES password data for ckpasswd tests
 tests/data/etc/passwd-bcrypt          bcrypt password data for ckpasswd tests
@@ -1040,6 +1041,7 @@ tests/lib/xwrite-t.c                  Tests for lib/xwrite.c
 tests/nnrpd                           Test suite for nnrpd (Directory)
 tests/nnrpd/auth-ext-t.c              Tests for auth_external in nnrpd
 tests/nnrpd/auth-test.in              Helper program for external auth tests
+tests/nnrpd/track-t.c                 Tests for reader tracking host selection
 tests/overview                        Test suite for overview (Directory)
 tests/overview/api-t.c                Basic tests for overview API
 tests/overview/overchan.t             Tests for backends/overchan

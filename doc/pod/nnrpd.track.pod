@@ -16,8 +16,10 @@ two fields, separated by a colon:
 
     host:identity
 
-The first field is either one of the FQDNs of a host, or a domain name
-(in the form C<*.domain.com>).
+The first field matches the whole client hostname or IPv4 address.  Use a
+fully qualified hostname for a single host, C<*.domain.com> for hosts below
+that domain, or C<*> for all hosts.  Hostnames are case-insensitive.  The
+first matching line supplies the identity.
 
 The second field is simply a segment of text which may be used to
 more easily identify the client, typically an e-mail address or

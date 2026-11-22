@@ -34,9 +34,9 @@ TESTS	= authprogs/ident.t expire/tombstone.t expire/tombstone-hisexpire.t \
 	lib/reservedfd.t \
 	lib/setenv.t lib/snprintf.t lib/strlcat.t \
 	lib/strlcpy.t lib/tst.t lib/uwildmat.t lib/vector.t lib/wire.t \
-	lib/xwrite.t nnrpd/auth-ext.t overview/api.t overview/buffindexed.t \
-	overview/ovsqlite.t overview/tdx-group.t overview/tradindexed.t \
-	overview/xref.t \
+	lib/xwrite.t nnrpd/auth-ext.t nnrpd/track.t overview/api.t \
+	overview/buffindexed.t overview/ovsqlite.t overview/tdx-group.t \
+	overview/tradindexed.t overview/xref.t \
 	storage/caf.t storage/cancel-tombstone.t util/innbind.t
 
 ##  Extra stuff that needs to be built before tests can be run.
@@ -339,6 +339,9 @@ lib/xwrite.t: lib/xwrite-t.o lib/xwrite.o lib/fakewrite.o tap/basic.o $(LIBINN)
 nnrpd/auth-ext.t: nnrpd/auth-ext-t.o ../nnrpd/auth-ext.o tap/basic.o tap/messages.o tap/string.o $(LIBINN) nnrpd/auth-test
 	$(LINK) nnrpd/auth-ext-t.o ../nnrpd/auth-ext.o tap/basic.o \
 	    tap/messages.o tap/string.o $(LIBINN)
+
+nnrpd/track.t: nnrpd/track-t.o ../nnrpd/track.o tap/basic.o $(LIBINN)
+	$(LINK) nnrpd/track-t.o ../nnrpd/track.o tap/basic.o $(LIBINN) $(LIBS)
 
 nnrpd/auth-test: nnrpd/auth-test.in $(FIXSCRIPT)
 	$(FIX) -i nnrpd/auth-test.in
