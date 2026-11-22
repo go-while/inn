@@ -133,6 +133,12 @@ files behind after a failed creation, and the buffindexed overview method
 validates its F<group.index> file and no longer frees memory twice when
 mapping overview data fails.  Many thanks to Kevin Bowling for the patches.
 
+=item *
+
+B<simpleftp> now accepts IPv6 addresses enclosed in square brackets in FTP
+URLs, optionally followed by a port, and no longer dies when an FTP URL
+follows an HTTP or HTTPS URL for the same host.
+
 =back
 
 =head1 Changes in 2.7.5 (not yet released)

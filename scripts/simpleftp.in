@@ -92,8 +92,12 @@ for (@ARGV) {
         $host = $3;
     }
 
-    # Do not search a port for IPv6 addresses.
-    if ($host !~ /^[\da-fA-F\:]+$/ && $host =~ /(.*):(.*)/) {
+    # An IPv6 address is enclosed in square brackets, optionally followed by
+    # a port (RFC 3986).  Do not search a port for unbracketed IPv6 addresses.
+    if ($host =~ /^\[([^\]]+)\](?::(\d*))?$/) {
+        $host = $1;
+        $port = $2 if defined $2 && $2 ne '';
+    } elsif ($host !~ /^[\da-fA-F\:]+$/ && $host =~ /(.*):(.*)/) {
         $host = $1;
         $port = $2;
     }
