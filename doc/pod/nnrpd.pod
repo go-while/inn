@@ -375,8 +375,15 @@ only advertises the IHAVE capability when it is really available.
 
 =item 7.
 
-B<nnrpd> allows a wider syntax for wildmats and ranges (especially C<->
-and C<-I<article-number>>).
+B<nnrpd> wildmats support bracketed character sets (for example,
+C<[abc]>, C<[a-c]>, and C<[^a-c]>) and backslash escapes outside those
+sets.  See libinn_uwildmat(3) for the syntax and the differences between
+an ordinary wildmat expression and the single pattern used by XPAT.
+
+In article ranges, a leading dash with no first number (for example,
+C<-12>) starts at the selected group's low-water mark and includes
+articles through the given number, up to the group's high-water mark.
+A dash alone (C<->) selects the whole range from low to high.
 
 =item 8.
 

@@ -360,7 +360,13 @@ to B<nnrpd>.
 
 =item 3.
 
-B<innd> allows a wider syntax for wildmats.
+Wildmats used by B<innd>, for example in LIST ACTIVE, accept character
+sets in square brackets in addition to the syntax in S<RFC 3977>.
+C<news.[abc]> matches C<news.a>, C<news.b>, and C<news.c>.
+C<news.[a-c]> matches the same names, and C<news.[^a-c]> matches a
+single character other than C<a>, C<b>, or C<c> after C<news.>.
+A backslash outside a set makes the following character literal.
+See libinn_uwildmat(3) for the full syntax.
 
 =item 4.
 
