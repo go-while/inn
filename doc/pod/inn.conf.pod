@@ -967,20 +967,6 @@ out separately after the initial alphabetized list.
 
 =over 4
 
-=item I<disablecapabilities>
-
-The optional reader commands to turn off even when the corresponding
-libraries are available.  For example:
-
-    disablecapabilities: [ COMPRESS SASL STARTTLS ]
-
-Names are case-insensitive.  B<nnrpd> omits each listed capability from
-its CAPABILITIES response and rejects the corresponding command.  C<SASL>
-applies to AUTHINFO SASL, leaving other authentication methods available.
-C<STARTTLS> controls the STARTTLS command.  A dedicated TLS listener
-started with B<nnrpd -S> continues to use TLS.  The default list is empty.
-Restart a standalone B<nnrpd> daemon after changing this parameter.
-
 =item I<allownewnews>
 
 Whether to allow use of the NEWNEWS command by clients.  This command used
@@ -1006,6 +992,20 @@ timing out while a post is being composed.  If the system isn't having a
 problem with too many long-lived connections, it may be a good idea to
 increase this value to C<3600> (an hour).  The default value is C<1800>
 (thirty minutes).
+
+=item I<disablecapabilities>
+
+The optional reader commands to turn off even when the corresponding
+libraries are available.  For example:
+
+    disablecapabilities: [ COMPRESS SASL STARTTLS ]
+
+Names are case-insensitive.  B<nnrpd> omits each listed capability from
+its CAPABILITIES response and rejects the corresponding command.  C<SASL>
+applies to AUTHINFO SASL, leaving other authentication methods available.
+C<STARTTLS> controls the STARTTLS command.  A dedicated TLS listener
+started with B<nnrpd -S> continues to use TLS.  The default list is empty.
+Restart a standalone B<nnrpd> daemon after changing this parameter.
 
 =item I<initialtimeout>
 

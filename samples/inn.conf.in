@@ -89,9 +89,9 @@ xrefslave:                   false
 # Reading
 
 allownewnews:                true
-#disablecapabilities:        [ ]
 articlemmap:                 true
 clienttimeout:               1800
+#disablecapabilities:        [ ]
 initialtimeout:              10
 msgidcachesize:              64000
 nfsreader:                   false
