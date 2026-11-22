@@ -205,6 +205,10 @@ chmod 0644 "$out"
 #
 echo "$(date "$DATEFMT") for $host: start" >>$out 2>&1
 for loop in 1 2 3 4 5 6 7 8 9 10; do
+    # Start each attempt clean: a failed download may have left a partial
+    # file, and wget would then save the next download as active.1.
+    rm -f active active.*
+
     # get the active file to compare against
     status=0
     case $host in
@@ -218,10 +222,13 @@ for loop in 1 2 3 4 5 6 7 8 9 10; do
         ;;
     *)
         if [ "$protocol" = "nntp" ]; then
-            port=$(expr "$host" : '.*:\(.*\)')
-            if [ -n "$port" ]; then
-                port="-p $port"
-                host=$(expr "$host" : '\(.*\):.*')
+            # Keep the optional port after stripping it from the host.
+            if [ "$loop" -eq 1 ]; then
+                port=$(expr "$host" : '.*:\(.*\)')
+                if [ -n "$port" ]; then
+                    port="-p $port"
+                    host=$(expr "$host" : '\(.*\):.*')
+                fi
             fi
             echo "$(date "$DATEFMT") getlist -h $host $port" >>$out
             if getlist -h $host $port >active 2>>$out; then
@@ -268,7 +275,7 @@ for loop in 1 2 3 4 5 6 7 8 9 10; do
             fi
         fi
 
-        if [ ! -s "active" ]; then
+        if [ "$status" -ne "$NOSYNC" ] && [ ! -s "active" ]; then
             echo "$(date "$DATEFMT") active file not retrieved or empty" >>$out
             status=1
         fi
@@ -317,7 +324,10 @@ for loop in 1 2 3 4 5 6 7 8 9 10; do
         exit 0
     fi
 
-    # failed to get the remote active file
+    # failed to get the remote active file; no wait after the last try
+    if [ "$loop" -eq 10 ]; then
+        break
+    fi
     echo "$(date "$DATEFMT") for $host: failed to connect/sync, retrying" \
         >>$out
 
