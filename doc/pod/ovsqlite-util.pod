@@ -51,7 +51,8 @@ distributions available at L<https://metacpan.org/dist/DBI> and
 L<https://metacpan.org/dist/DBD-SQLite>).
 
 Naturally, an ovsqlite overview database also needs to be in use, as detailed
-in the ovsqlite(5) manual page.
+in the ovsqlite(5) manual page.  If the database is missing, the utility
+reports an error.  B<ovsqlite-server> creates it on first startup.
 
 =head1 OPTIONS
 
