@@ -110,8 +110,8 @@ if no item has that key.
 B<hash_traverse> calls I<callback> on every data item in I<hash>, in no
 particular order.  The first argument of I<callback> is the data item,
 the second one is I<data>, which is passed unchanged.  I<callback> must
-not add items to I<hash>, as the table may then be resized during the
-traversal.
+not call B<hash_insert> on I<hash>, as even a failed insertion may resize
+the table during the traversal.
 
 B<hash_count> returns the number of data items in I<hash>.
 
