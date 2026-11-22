@@ -274,11 +274,21 @@ nntp_read_multiline(struct nntp *nntp, char **data, size_t *length)
     enum nntp_status status = NNTP_READ_OK;
     size_t offset;
     size_t start = 0;
+    bool found;
 
     buffer_compact(in);
     while (status == NNTP_READ_OK) {
-        if (buffer_find_string(in, "\r\n.\r\n", start, &offset)) {
+        /* An empty block is only the terminating line, which then has no
+           line ending before it. */
+        found = false;
+        if (in->left >= 3 && memcmp(in->data + in->used, ".\r\n", 3) == 0) {
+            offset = 3;
+            found = true;
+        } else if (buffer_find_string(in, "\r\n.\r\n", start, &offset)) {
             offset += 5;
+            found = true;
+        }
+        if (found) {
             in->left -= offset;
             *length = offset;
             *data = in->data + in->used;

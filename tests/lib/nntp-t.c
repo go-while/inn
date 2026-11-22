@@ -154,6 +154,60 @@ test_noflush(void)
 }
 
 
+/*
+**  nntp_read_multiline finds the end of a block, also of an empty one that
+**  is only the terminating line, and leaves what follows in the buffer.
+*/
+static void
+test_multiline(void)
+{
+    struct nntp *nntp;
+    int fds[2];
+    char *data, *line;
+    size_t length;
+
+    if (pipe(fds) < 0)
+        sysbail("cannot create pipe");
+    nntp = nntp_new(fds[0], -1, 0, 1);
+
+    put(fds[1], ".\r\nQUIT\r\n");
+    data = NULL;
+    length = 0;
+    is_int(NNTP_READ_OK, nntp_read_multiline(nntp, &data, &length),
+           "empty block is read");
+    is_int(3, length, "...as only the terminating line");
+    ok(length == 3 && memcmp(data, ".\r\n", 3) == 0, "...with its bytes");
+    line = NULL;
+    is_int(NNTP_READ_OK, nntp_read_line(nntp, &line),
+           "line after the empty block is read");
+    is_string("QUIT", line, "...and was not part of the block");
+
+    put(fds[1], "..x\r\nb\r\n.\r\nNEXT\r\n");
+    data = NULL;
+    length = 0;
+    is_int(NNTP_READ_OK, nntp_read_multiline(nntp, &data, &length),
+           "block starting with a dot-stuffed line is read");
+    ok(length == 11 && memcmp(data, "..x\r\nb\r\n.\r\n", 11) == 0,
+       "...up to and including its terminating line");
+    line = NULL;
+    is_int(NNTP_READ_OK, nntp_read_line(nntp, &line),
+           "line after the block is read");
+    is_string("NEXT", line, "...and was not part of the block");
+
+    put(fds[1], ".\r");
+    is_int(NNTP_READ_TIMEOUT, nntp_read_multiline(nntp, &data, &length),
+           "incomplete terminating line waits for more data");
+    put(fds[1], "\n");
+    length = 0;
+    is_int(NNTP_READ_OK, nntp_read_multiline(nntp, &data, &length),
+           "empty block split across reads is read");
+    is_int(3, length, "...as only the terminating line");
+
+    close(fds[1]);
+    nntp_free(nntp);
+}
+
+
 int
 main(void)
 {
@@ -161,10 +215,11 @@ main(void)
     alarm(60);
     signal(SIGPIPE, SIG_IGN);
 
-    plan(12);
+    plan(24);
 
     test_timeout();
     test_noflush();
+    test_multiline();
 
     return 0;
 }
