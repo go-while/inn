@@ -101,5 +101,17 @@ print $MTA "\n";
 while (<STDIN>) {
     print $MTA $_;
 }
-close $MTA;
+
+# Closing the pipe waits for the MTA.  Report a failure to submit the mail
+# in the exit status, so that the caller can notice it.
+if (!close $MTA) {
+    if ($! != 0) {
+        warn "$0: Cannot send the mail to $smarr[0]: $!\n";
+    } elsif ($? & 127) {
+        warn "$0: $smarr[0] was killed by signal " . ($? & 127) . "\n";
+    } else {
+        warn "$0: $smarr[0] exited with status " . ($? >> 8) . "\n";
+    }
+    exit 1;
+}
 exit;

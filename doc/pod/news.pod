@@ -243,6 +243,13 @@ detection of malformed Xref records stored with tradspool and of corrupt
 history records.  The overview and storage backends also validate more
 structures before using them.  Many thanks to Kevin Bowling for the patches.
 
+=item *
+
+B<innmail> now exits with a non-zero status when the MTA fails, for
+instance when it rejects the message or cannot queue it.  It previously
+exited with status 0 in that case, so callers could not notice that the
+mail was not sent.
+
 =back
 
 =head1 Changes in 2.7.4 (2026-06-22)

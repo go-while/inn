@@ -52,6 +52,13 @@ if this option is omitted.
 
 =back
 
+=head1 EXIT STATUS
+
+B<innmail> exits with status 0 when the MTA accepted the message.  It exits
+with a non-zero status, after printing a message on standard error, when
+the MTA could not be run or exited with a non-zero status (for instance
+because it rejected the message or could not queue it).
+
 =head1 EXAMPLES
 
 This sends a one-line message to the local user C<joe>:
