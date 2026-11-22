@@ -74,14 +74,14 @@ while (<CF>) {
     $maddr{$ln} = $ma;
     $saddr{$ln} = $sa if ($sa =~ /.+/);
     $sa = $INN::Config::newsuser if (!defined($saddr{$ln}));
-    syslog('debug', "List=$ln, To=<$ma>, From=<$sa>") if ($use_syslog);
+    syslog('debug', 'List=%s, To=<%s>, From=<%s>', $ln, $ma, $sa) if ($use_syslog);
 }
 close(CF);
 
 # For each incoming line from the INN channel.
 while (<STDIN>) {
     chomp;
-    syslog('info', $_) if ($use_syslog);
+    syslog('info', '%s', $_) if ($use_syslog);
 
     my ($token, $lnames) = split(/\s+/, $_, 2);
     my @addrs = split(/\s+/, $lnames);
@@ -89,12 +89,12 @@ while (<STDIN>) {
     my @bad = grep { !defined($maddr{$_}) } @addrs;
 
     if (!@good) {
-        syslog('notice', "unknown list(s): $lnames") if ($use_syslog);
+        syslog('notice', 'unknown list(s): %s', $lnames) if ($use_syslog);
         next;
     }
 
     if (@bad) {
-        syslog('info', 'skipping list(s): ', join(' ', @bad)) if ($use_syslog);
+        syslog('info', 'skipping list(s): %s', join(' ', @bad)) if ($use_syslog);
     }
 
     # Send one mail per envelope sender, to the lists which use it.  Lists
@@ -133,6 +133,16 @@ sub report {
     warn "news2mail: $msg\n";
 }
 
+# Tell why a child process or a pipe failed, from the wait status $? and the
+# error $! taken right after close().
+sub why {
+    my ($status, $err) = @_;
+
+    return 'killed by signal ' . ($status & 127) if ($status & 127);
+    return 'exit status ' . ($status >> 8) if ($status);
+    return "I/O error: $err";
+}
+
 # Retrieve an article with sm.  Return a reference to the array of its lines,
 # or undef when sm fails or returns nothing.
 sub retrieve {
@@ -140,12 +150,13 @@ sub retrieve {
 
     my $pid = open(my $smgr, '-|', $sm, '-q', $t);
     if (!$pid) {
-        report("cannot run $sm: $!");
+        report("cannot run $sm -q $t, nothing mailed: $!");
         return undef;
     }
     my @lines = <$smgr>;
     if (!close($smgr)) {
-        report("$sm -q $t failed (status $?), nothing mailed");
+        my $reason = why($?, "$!");
+        report("$sm -q $t failed ($reason), nothing mailed");
         return undef;
     }
     if (!@lines) {
@@ -174,23 +185,31 @@ sub mailto {
         '-oee', '-odq', "-f$s", "-pNNTP:$INN::Config::pathhost", @a,
     );
 
-    syslog('debug', join(' ', @command)) if ($use_syslog);
+    syslog('debug', '%s', join(' ', @command)) if ($use_syslog);
 
     # Do not die if the transport exits before reading the whole message:
     # the failure is reported when closing it.
     local $SIG{PIPE} = 'IGNORE';
 
     unless (open(SM, '|-', @command)) {
-        syslog('err', join(' ', '|', @command), 'failed!') if ($use_syslog);
-        die "bad $sendmail";
+        report("mailing $t from <$s> to " . join(' ', @a)
+            . " failed: cannot run $sendmail: $!");
+        return 0;
     }
+
+    # Remember the first error when writing to the transport.
+    my $werr;
+    my $put = sub {
+        print SM @_ or $werr = "$!" if (!defined($werr));
+    };
 
     # Headers.
     my $inheaders = 1;
     foreach my $text (@{$article}) {
         # Body.
         if (!$inheaders) {
-            print SM $text;
+            $put->($text);
+            last if (defined($werr));
             next;
         }
 
@@ -199,8 +218,7 @@ sub mailto {
         # Empty line signals the end of header field.
         # Do not add an Auto-Submitted header field when gatewaying.
         if ($line =~ /^$/) {
-            print SM "To: " . join(",\n\t", @a) . "\n";
-            print SM "\n";
+            $put->("To: " . join(",\n\t", @a) . "\n\n");
             $inheaders = 0;
             next;
         }
@@ -217,15 +235,21 @@ sub mailto {
         # Convert Newsgroups header field into X-Newsgroups header field.
         $line =~ s/^Newsgroups:/X-Newsgroups:/i;
 
-        print SM "$line\n";
+        $put->("$line\n");
+        last if (defined($werr));
     }
 
     # The transport exits with a non-zero status when it cannot take the
-    # message, which close() reports.
-    if (!close(SM)) {
-        report("mailing $t from <$s> to " . join(' ', @a)
-            . " failed (status $?)");
-        return 0;
-    }
-    return 1;
+    # message, which close() reports.  Close it even after a write error, to
+    # reap the child.
+    my $closed = close(SM);
+    my $status = $?;
+    my $cerr = "$!";
+    return 1 if ($closed && !defined($werr));
+
+    my $reason = defined($werr)
+      ? "cannot write to the transport: $werr"
+      : why($status, $cerr);
+    report("mailing $t from <$s> to " . join(' ', @a) . " failed: $reason");
+    return 0;
 }

@@ -221,8 +221,16 @@ it.  Previously, a single e-mail was sent to all the lists, with the
 envelope-from address of one of them if it was the only one set, and the
 C<news> user otherwise.  Note that a crosspost may therefore now give several
 e-mails.  Thanks to D. Stussy for the bug report.
-B<news2mail> also retrieves the article only once, mails nothing when it
-cannot, and logs the e-mails that the mail transport does not accept.
+
+=item *
+
+B<news2mail> retrieves an article only once for all its e-mails, instead of
+once per e-mail after having started the mail transport.  It no longer mails
+an empty message when the article has expired or been cancelled in the
+meantime.  It also reports the e-mails that cannot be sent (the program or
+the transport cannot be run, fails, or does not read the whole message), and
+exits with status 1 at the end of its input when some articles were not
+mailed.
 
 =back
 

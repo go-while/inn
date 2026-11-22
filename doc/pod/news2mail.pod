@@ -56,31 +56,15 @@ field body of each e-mail has the addresses of these mailing-lists.
 B<news2mail> retrieves an article with B<sm> once for all these e-mails.
 If it cannot (for instance because the article expired or was cancelled
 in the meantime), nothing is mailed for that article.
-When it cannot retrieve an article, or when the mail transport reports a
-failure for an e-mail, B<news2mail> logs the token of the article and, for
-a failed e-mail, its envelope-from address and recipients, to syslog and its
-standard error output.  It then goes on with the next articles and exits with
-status 1 when it ends, so that B<innd> logs an error.
-
-In F<newsfeeds>, the channel feed should look like:
-
-    news2mail!:!*:Ac,Tc,Wn*:<pathbin>/news2mail
-
-and for each mailing-list, you only have to add to F<newsfeeds> an entry list
-like:
-
-    list-big-red-ants/lists.ucsd.edu\
-        :!*,rec.pets.red-ants\
-        :Ap,Tm:news2mail!
-
-Please note the use of C<Ap> and the exclusion of the list owner domain
-to protect the list from feeding back new arrivals from the list.
-The site name used in the F<newsfeeds> entry for a mailing-list (above
-C<list-big-red-ants>) must be the same as the first field in an entry in
-F<news2mail.cf>.  For instance:
-
-    # newsfeeds-name   list-to-address      [list-sender-address]
-    list-big-red-ants  ants@lists.ucsd.edu  news+ants@news.server.org
+When it cannot retrieve an article, or when an e-mail cannot be sent (the
+mail transport cannot be run, does not read the whole message, or reports a
+failure), B<news2mail> logs the problem immediately to syslog and to its
+standard error output, which B<innd> sends to the F<errlog> file: the
+token of the article, and for an e-mail, its envelope-from address and
+recipients, and the reason.
+It then goes on with the next articles.  When its input ends, it exits with
+status 1 if some articles were not mailed, so that B<innd> logs an error; the
+log messages above are the only record of which ones.
 
 =head1 FILES
 
