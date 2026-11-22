@@ -192,6 +192,7 @@ doc/man/innxmit.8                     Manpage for innxmit
 doc/man/libinn.3                      Manpage for INN library routines
 doc/man/libinn_clientlib.3            Manpage for C News library interface
 doc/man/libinn_dbz.3                  Manpage for DBZ database interface
+doc/man/libinn_hashtab.3              Manpage for generic hash table
 doc/man/libinn_inndcomm.3             Manpage for part of INN library
 doc/man/libinn_list.3                 Manpage for list routines
 doc/man/libinn_qio.3                  Manpage for fast I/O file routines
@@ -319,6 +320,7 @@ doc/pod/install.pod                   Master file for INSTALL
 doc/pod/libinn.pod                    Master file for libinn.3
 doc/pod/libinn_clientlib.pod          Master file for libinn_clientlib.3
 doc/pod/libinn_dbz.pod                Master file for libinn_dbz.3
+doc/pod/libinn_hashtab.pod            Master file for libinn_hashtab.3
 doc/pod/libinn_inndcomm.pod           Master file for libinn_inndcomm.3
 doc/pod/libinn_list.pod               Master file for libinn_list.3
 doc/pod/libinn_qio.pod                Master file for libinn_qio.3
