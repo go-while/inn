@@ -1,0 +1,55 @@
+=head1 NAME
+
+innconf_read, innconf_free, innconf_print_value, innconf_dump, innconf_compare, innconf_check - work with INN's main configuration
+
+=head1 SYNOPSIS
+
+    #include <inn/innconf.h>
+
+    extern struct innconf *innconf;
+
+    bool innconf_read(const char *path);
+    void innconf_free(struct innconf *config);
+    bool innconf_print_value(FILE *file, const char *key,
+                             enum confparse_quoting quoting);
+    void innconf_dump(FILE *file, enum confparse_quoting quoting);
+    bool innconf_compare(struct innconf *first, struct innconf *second);
+    bool innconf_check(const char *path);
+
+=head1 DESCRIPTION
+
+B<innconf_read> loads I<path> into the global C<innconf> structure,
+replacing any previous configuration.  A NULL I<path> selects the
+C<INNCONF> environment variable when set, otherwise the configured
+default file.  On success, the function validates the configuration,
+fills in derived defaults, sets C<TMPDIR> from I<pathtmp> and returns
+true.  It returns false on failure.  Use the configuration after a
+successful return.
+
+B<innconf_free> frees I<config> and its allocated strings and vectors.
+Clear the global pointer if it refers to the released structure.
+
+B<innconf_print_value> writes I<key> from the current configuration to
+I<file> using I<quoting> as described in libinn_confparse(3).  It returns
+true for a recognized key and false otherwise.  B<innconf_dump> writes
+the recognized settings to I<file> in the same representation.
+
+B<innconf_compare> compares the settings in I<first> and I<second>.
+It reports differences as warnings and returns true when all settings
+match.
+
+B<innconf_check> loads and validates I<path> and reports unknown
+parameters.  Path selection is the same as for B<innconf_read>.  It
+replaces the global C<innconf> with the parsed configuration but skips
+the derived defaults and C<TMPDIR> setup performed by B<innconf_read>.
+It returns true when the checks succeed.
+
+=head1 HISTORY
+
+INN adopted the shared configuration parser for F<inn.conf> in 2002.
+
+=head1 SEE ALSO
+
+inn.conf(5), innconfval(1), libinn(3), libinn_confparse(3).
+
+=cut
