@@ -21,6 +21,7 @@
 /* Needed for htonl() and friends on AIX 4.1. */
 #include <netinet/in.h>
 
+#include "inn/buffer.h"
 #include "inn/innconf.h"
 #include "inn/libinn.h"
 #include "inn/messages.h"
@@ -268,6 +269,9 @@ FindNGByNum(unsigned long ngnumber)
 #define _PATH_NEWTSNGDB     "tradspool.map.new"
 
 
+/* Size of the chunks DumpDB writes. */
+#define DUMPDB_CHUNK (64 * 1024)
+
 /* dump DB to file. */
 static void
 DumpDB(void)
@@ -275,7 +279,8 @@ DumpDB(void)
     char *fname, *fnamenew;
     NGTENT *ngtp;
     unsigned int i;
-    FILE *out;
+    int fd;
+    struct buffer *out = NULL;
 
     if (!SMopenmode)
         return; /* don't write if we're not in read/write mode. */
@@ -285,34 +290,48 @@ DumpDB(void)
     fname = concatpath(innconf->pathspool, _PATH_TRADSPOOLNGDB);
     fnamenew = concatpath(innconf->pathspool, _PATH_NEWTSNGDB);
 
-    if ((out = fopen(fnamenew, "w")) == NULL) {
-        syswarn("tradspool: DumpDB: can't write %s", fnamenew);
-        free(fname);
-        free(fnamenew);
-        return;
+    fd = open(fnamenew, O_WRONLY | O_CREAT | O_TRUNC, 0666);
+    if (fd < 0) {
+        syswarn("tradspool: DumpDB: can't open %s", fnamenew);
+        goto done;
     }
+    /* Collect the records and write them in large chunks. */
+    out = buffer_new();
+    buffer_resize(out, DUMPDB_CHUNK);
     for (i = 0; i < NGT_SIZE; ++i) {
-        ngtp = NGTable[i];
-        for (; ngtp; ngtp = ngtp->next) {
-            fprintf(out, "%s %lu\n", ngtp->ngname, ngtp->ngnumber);
+        for (ngtp = NGTable[i]; ngtp; ngtp = ngtp->next) {
+            buffer_append_sprintf(out, "%s %lu\n", ngtp->ngname,
+                                  ngtp->ngnumber);
+            if (out->left >= DUMPDB_CHUNK) {
+                if (xwrite(fd, out->data, out->left) < 0)
+                    goto writefail;
+                out->left = 0;
+            }
         }
     }
-    if (fclose(out) < 0) {
+    if (out->left > 0 && xwrite(fd, out->data, out->left) < 0)
+        goto writefail;
+    if (close(fd) < 0) {
         syswarn("tradspool: DumpDB: can't close %s", fnamenew);
-        free(fname);
-        free(fnamenew);
-        return;
+        goto discard;
     }
     if (rename(fnamenew, fname) < 0) {
         syswarn("tradspool: DumpDB: can't rename %s", fnamenew);
-        free(fname);
-        free(fnamenew);
-        return;
+        goto discard;
     }
+    NGTableUpdated = false;
+    goto done;
+
+writefail:
+    syswarn("tradspool: DumpDB: can't write %s", fnamenew);
+    close(fd);
+discard:
+    unlink(fnamenew);
+done:
+    if (out != NULL)
+        buffer_free(out);
     free(fname);
     free(fnamenew);
-    NGTableUpdated = false; /* reset modification flag. */
-    return;
 }
 
 /*

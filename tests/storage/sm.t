@@ -151,7 +151,7 @@ if [ ! -x "$sm" ]; then
 fi
 
 # Print out the count of tests.
-echo 23
+echo 24
 
 # Point sm at the appropriate inn.conf file and create our required directory
 # structure.
@@ -172,6 +172,25 @@ exists spool/example/test/1
 exists spool/example/test/2
 exists spool/example/config/1
 exists spool/example/config/2
+
+# Tradspool numbers the groups in active-file order when it reads the
+# active file at initialization, and writes the map in hash-table order.
+# Compare the sorted lines, and check that the map has one line per group
+# and ends with a newline.
+n=0
+while read group rest; do
+    n=$(expr $n + 1)
+    echo "$(echo "$group" | sed 's/\./\//g') $n"
+done <db/active | LC_ALL=C sort >spool/real
+groups=$(wc -l <db/active | tr -d ' ')
+lines=$(wc -l <spool/tradspool.map | tr -d ' ')
+if LC_ALL=C sort spool/tradspool.map >spool/test \
+    && diff spool/real spool/test && [ "$lines" = "$groups" ] \
+    && [ "$(tail -c 1 spool/tradspool.map | wc -l | tr -d ' ')" = 1 ]; then
+    printcount "ok"
+else
+    printcount "not ok"
+fi
 
 # Make sure that the articles are correct.
 retrieve "$token1" articles/1
