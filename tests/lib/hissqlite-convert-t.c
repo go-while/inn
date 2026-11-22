@@ -10,6 +10,10 @@
 **  temporary build files are cleaned up, that a conversion leaves alone a
 **  temporary file it does not own, and that of two conversions run at the same
 **  time to the same destination, exactly one publishes a complete database.
+**  A test hook of the binary (INN_TESTSUITE and HISSQLITE_CONVERT_TEST) makes
+**  a destination appear just before the publication, publishes it the way a
+**  retransmitted NFS link would, or holds the conversion so that SIGTERM can
+**  be checked to remove the temporary directory.
 **
 **  This drives the real binary (via system()) rather than the library, so it
 **  needs inn.conf: a minimal one is written to the temp dir and pointed at
@@ -40,6 +44,13 @@ main(void)
 
 #    include <dirent.h>
 #    include <fcntl.h>
+#    include <signal.h>
+#    ifdef HAVE_SYS_SELECT_H
+#        include <sys/select.h>
+#    endif
+#    ifdef HAVE_SYS_TIME_H
+#        include <sys/time.h>
+#    endif
 #    include <sys/stat.h>
 #    include <sys/wait.h>
 
@@ -65,6 +76,17 @@ run_convert(const char *src, const char *dst)
     if (status == -1 || !WIFEXITED(status))
         return -1;
     return WEXITSTATUS(status);
+}
+
+/* Sleep for ms milliseconds. */
+static void
+sleep_ms(long ms)
+{
+    struct timeval tv;
+
+    tv.tv_sec = ms / 1000;
+    tv.tv_usec = (ms % 1000) * 1000;
+    select(0, NULL, NULL, NULL, &tv);
 }
 
 /* Start "<convert> <src> <dst>" in the background with output suppressed and
@@ -142,7 +164,7 @@ main(void)
     if (access(convert, X_OK) != 0)
         skip_all("hissqlite-convert not built");
 
-    test_init(13);
+    test_init(19);
 
     strlcpy(tmpdir, "hissqlite-conv-XXXXXX", sizeof(tmpdir));
     if (mkdtemp(tmpdir) == NULL)
@@ -321,10 +343,75 @@ main(void)
 
     /* No temporary directory or file is left behind, apart from the one
        created by this test. */
-    ok(13, count_entries(tmpdir, "dst.new.", NULL)
+    ok(13, count_entries(tmpdir, "hisconv.", NULL)
+                   + count_entries(tmpdir, "dst.new.", NULL)
                    + count_entries(tmpdir, "dst2.new.", "dst2.new.sqlite")
                    + count_entries(tmpdir, "dst3.new.", NULL)
                == 0);
+
+    /* The test hook acts just before the publication. */
+    if (setenv("INN_TESTSUITE", "1", 1) != 0)
+        sysbail("can't set INN_TESTSUITE");
+
+    /* A destination created after the initial check, here with the hook, is
+       neither replaced nor accepted. */
+    {
+        char dst4[128], dst4db[160], buf[32] = "";
+
+        snprintf(dst4, sizeof(dst4), "%s/dst4", tmpdir);
+        snprintf(dst4db, sizeof(dst4db), "%s/dst4.sqlite", tmpdir);
+        if (setenv("HISSQLITE_CONVERT_TEST", "file", 1) != 0)
+            sysbail("can't set HISSQLITE_CONVERT_TEST");
+        ok(14, run_convert(src, dst4) != 0);
+        f = fopen(dst4db, "r");
+        if (f != NULL) {
+            if (fgets(buf, sizeof(buf), f) == NULL)
+                buf[0] = '\0';
+            fclose(f);
+        }
+        ok(15, strcmp(buf, "racer\n") == 0);
+    }
+
+    /* EEXIST from link with the destination already being the new database,
+       as after a retransmitted NFS request, is a success. */
+    if (setenv("HISSQLITE_CONVERT_TEST", "link", 1) != 0)
+        sysbail("can't set HISSQLITE_CONVERT_TEST");
+    {
+        char dst5[128];
+
+        snprintf(dst5, sizeof(dst5), "%s/dst5", tmpdir);
+        ok(16, run_convert(src, dst5) == 0);
+        h = HISopen(dst5, "hissqlite", HIS_RDWR);
+        ok(17, h != NULL && HIScheck(h, "<r1@conv>"));
+        if (h != NULL)
+            HISclose(h);
+    }
+
+    /* SIGTERM during a conversion removes its temporary directory. */
+    if (setenv("HISSQLITE_CONVERT_TEST", "wait", 1) != 0)
+        sysbail("can't set HISSQLITE_CONVERT_TEST");
+    {
+        char dst6[128];
+        pid_t pid;
+        int i, status;
+
+        snprintf(dst6, sizeof(dst6), "%s/dst6", tmpdir);
+        pid = start_convert(src, dst6);
+        for (i = 0; i < 300 && count_entries(tmpdir, "hisconv.", NULL) == 0;
+             i++)
+            sleep_ms(100);
+        sleep_ms(500); /* let it reach the hook */
+        kill(pid, SIGTERM);
+        if (waitpid(pid, &status, 0) != pid)
+            sysbail("can't wait for %lu", (unsigned long) pid);
+        ok(18, WIFSIGNALED(status) && WTERMSIG(status) == SIGTERM);
+        snprintf(dst6, sizeof(dst6), "%s/dst6.sqlite", tmpdir);
+        ok(19, count_entries(tmpdir, "hisconv.", NULL) == 0
+                   && access(dst6, F_OK) != 0);
+        if (count_entries(tmpdir, "hisconv.", NULL) != 0)
+            diag("temporary directory left after SIGTERM");
+    }
+    setenv("HISSQLITE_CONVERT_TEST", "", 1);
 
     {
         char cmd[160];

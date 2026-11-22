@@ -19,16 +19,23 @@ recovered.  Unlike a from-spool rebuild with B<makehistory>, this preserves
 both the exact arrival, posting, and expiration timestamps and the
 I<remembered> (token-less) entries, which a rebuild cannot reconstruct.
 
-The new database is built in a temporary directory of its own beside the
-destination, named after I<dstpath> with a F<.new.> suffix followed by the
-process ID and a number, and moved into place only on full success, so an
-interrupted or failed run never leaves a usable-but-incomplete destination.
-B<hissqlite-convert> refuses to run if the destination already exists, and
-does not replace a destination created while it runs (for instance by
-another conversion), so two conversions to the same destination cannot
-publish each other's unfinished database.  A failed run removes its
-temporary directory; a run killed by a signal leaves it behind, and it can
-then be removed.
+The new database is built in a temporary directory of its own, created in
+the directory of I<dstpath> and named F<hisconv.>I<pid>F<.>I<n> (where I<pid>
+is the process ID of B<hissqlite-convert> and I<n> a small number), and moved
+into place only on full success, so an interrupted or failed run never leaves
+a usable-but-incomplete destination.  B<hissqlite-convert> refuses to run if
+the destination already exists, and never replaces a destination created
+while it runs (for instance by another conversion, or by B<innd> started with
+the new I<hismethod> too early), so two conversions to the same destination
+cannot publish each other's unfinished database.  The database is published
+with a hard link, so the file system of I<dstpath> must support hard links;
+otherwise the conversion fails and its temporary directory is removed.
+
+A failed run, or one stopped with SIGHUP, SIGINT or SIGTERM, removes its
+temporary directory.  A run killed otherwise (for instance with SIGKILL, or
+by a crash) leaves it behind: it is the F<hisconv.*> directory of the
+directory of I<dstpath> whose name holds the process ID of that run, and it
+can then be removed.
 
 B<innd> must not be writing the source history while it is being converted.
 After a successful conversion, set I<hismethod> to C<hissqlite> in F<inn.conf>

@@ -24,6 +24,7 @@
 #include "inn/innconf.h"
 #include "inn/libinn.h"
 #include "inn/messages.h"
+#include "inn/paths.h"
 #include "inn/storage.h"
 
 #ifndef HAVE_SQLITE3
@@ -37,6 +38,8 @@ main(void)
 #else
 
 #    include <errno.h>
+#    include <fcntl.h>
+#    include <signal.h>
 #    include <sqlite3.h>
 #    include <sys/stat.h>
 
@@ -50,34 +53,34 @@ struct convstate {
     unsigned long dups;  /* duplicate-hash rows skipped (anomalous) */
 };
 
-/* The private directory the database is built in, and the database in it,
-   removed by remove_temp. */
+/* The files SQLite may create for a database, as suffixes of its name. */
+static const char *const sqlite_suffixes[] = {"", "-journal", "-wal", "-shm"};
+
+/* The private directory the database is built in, the database in it, and
+   the paths of the database and of the files SQLite may create beside it.
+   They stay allocated until exit, so that the signal handler can use them;
+   temp_active tells whether the directory is still there. */
 static char *tempdir = NULL;
 static char *tempdb = NULL;
+static char *tempfiles[ARRAY_SIZE(sqlite_suffixes)];
+static volatile sig_atomic_t temp_active = 0;
 
 /*
 **  Remove the temporary database, the files SQLite may have left beside it,
-**  and its directory.
+**  and its directory.  Only unlink and rmdir are called, which are
+**  async-signal-safe, so that the signal handler can call it too.
 */
 static void
 remove_temp(void)
 {
-    static const char *const suffixes[] = {"", "-journal", "-wal", "-shm"};
-    char *path;
     size_t i;
 
-    if (tempdir == NULL)
+    if (!temp_active)
         return;
-    for (i = 0; i < ARRAY_SIZE(suffixes); i++) {
-        path = concat(tempdb, suffixes[i], (char *) NULL);
-        unlink(path);
-        free(path);
-    }
+    for (i = 0; i < ARRAY_SIZE(tempfiles); i++)
+        unlink(tempfiles[i]);
     rmdir(tempdir);
-    free(tempdir);
-    free(tempdb);
-    tempdir = NULL;
-    tempdb = NULL;
+    temp_active = 0;
 }
 
 /* Called by die and sysdie: a failed run leaves nothing behind. */
@@ -88,29 +91,86 @@ fatal_cleanup(void)
     return 1;
 }
 
+/* SIGHUP, SIGINT and SIGTERM: remove the temporary directory, then end with
+   the signal. */
+static void
+signal_cleanup(int sig)
+{
+    remove_temp();
+    signal(sig, SIG_DFL);
+    raise(sig);
+}
+
 /*
-**  Create a directory of our own beside dstpath, named dstpath.new.PID.N, and
-**  set tempdir and tempdb.  mkdir fails if the directory exists, so another
-**  conversion, running or failed, never shares it.
+**  Create a directory of our own in the directory of dstpath, named
+**  hisconv.PID.N (short, whatever the length of the name of dstpath), and set
+**  tempdir, tempdb and tempfiles.  mkdir fails if the directory exists, so
+**  another conversion, running or failed, never shares it.
 */
 static void
 make_temp(const char *dstpath)
 {
-    char suffix[64];
+    char name[64];
+    const char *slash;
+    char *dir;
     unsigned int n;
+    size_t i;
 
+    xsignal(SIGHUP, signal_cleanup);
+    xsignal(SIGINT, signal_cleanup);
+    xsignal(SIGTERM, signal_cleanup);
+    slash = strrchr(dstpath, '/');
+    if (slash == NULL)
+        dir = xstrdup(".");
+    else if (slash == dstpath)
+        dir = xstrdup("/");
+    else
+        dir = xstrndup(dstpath, slash - dstpath);
     for (n = 0;; n++) {
-        snprintf(suffix, sizeof(suffix), ".new.%lu.%u",
+        snprintf(name, sizeof(name), "hisconv.%lu.%u",
                  (unsigned long) getpid(), n);
-        tempdir = concat(dstpath, suffix, (char *) NULL);
+        tempdir = concatpath(dir, name);
         if (mkdir(tempdir, 0700) == 0)
             break;
         if (errno != EEXIST || n >= 100)
             sysdie("cannot create temporary directory %s", tempdir);
         free(tempdir);
     }
+    free(dir);
     tempdb = concatpath(tempdir, "history.sqlite");
+    for (i = 0; i < ARRAY_SIZE(tempfiles); i++)
+        tempfiles[i] = concat(tempdb, sqlite_suffixes[i], (char *) NULL);
+    temp_active = 1;
     message_fatal_cleanup = fatal_cleanup;
+}
+
+/*
+**  Test hook, only with INN_TESTSUITE set in the environment: according to
+**  HISSQLITE_CONVERT_TEST, act just before the publication as if something
+**  else had meanwhile.  "file" creates the destination (another conversion,
+**  or innd), "link" publishes the database already (as a link request
+**  retransmitted over NFS would have), "wait" sleeps to let a test send a
+**  signal.
+*/
+static void
+test_hook(const char *finaldb)
+{
+    const char *what;
+    int fd;
+
+    what = getenv("HISSQLITE_CONVERT_TEST");
+    if (getenv(INN_ENV_TESTSUITE) == NULL || what == NULL)
+        return;
+    if (strcmp(what, "file") == 0) {
+        fd = open(finaldb, O_WRONLY | O_CREAT | O_EXCL, 0644);
+        if (fd < 0 || write(fd, "racer\n", 6) != 6 || close(fd) != 0)
+            syswarn("test hook: cannot create %s", finaldb);
+    } else if (strcmp(what, "link") == 0) {
+        if (link(tempdb, finaldb) != 0)
+            syswarn("test hook: cannot link %s", finaldb);
+    } else if (strcmp(what, "wait") == 0) {
+        sleep(60);
+    }
 }
 
 static void
@@ -213,7 +273,7 @@ main(int argc, char *argv[])
     if (stat(finaldb, &sb) == 0)
         die("destination %s already exists; refusing to overwrite", finaldb);
 
-    /* Build in a directory of our own beside the destination and publish the
+    /* Build in a directory of our own next to the destination and publish the
        database only on full success, so a crash or error never leaves a
        usable-but-incomplete destination (this is also what makes
        journal_mode=off below safe).  A private directory, rather than a fixed
@@ -276,19 +336,26 @@ main(int argc, char *argv[])
     /* Publish the completed database under its final name without replacing
        a destination created since the check above (by another conversion, or
        by an innd already started with hismethod set to hissqlite): link fails
-       if the name exists.  On a file system without hard links, fall back to a
-       rename after a last check. */
+       if the name exists, so the file system of the destination must support
+       hard links.  Over NFS, a retransmitted link request can fail with
+       EEXIST although the first one succeeded: the destination is then our
+       database, as the same inode tells. */
+    test_hook(finaldb);
     if (link(tempdb, finaldb) != 0) {
-        if (errno == EEXIST)
+        struct stat tsb;
+        int oerrno = errno;
+
+        if (oerrno != EEXIST) {
+            errno = oerrno;
+            sysdie("cannot link %s to %s (the file system of the destination"
+                   " must support hard links)",
+                   tempdb, finaldb);
+        }
+        if (stat(tempdb, &tsb) != 0 || stat(finaldb, &sb) != 0
+            || tsb.st_dev != sb.st_dev || tsb.st_ino != sb.st_ino)
             die("destination %s was created during the conversion; refusing"
                 " to overwrite",
                 finaldb);
-        if (stat(finaldb, &sb) == 0)
-            die("destination %s was created during the conversion; refusing"
-                " to overwrite",
-                finaldb);
-        if (rename(tempdb, finaldb) != 0)
-            sysdie("cannot rename %s to %s", tempdb, finaldb);
     }
     remove_temp();
 
