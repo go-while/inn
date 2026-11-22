@@ -37,6 +37,10 @@ set to false in F<inn.conf> and the B<-N> flag is not given, or for I<all>
 articles when I<groupbaseexpiry> is set to true, F<expire.ctl> is ignored
 except the C</remember/> line; B<expire> then only probes to see if the
 article still exists, and purges the relevant history entries if appropriate.
+When this probe fails for another reason than the article being absent, for
+instance because of a permission problem or an I/O error on the spool, the
+history entry is kept as is, B<expire> reports how many articles could not be
+checked, and the next run checks them again.
 
 Regardless of the setting of I<groupbaseexpiry>, B<expireover> should be run
 along with B<expire>, usually via B<news.daily> out of cron.
