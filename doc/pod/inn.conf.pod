@@ -1051,7 +1051,9 @@ that do not self-expire.  Self-expiring backends (CNFS) still go
 through C<SMretrieve> because cyclic-buffer wrap-around bypasses
 the tombstone.  The tombstone is loaded lazily on first use per
 connection and refreshed by C<stat> on each call; the parsed
-hashset is rebuilt only when the file's mtime or size changes.
+hashset is rebuilt only when the file's mtime or size changes.  When the
+file cannot be read completely (for instance because of its permissions),
+the check goes through C<SMretrieve> instead.
 Statting the same path is dentry-cache resident and far cheaper
 than the per-article syscalls the fast path elides, so cancellations
 recorded by other processes become visible to long-lived

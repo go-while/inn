@@ -133,6 +133,13 @@ files behind after a failed creation, and the buffindexed overview method
 validates its F<group.index> file and no longer frees memory twice when
 mapping overview data fails.  Many thanks to Kevin Bowling for the patches.
 
+=item *
+
+When both I<expiretombstone> and I<nnrpdcheckart> are set, B<nnrpd> no
+longer lists removed or cancelled articles as present when it cannot read
+F<cancels.tombstone> completely (for instance because of its permissions);
+it then checks the existence of articles in the storage manager.
+
 =back
 
 =head1 Changes in 2.7.5 (not yet released)
