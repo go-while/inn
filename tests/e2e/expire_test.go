@@ -393,6 +393,13 @@ func TestNewsDailyExpdirInstallFailure(t *testing.T) {
 // unpause innd (expire unpauses it when it finishes, so news.daily has to pause it again for
 // the installation; see HIS-7).
 func TestNewsDailyExpdirInstall(t *testing.T) {
+	// "expire-new" contains "-n": news.daily must not take it for expire's -n flag.
+	for _, name := range []string{"expdir", "expire-new"} {
+		t.Run(name, func(t *testing.T) { testNewsDailyExpdirInstall(t, name) })
+	}
+}
+
+func testNewsDailyExpdirInstall(t *testing.T, name string) {
 	bin := t.TempDir()
 	report := filepath.Join(bin, "report")
 	mailer := filepath.Join(bin, "mailer")
@@ -403,8 +410,7 @@ func TestNewsDailyExpdirInstall(t *testing.T) {
 	s := NewSite(t, SiteOptions{InnConf: map[string]string{"mailcmd": mailer}})
 	id := s.Inject(t, "e2e.test", 1)[0]
 	token := historyToken(t, s, id)
-	// "-n" in the name: news.daily must not take it for expire's -n flag.
-	expdir := filepath.Join(s.Dir, "expire-new")
+	expdir := filepath.Join(s.Dir, name)
 	if err := os.Mkdir(expdir, 0o755); err != nil {
 		t.Fatal(err)
 	}
