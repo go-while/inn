@@ -11,9 +11,9 @@ export LC_ALL=C
 methods=hisv6
 if grep -q '^#define HAVE_SQLITE3' "$root/include/config.h"; then
     methods="hisv6 hissqlite"
-    echo 10
+    echo 12
 else
-    echo 5
+    echo 6
 fi
 
 n=0
@@ -41,6 +41,7 @@ cat >"$tmp/ids" <<'EOF'
 <old@example.test>
 <future@example.test>
 <arrival@example.test>
+<limit@example.test>
 EOF
 for method in $methods; do
     db=$tmp/$method
@@ -62,12 +63,16 @@ runasuser: "$(id -un)"
 runasgroup: "$(id -gn)"
 EOF
     token=$("$root/frontends/sm" -s <"$data/articles/1")
-    perl -MDigest::MD5=md5_hex -e '
+    perl -MConfig -MDigest::MD5=md5_hex -e '
         ($token) = @ARGV;
         $past = time - 86400;
         $future = time + 86400;
+        # hisv6 reads timestamps with strtoul.  On LP64 this value is also
+        # the highest signed 64-bit integer a SQLite timestamp can hold.
+        $limit = $Config{longsize} >= 8 ? "9223372036854775807" : "2147483647";
         for (["old", "$past~-~$past"], ["future", "$past~-~$future"],
-             ["arrival", "$future~-"], ["live", "$past~-~$past\t$token"]) {
+             ["arrival", "$future~-"], ["limit", "$past~-~$limit"],
+             ["live", "$past~-~$past\t$token"]) {
             ($name, $times) = @$_;
             printf "[%s]\t%s\n", uc(md5_hex("<$name\@example.test>")), $times;
         }
@@ -86,10 +91,12 @@ EOF
     check "$(missing)" "" "never keeps all remembered entries"
     expire_with 0.000001
     check "$(missing)" "<old@example.test>" "a nonzero fraction uses a cutoff"
+    expire_with "$(printf '0.%0400d' 1)"
+    check "$(missing)" "<old@example.test>" "a nonzero underflow uses a cutoff"
     expire_with 0 -t
     check "$(missing)" "<old@example.test>" "dry run preserves history"
     expire_with 0.0
-    check "$(missing)" "$(cat "$tmp/ids")" "zero clears both future timestamps"
+    check "$(missing)" "$(cat "$tmp/ids")" "zero clears future timestamps including the limit"
     check "$("$root/expire/grephistory" '<live@example.test>')" "$token" \
         "the stored article retains its token"
 done
