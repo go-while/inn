@@ -133,6 +133,15 @@ files behind after a failed creation, and the buffindexed overview method
 validates its F<group.index> file and no longer frees memory twice when
 mapping overview data fails.  Many thanks to Kevin Bowling for the patches.
 
+=item *
+
+The request made by B<makehistory> to renumber the F<active> file after an
+overview rebuild is no longer lost when B<innd> fails to start.  B<rc.news>
+used to remove the F<.rebuildoverview> file in I<pathrun> before starting the
+overview services and B<innd>, so that the next start, once the cause of the
+failure had been fixed, did not renumber F<active>.  B<innd> now removes the
+file itself once it has renumbered the F<active> file.
+
 =back
 
 =head1 Changes in 2.7.5 (not yet released)
