@@ -140,8 +140,15 @@ qualified by adding I<pathoutgoing> if I<input> was not a fully qualified
 path).  If this happens successfully, B<batcher> will then try to rename
 this temporary file to I<input> (thus replacing I<input> with a copy of
 itself with all of lines for the successfully batched articles removed).
+If the temporary file could not be written completely, I<input> is left
+unchanged.
 
 =back
+
+If a batch could not be closed successfully (for instance when the program
+given with B<-p> exits with a non-zero status), none of its articles is
+considered as batched: the spooled input begins at the first article of that
+batch.
 
 Upon receipt of an interrupt or termination signal, B<batcher> will finish
 batching the current article, close the batch, and then rewrite the batch

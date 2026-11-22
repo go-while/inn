@@ -101,6 +101,15 @@ The newsmaster's e-mail address mentioned in the help message returned
 by B<nnrpd> now uses I<fromhost> (set in F<inn.conf> or overridden in
 F<readers.conf>) as the default domain name instead of I<domain>.
 
+=item *
+
+Fixed B<batcher> losing articles when it spooled its input again after a
+batch failed.  When a batch processor exited with an error, the articles of
+the failed batch were removed from the retry file, and only the following ones
+were kept.  The retry file now starts at the first article of the failed batch.
+It also replaces the input file only when it has been completely written,
+for instance not when the disk is full.
+
 =back
 
 =item *

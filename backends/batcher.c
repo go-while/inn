@@ -35,6 +35,7 @@ static size_t ArtsWritten;
 static int BATCHcount;
 static int MaxBatches;
 static int BATCHstatus;
+static off_t BatchStart = -1;
 static size_t BytesInBatch = 60 * 1024;
 static size_t BytesWritten;
 static size_t MaxArts;
@@ -150,15 +151,27 @@ RequeueAndExit(off_t Cookie, char *line, long BytesInArt)
             i = 1;
             break;
         }
+    if (ferror(stdin)) {
+        syswarn("%s cannot read %s", Host, Input != NULL ? Input : "input");
+        i = 1;
+    }
     if (fclose(F) == EOF) {
         syswarn("%s cannot close spool", Host);
         i = 1;
     }
 
-    /* If we had a named input file, try to rename the spool. */
-    if (Input != NULL && rename(spool, Input) < 0) {
-        syswarn("%s cannot rename spool", Host);
-        i = 1;
+    /* If we had a named input file, replace it with the spool, but only
+     * when the spool is complete.  Otherwise keep the input file as it is:
+     * it still holds every article not sent, and the ones sent already are
+     * rejected as duplicates by the next run. */
+    if (Input != NULL) {
+        if (i != 0) {
+            warn("%s keeping %s unchanged", Host, Input);
+            unlink(spool);
+        } else if (rename(spool, Input) < 0) {
+            syswarn("%s cannot rename spool", Host);
+            i = 1;
+        }
     }
 
     free(spool);
@@ -333,6 +346,7 @@ main(int ac, char *av[])
                 syswarn("%s cannot start batch %d", Host, BATCHcount);
                 break;
             }
+            BatchStart = Cookie;
             if (InitialString && *InitialString) {
                 fprintf(F, "%s\n", InitialString);
                 BytesInCB += strlen(InitialString) + 1;
@@ -371,6 +385,7 @@ main(int ac, char *av[])
                 syswarn("%s cannot start batch %d", Host, BATCHcount);
                 break;
             }
+            BatchStart = Cookie;
         }
 
     SendIt:
@@ -404,14 +419,21 @@ main(int ac, char *av[])
         ArtsWritten++;
 
         if (GotInterrupt) {
-            Cookie = -1;
             BATCHstatus = BATCHclose(F);
-            RequeueAndExit(Cookie, line, BytesInArt);
+            /* If the batch was not accepted, start again from its first
+             * article. */
+            if (BATCHstatus != 0)
+                RequeueAndExit(BatchStart, line, BytesInArt);
+            RequeueAndExit(-1, line, BytesInArt);
         }
     }
 
     if (BATCHopen)
         BATCHstatus = BATCHclose(F);
+    /* A batch which failed to close was not accepted: none of its articles
+     * is done, and the input has to be read again from its first one. */
+    if (BATCHstatus != 0 && BatchStart != -1)
+        RequeueAndExit(BatchStart, NULL, 0);
     RequeueAndExit(Cookie, NULL, 0);
 
     /* NOTREACHED */
