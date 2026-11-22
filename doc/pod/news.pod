@@ -143,15 +143,6 @@ B<expire> then dropped the history entry of an article that could still be
 on disk.  Such entries are now kept in F<expireover.tombstone.retry> and
 checked again during the next run.
 
-=item *
-
-B<fastrm> now exits with status 1 when it cannot remove a file, as its
-documentation says.  It only reported the error, so that B<expirerm> moved
-the list of articles to remove to F<expire.list> as if they had all been
-removed and, when I<expiretombstone> is set in F<inn.conf>, recorded them
-as removed in the tombstone log read by B<expire>, which then dropped their
-history entries although they were still on disk.
-
 =back
 
 =head1 Changes in 2.7.5 (not yet released)
