@@ -1,7 +1,7 @@
 #! /bin/sh
 # Exercise scanlogs in a private spool with a stand-in for ctlinnd.
 . "$C_TAP_SOURCE/tap/libtap.sh"
-plan 9
+plan 25
 fixture=$(test_tmpdir)/scanlogs-$$
 mkdir -p "$fixture/bin" "$fixture/log" || exit 1
 export fixture
@@ -14,16 +14,23 @@ LOCKS=$fixture
 ACTIVE=$fixture/active
 TMPDIR=$fixture
 LOGCYCLES=2
-LOG_COMPRESS=cat
+LOG_COMPRESS=${TEST_DEFAULT-cat}
 Z=''
 AWK=awk
+SED=sed
+HISTORY=$fixture/history
+PATHDB=$fixture
+PATHSPOOL=$fixture
+RNEWS=true
+MAILCMD=$fixture/bin/mail
 PATH=$fixture/bin:$PATH
 export PATH
 EOF
 printf '#! /bin/sh\necho Ok\n' >"$fixture/bin/ctlinnd"
-printf '#! /bin/sh\nexit 0\n' >"$fixture/bin/shlock"
+printf '#! /bin/sh\nfor lock do :; done\necho "$$" >"$lock"\n' >"$fixture/bin/shlock"
+printf '#! /bin/sh\ncat >"$fixture/mail"\n' >"$fixture/bin/mail"
 printf '#! /bin/sh\n[ "$1" = -9 ] || exit 1\ncat\n' >"$fixture/bin/gzip"
-printf '#! /bin/sh\nexit 0\n' >"$fixture/bin/innreport"
+printf '#! /bin/sh\necho analysis-complete\n' >"$fixture/bin/innreport"
 chmod +x "$fixture"/bin/*
 touch "$fixture/active"
 sed '2c\
@@ -49,4 +56,31 @@ ok 'compressor error is reported' test "$?" -ne 0
 ok 'failed compression retains the complete plain log' cmp "$old/news.1" "$fixture/third"
 ok 'oldest compressed generation expired' test ! -f "$old/news.2.gz"
 ok 'preceding plain generation retained' cmp "$old/news.2" "$fixture/second"
+for mode in missing unknown default; do
+    echo "$mode" >"$fixture/log/news"
+    echo "$mode" >"$fixture/expected"
+    case $mode in
+        missing) run "$fixture/missing/gzip" ;;
+        unknown) run misspelled-compressor ;;
+        default) (unset COMPRESSFORMAT; TEST_DEFAULT="$fixture/missing-default"
+                 export TEST_DEFAULT; sh "$fixture/scanlogs") >"$fixture/output" 2>&1 ;;
+    esac
+    ok "$mode compressor returns failure" test "$?" -ne 0
+    ok "$mode compressor keeps a plain archive" cmp "$old/news.1" "$fixture/expected"
+    ok "$mode compressor still produces the report" grep -q analysis-complete "$fixture/output"
+    ok "$mode compressor warns" grep -Eq 'unknown compressformat|compressor unavailable|compression failed' "$fixture/output"
+done
+cp "$fixture/scanlogs" "$fixture/bin/scanlogs"
+chmod +x "$fixture/bin/scanlogs"
+sed '2c\
+. "$fixture/vars"
+' "$C_TAP_SOURCE/../scripts/news.daily.in" >"$fixture/news.daily"
+echo daily >"$fixture/log/news"
+echo daily >"$fixture/expected"
+COMPRESSFORMAT="$fixture/missing/gzip" sh "$fixture/news.daily" \
+    noexpire noexpireover noexplog noprocbatch norenumber norm nostat
+ok 'news.daily reports the rotation failure after mailing' test "$?" -ne 0
+ok 'mail contains the analysis' grep -q analysis-complete "$fixture/mail"
+ok 'mail contains the compressor warning' grep -q 'compressor unavailable' "$fixture/mail"
+ok 'daily log rotated intact' cmp "$old/news.1" "$fixture/expected"
 rm -rf "$fixture"

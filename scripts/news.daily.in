@@ -71,6 +71,7 @@ DOEXPIRE=true
 DOEXPLOG=true
 DOEXPIREOVER=false
 DOLOGS=true
+scanstatus=0
 DOMAIL=true
 DOPROCBATCH=true
 DORENUMBER=true
@@ -324,9 +325,9 @@ fi
 ##  expire are not buried below it.
 ${DOLOGS} && {
     if ${DOMAIL}; then
-        scanlogs ${SCANARG} >${TEMPLOGS} 2>&1
+        scanlogs ${SCANARG} >${TEMPLOGS} 2>&1 || scanstatus=$?
     else
-        scanlogs ${SCANARG}
+        scanlogs ${SCANARG} || scanstatus=$?
     fi
 }
 
@@ -716,4 +717,4 @@ if ${DAILY}; then
     date >${PATHDB}/.news.daily
 fi
 ${RNEWS} -U
-exit 0
+exit "${scanstatus}"
