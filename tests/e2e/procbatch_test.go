@@ -109,7 +109,10 @@ func runUnderSizeLimit(s *Site, blocks int, name string, args ...string) (string
 // it fails and keeps its input file, with -u alone and with -m -u as news.daily runs it, and
 // nothing is appended to the backlog file. procbatch used to ignore the write error, append
 // the truncated file to the backlog with -m, remove the input with -u and exit 0, losing the
-// other entries. Without the limit, all the entries reach the backlog file.
+// other entries. Without the limit, all the entries reach the backlog file. When the limit
+// cuts an entry in the middle and peer1.tmp already holds entries of an earlier run,
+// procbatch cuts peer1.tmp back to those entries, so that the next run does not append to
+// a partial line.
 func TestProcbatchWriteError(t *testing.T) {
 	s := NewSite(t, SiteOptions{})
 
@@ -190,4 +193,64 @@ func TestProcbatchWriteError(t *testing.T) {
 			}
 		})
 	}
+
+	t.Run("mid-record with earlier entries", func(t *testing.T) {
+		work := t.TempDir()
+		outDir := filepath.Join(work, "out")
+		if err := os.Mkdir(outDir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		earlier := "e2e/old/1 <old1@e2e.invalid>\ne2e/old/2 <old2@e2e.invalid>\n"
+		tmp := filepath.Join(outDir, "peer1.tmp")
+		if err := os.WriteFile(tmp, []byte(earlier), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		// Entries of 62 bytes: 4096 bytes minus the earlier ones is not a multiple.
+		var in, want strings.Builder
+		want.WriteString(earlier)
+		for i := range entries {
+			line := fmt.Sprintf("e2e/test/%05d <mid-%028d@e2e.invalid>", i+1, i+1)
+			in.WriteString(line + " peer1\n")
+			want.WriteString(line + "\n")
+		}
+		if (4096-len(earlier))%62 == 0 {
+			t.Fatal("the limit falls at the end of an entry")
+		}
+		input := filepath.Join(work, "innfeed-dropped.A000002")
+		if err := os.WriteFile(input, []byte(in.String()), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		args := []string{"-u", "-d", outDir, input}
+		out, err := runUnderSizeLimit(s, 8, "procbatch", args...)
+		t.Logf("procbatch %s under the limit: %v\n%s", strings.Join(args, " "), err, out)
+		_, statErr := os.Stat(input)
+		got, _ := os.ReadFile(tmp)
+		if err == nil || statErr != nil {
+			t.Fatalf("procbatch did not fail (%v) or removed its input (%v)", err, statErr)
+		}
+		if string(got) != earlier {
+			t.Fatalf("peer1.tmp after the failure has %d bytes, want only the %d bytes of the earlier entries:\n%q",
+				len(got), len(earlier), tail(string(got), 200))
+		}
+
+		// The next run, without the limit, appends complete entries.
+		out, err = s.run("procbatch", args...)
+		t.Logf("procbatch %s: %v\n%s", strings.Join(args, " "), err, out)
+		got, _ = os.ReadFile(tmp)
+		if err != nil {
+			t.Fatalf("procbatch without the limit failed: %v", err)
+		}
+		if string(got) != want.String() {
+			t.Errorf("peer1.tmp after the second run has %d bytes, want %d (earlier entries and all new ones)",
+				len(got), want.Len())
+		}
+	})
+}
+
+// tail returns the last n bytes of s.
+func tail(s string, n int) string {
+	if len(s) > n {
+		return s[len(s)-n:]
+	}
+	return s
 }

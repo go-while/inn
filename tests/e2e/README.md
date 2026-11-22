@@ -66,7 +66,7 @@ needs the Go standard library:
 | `TestBytesBodyStartsWithDot` | innd, nnrpd | the `:bytes` overview field is the article's size also when its body begins with a dot-stuffed line |
 | `TestOvsqliteReaderSeesNewArticle` | innd, nnrpd, ovsqlite-server | with ovsqlite, GROUP shows an article as soon as innd has accepted it, with and without `walmode` |
 | `TestTimecafExpireoverCurrentFile` | innd, expireover | expireover removes an expired timecaf article in the CAF file innd is writing to, without waiting for innd to move on to another file |
-| `TestProcbatchWriteError` | innd, procbatch | when procbatch cannot write all the entries of a peer (a 4096-byte file size limit stands in for a full file system), it exits non-zero, keeps its input with `-u` and appends nothing to the backlog with `-m`; without the limit all entries reach the backlog |
+| `TestProcbatchWriteError` | innd, procbatch | when procbatch cannot write all the entries of a peer (a 4096-byte file size limit stands in for a full file system), it exits non-zero, keeps its input with `-u` and appends nothing to the backlog with `-m`; without the limit all entries reach the backlog; a limit that cuts an entry leaves peer1.tmp with only its earlier entries, and the next run appends complete ones |
 
 ## Running
 
