@@ -7,6 +7,8 @@
  * Written by Kevin Bowling in 2026.
  */
 
+#define LIBTEST_NEW_FORMAT 1
+
 #include "portable/system.h"
 
 #include <errno.h>
@@ -60,7 +62,7 @@ main(void)
     int i;
     bool seen;
 
-    test_init(3);
+    plan(3);
 
     if (access("../data/overview/basic", F_OK) == 0) {
         if (chdir("../data") < 0)
@@ -74,7 +76,7 @@ main(void)
     }
 
     /* Test 1: open overview in read/write mode (connects to server). */
-    ok(1, OVopen(OV_READ | OV_WRITE));
+    ok(OVopen(OV_READ | OV_WRITE), "open SQLite overview for writes");
 
     /* Load test data from the same file used by overview-t.c. */
     f = fopen("overview/basic", "r");
@@ -133,11 +135,11 @@ main(void)
     fclose(f);
 
     /* Test 2: all articles were loaded. */
-    ok(2, narticles > 0);
+    ok(narticles > 0, "write at least one fixture article");
 
     /* Test 3: close succeeds. */
     OVclose();
-    ok(3, true);
+    ok(true, "close SQLite overview after writing");
 
     for (i = 0; i < ngroups; i++)
         free(seen_groups[i]);
