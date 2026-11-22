@@ -1075,7 +1075,23 @@ tdx_expire(const char *group, ARTNUM *low, struct history *history)
         tdx_index_close(index);
         return false;
     }
-    tdx_index_rebuild_start(index, entry);
+    if (!tdx_index_rebuild_start(index, entry)) {
+        tdx_index_close(index);
+        return false;
+    }
+
+    /* A newly created or previously expired empty group already has the
+       final water marks and no overview data to repack.  Check under the
+       writer lock so that a concurrent insertion cannot be missed. */
+    if (entry->base == 0 && entry->count == 0 && entry->low > 0
+        && entry->high == entry->low - 1) {
+        if (low != NULL)
+            *low = entry->low;
+        offset = entry - index->entries;
+        index_lock_group(index->fd, offset, INN_LOCK_UNLOCK);
+        tdx_index_close(index);
+        return true;
+    }
 
     /* tdx_data_expire_start builds the new IDX and DAT files and fills in the
        struct group_entry that was passed to it.  tdx_data_rebuild_finish does
