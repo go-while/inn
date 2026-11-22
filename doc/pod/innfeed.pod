@@ -96,7 +96,10 @@ interfering with this one.
 
 A F<foo.input> file which has old article information B<innfeed> is reading
 for re-processing.  It is removed when its end has been reached, not after a
-read error: it is then kept and read again at the next rotation.
+read error: it is then kept, and B<innfeed> opens it again when it next checks
+for a file to read, which can be immediately.  A F<foo.input> file which is
+there and not open is read before F<foo.output> is renamed to F<foo.input>,
+and is never overwritten by it.
 
 =item *
 

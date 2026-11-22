@@ -101,12 +101,6 @@ The newsmaster's e-mail address mentioned in the help message returned
 by B<nnrpd> now uses I<fromhost> (set in F<inn.conf> or overridden in
 F<readers.conf>) as the default domain name instead of I<domain>.
 
-=item *
-
-Fixed B<innfeed> removing the backlog file of a peer after a read error.  The
-file was handled as if its end had been reached, so that the entries not read
-yet were lost.  The file is now kept, and read again at the next rotation.
-
 =back
 
 =item *
@@ -138,6 +132,15 @@ metadata of CAF files, retries partial writes and no longer leaves temporary
 files behind after a failed creation, and the buffindexed overview method
 validates its F<group.index> file and no longer frees memory twice when
 mapping overview data fails.  Many thanks to Kevin Bowling for the patches.
+
+=item *
+
+Fixed B<innfeed> removing the backlog file of a peer after a read error.  The
+file was handled as if its end had been reached, so that the entries not read
+yet were lost.  The file is now kept, and read again when B<innfeed> next
+looks for a file to read.  A F<I<peer>.input> file which exists is now also
+adopted when it is not open, instead of being overwritten by the
+F<I<peer>.output> file.
 
 =back
 

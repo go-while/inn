@@ -1059,7 +1059,15 @@ prepareFiles(Tape tape)
                     while (c != EOF && c != '\n')
                         c = fgetc(tape->inFp);
 
-                    if (c == EOF) {
+                    if (c == EOF && ferror(tape->inFp)) {
+                        /* A read error is not the end of the tape: keep the
+                         * file, which is tried again at the next rotation. */
+                        syswarn("ME ioerr on tape file %s",
+                                tape->inputFilename);
+                        fclose(tape->inFp);
+                        tape->inFp = NULL;
+                        tape->scribbled = false;
+                    } else if (c == EOF) {
                         fclose(tape->inFp);
                         unlink(tape->inputFilename);
                         tape->inFp = NULL;
