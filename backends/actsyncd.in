@@ -8,7 +8,7 @@
 #
 #       config_file     name of file used to determine how to run actsync
 #       debug_level     force no action and use -v debug_level
-#       debug_outfmt    change -o a1 output to -o debug_outfmt for debug
+#       debug_outfmt    use -o debug_outfmt instead of -o c for debug
 
 # By: Landon Curt Noll  chongo@toad.com  (chongo was here /\../\)
 #
@@ -137,39 +137,90 @@ if [ ! -s "$ign" ]; then
     exit 7
 fi
 
+# Retrieve and unpack the remote active file in the current directory.
+fetch_active() {
+    case "$protocol" in
+    ftp) program=$GETFTP ;;
+    *) program=$GETHTTP ;;
+    esac
+    url="$protocol://$host/$path"
+    if [ -z "$program" ]; then
+        echo "$0: no program to retrieve $url" >&2
+        return "$NOSYNC"
+    fi
+    echo "$(date "$DATEFMT") $program $url"
+    $program "$url" || return "$NOSYNC"
+
+    case "$path" in
+    *.bz2) unpack="$BZIP2 -d"; compressed=active.bz2 ;;
+    *.gz) unpack="$GZIP -d"; compressed=active.gz ;;
+    *.Z) unpack=$UNCOMPRESS; compressed=active.Z ;;
+    *) return 0 ;;
+    esac
+    echo "$(date "$DATEFMT") $unpack $compressed"
+    $unpack "$compressed" || return 1
+}
+
+debug_actsync() {
+    echo "$(date "$DATEFMT") will execute $ACTSYNC -i $ign $flags -v $DEBUG -o $DEBUG_FMT $1" >&2
+    eval '"$ACTSYNC" -i "$ign" '"$flags"' -v "$DEBUG" -o "$DEBUG_FMT" "$1"'
+    status=$?
+    echo "$(date "$DATEFMT") DEBUG: exit status $status" >&2
+    return "$status"
+}
+
 # DEBUG processing, if debug_level was given.
 #
-if [ -z "$DEBUG" ]; then
-    # Force "-o c" mode (overrides any -o argument in the command line).
-    # Standard actsyncd output mode (commands to ctlinnd).
-    flags="$flags -o c"
-else
-    if [ "$protocol" != "nntp" ]; then
-        echo "$0: DEBUG mode (still) only available with nntp" >&2
-        exit 88
+if [ -n "$DEBUG" ]; then
+    DEBUG_FMT=${DEBUG_FMT:-c}
+    case "$DEBUG_FMT" in
+    x*)
+        echo "$0: do not use any of the -o x debug_outfmt modes!" >&2
+        exit 8
+        ;;
+    esac
+
+    case "$host" in
+    /* | .*) debug_actsync "$host"; exit $? ;;
+    esac
+    if [ "$protocol" = "nntp" ]; then
+        debug_actsync "$host"
+        exit $?
     fi
 
-    # force -v level as needed
-    flags="$flags -v $DEBUG"
-
-    # force -o level but reject -o x modes
-    if [ -n "$DEBUG_FMT" ]; then
-        case "$DEBUG_FMT" in
-        x*)
-            echo "$0: do not use any of the -o x debug_outfmt modes!" 1>&2
-            exit 8
-            ;;
-        *) flags="$flags -o $DEBUG_FMT" ;;
+    # Keep a trial run separate from the daemon's work directory and lock.
+    (
+        case "$ign" in
+        /*) ;;
+        *) ign="$(pwd)/$ign" ;;
         esac
-    fi
+        umask 077
+        workdir="${TMPDIR}/actsyncd-debug.$$"
+        mkdir "$workdir" || exit 1
+        trap 'rm -rf "$workdir"' 0
+        trap 'exit 123' 1 2 3 15
+        cd "$workdir" || exit 1
 
-    # execute actsync directly
-    echo "$(date "$DATEFMT") will execute $ACTSYNC -i $ign $flags $host" 1>&2
-    eval "$ACTSYNC -i $ign $flags $host"
-    status="$?"
-    echo "$(date "$DATEFMT") DEBUG: exit status $status" 1>&2
-    exit "$status"
+        fetch_active >&2
+        status=$?
+        if [ "$status" -ne 0 ]; then
+            if [ "$status" -eq "$NOSYNC" ]; then
+                echo "$0: could not retrieve $protocol://$host/$path" >&2
+            else
+                echo "$0: could not decompress $protocol://$host/$path" >&2
+            fi
+            exit 1
+        fi
+        if [ ! -s active ]; then
+            echo "$(date "$DATEFMT") active file not retrieved or empty" >&2
+            exit 1
+        fi
+        debug_actsync ./active
+    )
+    exit $?
 fi
+# Force the normal output mode (commands to ctlinnd).
+flags="$flags -o c"
 
 # Lock out others
 #
@@ -230,42 +281,8 @@ for loop in 1 2 3 4 5 6 7 8 9 10; do
                 status=$NOSYNC
             fi
         else
-            if [ "$protocol" = "ftp" ]; then
-                program=$GETFTP
-            else
-                program=$GETHTTP
-            fi
-            echo "$(date "$DATEFMT") $program $protocol://$host/$path" >>$out
-            if $program $protocol://$host/$path >>$out 2>&1; then
-                case "$path" in
-                *.bz2)
-                    echo "$(date "$DATEFMT") $BZIP2 -d active.bz2" >>$out
-                    if $BZIP2 -d active.bz2 >>$out 2>&1; then
-                        :
-                    else
-                        status=1
-                    fi
-                    ;;
-                *.gz)
-                    echo "$(date "$DATEFMT") $GZIP -d active.gz" >>$out
-                    if $GZIP -d active.gz >>$out 2>&1; then
-                        :
-                    else
-                        status=1
-                    fi
-                    ;;
-                *.Z)
-                    echo "$(date "$DATEFMT") $UNCOMPRESS active.Z" >>$out
-                    if $UNCOMPRESS active.Z >>$out 2>&1; then
-                        :
-                    else
-                        status=1
-                    fi
-                    ;;
-                esac
-            else
-                status=$NOSYNC
-            fi
+            fetch_active >>"$out" 2>&1
+            status=$?
         fi
 
         if [ ! -s "active" ]; then
