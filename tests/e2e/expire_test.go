@@ -259,3 +259,50 @@ func TestNewsDailyExpdirInstallFailure(t *testing.T) {
 		t.Errorf("the newsmaster was not notified of the failed installation")
 	}
 }
+
+// TestNewsDailyExpdirInstall: news.daily run with expdir installs the new history files built
+// by expire -d and leaves innd running on them: the injected article is still found by its
+// Message-ID, through grephistory and through innd, and news.daily reports no failure to
+// unpause innd (expire unpauses it when it finishes, so news.daily has to pause it again for
+// the installation; see HIS-7).
+func TestNewsDailyExpdirInstall(t *testing.T) {
+	bin := t.TempDir()
+	report := filepath.Join(bin, "report")
+	mailer := filepath.Join(bin, "mailer")
+	script := fmt.Sprintf("#! /bin/sh\nhead -c 65536 >>'%s'\n", report)
+	if err := os.WriteFile(mailer, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	s := NewSite(t, SiteOptions{InnConf: map[string]string{"mailcmd": mailer}})
+	id := s.Inject(t, "e2e.test", 1)[0]
+	token := historyToken(t, s, id)
+	expdir := filepath.Join(s.Dir, "expdir")
+	if err := os.Mkdir(expdir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	out, err := runNewsDaily(s, 150*time.Second, "expdir="+expdir, "noexpireover",
+		"noprocbatch", "nologs", "nostat")
+	t.Logf("news.daily: err=%v\n%s", err, out)
+	mail, _ := os.ReadFile(report)
+	t.Logf("mail:\n%s", mail)
+	if err != nil {
+		t.Errorf("news.daily: %v", err)
+	}
+	if strings.Contains(string(mail), "Cannot") {
+		t.Errorf("news.daily reported a failure")
+	}
+	if _, err := os.Stat(filepath.Join(expdir, "history.n.done")); err == nil {
+		t.Errorf("history.n.done is still in %s", expdir)
+	}
+	if mode := s.Ctlinnd(t, "mode"); !strings.Contains(mode, "Server running") {
+		t.Errorf("innd is not running after news.daily:\n%s", mode)
+	}
+	if got := historyToken(t, s, id); got != token {
+		t.Errorf("grephistory %s = %q after news.daily, want %q", id, got, token)
+	}
+	// innd answers from the installed history: the article is a duplicate.
+	p := s.Peer(t)
+	expect(t, p, 435, "IHAVE %s", id)
+	expect(t, p, 205, "QUIT")
+}
