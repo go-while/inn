@@ -104,14 +104,17 @@ func TestInnmailAddresses(t *testing.T) {
 // whole message but then fails, with a non-zero exit status (75, EX_TEMPFAIL, and 69,
 // EX_UNAVAILABLE) or killed by a signal; it exits 0 when the MTA accepts the message.
 // innmail used to exit 0 in every case, so that its callers could not notice that the
-// mail was not sent.
+// mail was not sent. An MTA that exits with status 75 without reading a message larger
+// than a pipe buffer also gets exit status 1 and the reason, not a death of innmail by
+// SIGPIPE.
 func TestInnmailMTAFailure(t *testing.T) {
 	dir := t.TempDir()
 	mta := filepath.Join(t.TempDir(), "mta")
 	script := "#! /bin/sh\n" +
 		"d='" + dir + "'\n" +
-		"head -c 4096 > \"$d/mail\"\n" +
 		"st=$(cat \"$d/status\")\n" +
+		"case $st in early*) exit \"${st#early}\";; esac\n" +
+		"head -c 4096 > \"$d/mail\"\n" +
 		"if [ \"$st\" = signal ]; then kill -TERM $$; sleep 5; fi\n" +
 		"exit \"$st\"\n"
 	if err := os.WriteFile(mta, []byte(script), 0o755); err != nil {
@@ -128,13 +131,19 @@ func TestInnmailMTAFailure(t *testing.T) {
 		{"75", 1, "exited with status 75"},
 		{"69", 1, "exited with status 69"},
 		{"signal", 1, "killed by signal 15"},
+		{"early75", 1, "exited with status 75"},
 	} {
 		t.Run(tc.status, func(t *testing.T) {
 			if err := os.WriteFile(filepath.Join(dir, "status"), []byte(tc.status+"\n"), 0o644); err != nil {
 				t.Fatal(err)
 			}
 			os.Remove(filepath.Join(dir, "mail"))
-			out, err := s.runInput("body\n", "innmail", "-s", "Test", "joe")
+			body := "body\n"
+			if strings.HasPrefix(tc.status, "early") {
+				// More than a pipe buffer, so that innmail writes after the MTA exited.
+				body = strings.Repeat("a long body line of the message\n", 8192) + body
+			}
+			out, err := s.runInput(body, "innmail", "-s", "Test", "joe")
 			t.Logf("innmail with the MTA ending with %s: %v\n%s", tc.status, err, out)
 			code := 0
 			var ee *exec.ExitError
@@ -148,6 +157,9 @@ func TestInnmailMTAFailure(t *testing.T) {
 			}
 			if tc.warn != "" && !strings.Contains(out, tc.warn) {
 				t.Errorf("innmail does not say %q", tc.warn)
+			}
+			if strings.HasPrefix(tc.status, "early") {
+				return
 			}
 			if mail, err := os.ReadFile(filepath.Join(dir, "mail")); err != nil || !strings.HasSuffix(string(mail), "\n\nbody\n") {
 				t.Errorf("the MTA did not get the whole message (%v):\n%s", err, mail)

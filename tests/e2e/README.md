@@ -66,7 +66,7 @@ needs the Go standard library:
 | `TestBytesBodyStartsWithDot` | innd, nnrpd | the `:bytes` overview field is the article's size also when its body begins with a dot-stuffed line |
 | `TestOvsqliteReaderSeesNewArticle` | innd, nnrpd, ovsqlite-server | with ovsqlite, GROUP shows an article as soon as innd has accepted it, with and without `walmode` |
 | `TestTimecafExpireoverCurrentFile` | innd, expireover | expireover removes an expired timecaf article in the CAF file innd is writing to, without waiting for innd to move on to another file |
-| `TestInnmailMTAFailure` | innmail | innmail exits with status 1 and says why when the MTA reads the message and then exits with status 75 or 69 or is killed by a signal, and 0 when the MTA accepts it |
+| `TestInnmailMTAFailure` | innmail | innmail exits with status 1 and says why when the MTA reads the message and then exits with status 75 or 69 or is killed by a signal, or exits with status 75 before reading a 256 KB message (no SIGPIPE death), and 0 when the MTA accepts it |
 
 ## Running
 
