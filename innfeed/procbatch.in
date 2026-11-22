@@ -76,8 +76,32 @@ sub HELP_MESSAGE {
     exit(0);
 }
 
-my (%opt, %hosts);
+my (%opt, %hosts, %sizes);
 my $missing = 0;
+
+# Give up after an error on the output file of a peer: cut every output file
+# opened so far back to the size it had before, so that no entry of this run
+# and no partial line (after a short write) is left in them, and exit with an
+# error.  The input file is kept.  The output files are not removed, as they
+# may hold the entries of earlier runs.
+sub output_failed {
+    my ($host, $action) = @_;
+    my $error = "$!";
+
+    foreach my $peer (keys %hosts) {
+        my $file = "$destDir/$peer.tmp";
+
+        # The handle may already be closed, or fail to flush again.
+        {
+            no warnings;
+            close $hosts{$peer};
+        }
+        truncate($file, $sizes{$peer})
+          or warn "$0: cannot truncate $file to $sizes{$peer} bytes: $!\n";
+    }
+    die "$0: cannot $action $destDir/$host.tmp: $error\n";
+}
+
 getopts("cd:e:hmqs:t:uv", \%opt) || die $usage;
 
 HELP_MESSAGE() if $opt{'h'};
@@ -132,22 +156,24 @@ while (<$INPUT>) {
         if (!$hosts{$host}) {
             my $outputFile = "$destDir/$host.tmp";
             print "Starting $host\n" if ($opt{'v'});
-            open $hosts{$host}, '>>', $outputFile
-              or die "open >>$outputFile: $!\n";
+            $sizes{$host} = -s $outputFile || 0;
+            if (!open($hosts{$host}, '>>', $outputFile)) {
+                delete $hosts{$host};
+                output_failed($host, "open");
+            }
         }
         print { $hosts{$host} } "$F[0] $F[1]\n"
-          or die "$0: cannot write to $destDir/$host.tmp: $!\n";
+          or output_failed($host, "write to");
     }
 }
 close $INPUT;
 
 # All the output files must be complete before any of them is moved and
 # before the input file is removed.  A write error (for instance because
-# the file system is full) only shows up when the buffered output is
+# the file system is full) may only show up when the buffered output is
 # flushed, so stop there and keep the input file.
 foreach my $host (keys %hosts) {
-    close $hosts{$host}
-      or die "$0: cannot write to $destDir/$host.tmp: $!\n";
+    close $hosts{$host} or output_failed($host, "write to");
 }
 
 foreach my $host (keys %hosts) {

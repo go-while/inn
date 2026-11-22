@@ -133,6 +133,16 @@ files behind after a failed creation, and the buffindexed overview method
 validates its F<group.index> file and no longer frees memory twice when
 mapping overview data fails.  Many thanks to Kevin Bowling for the patches.
 
+=item *
+
+B<procbatch> now checks that its output files are completely written.
+Previously, a write error such as a full file system could truncate the
+entries for a peer, and with B<-u> the input batchfile was nevertheless
+removed, losing the entries that were not written.  The input batchfile is
+now kept, the output files are cut back to their size before the run (so
+that a later run does not append to a partial line), and B<procbatch> exits
+with a non-zero status.
+
 =back
 
 =head1 Changes in 2.7.5 (not yet released)
@@ -242,14 +252,6 @@ parser, the reset of timecaf resources after failed operations, and the
 detection of malformed Xref records stored with tradspool and of corrupt
 history records.  The overview and storage backends also validate more
 structures before using them.  Many thanks to Kevin Bowling for the patches.
-
-=item *
-
-B<procbatch> now checks that its output files are completely written.
-Previously, a write error such as a full file system could truncate the
-entries for a peer, and with B<-u> the input batchfile was nevertheless
-removed, losing the other entries.  The input batchfile is now kept and
-B<procbatch> exits with a non-zero status.
 
 =back
 
