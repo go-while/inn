@@ -9,8 +9,10 @@
 **  minimum of 20).
 **
 **  For setting the limit, only setrlimit is supported; if it isn't
-**  available, return -1 always.  We also refuse to set the limit to
-**  something higher than select can handle, checking against FD_SETSIZE.
+**  available, return -1 always.  setfdlimit refuses values greater than
+**  FD_SETSIZE.  raisefdlimit raises the soft limit up to the hard limit
+**  (or a finite maximum) for programs that do not depend on the
+**  descriptor limit of select.
 **
 **  Note that on some versions of Linux (2.2.x reported), sysconf may return
 **  the wrong value for the maximum file descriptors.  getrlimit is correct,
@@ -80,6 +82,88 @@ setfdlimit(unsigned int limit UNUSED)
 }
 
 #endif /* !(HAVE_SETRLIMIT && RLIMIT_NOFILE) */
+
+
+/*
+**  Raise the soft file descriptor limit without changing the hard limit.
+**
+**  The soft limit is never set to RLIM_INFINITY: some systems (macOS)
+**  reject it with EINVAL, and getfdlimit cannot represent it.  When the
+**  hard limit is infinite, or the system rejects it as a soft limit with
+**  EINVAL (macOS caps it at OPEN_MAX), a finite maximum is used instead:
+**  the larger of sysconf(_SC_OPEN_MAX) and OPEN_MAX, where available.
+**  The soft limit is never lowered.
+**
+**  The new soft limit may exceed FD_SETSIZE, so descriptors above it must
+**  not be given to select; programs that need that use setfdlimit.
+*/
+#if HAVE_GETRLIMIT && HAVE_SETRLIMIT && defined(RLIMIT_NOFILE)
+
+/* A finite maximum for the soft limit, or 0 if none is known. */
+static rlim_t
+finitefdmax(void)
+{
+    rlim_t max = 0;
+#    if HAVE_SYSCONF && defined(_SC_OPEN_MAX)
+    long value;
+
+    value = sysconf(_SC_OPEN_MAX);
+    if (value > 0)
+        max = (rlim_t) value;
+#    endif
+#    ifdef OPEN_MAX
+    if ((rlim_t) OPEN_MAX > max)
+        max = (rlim_t) OPEN_MAX;
+#    endif
+    if (max == RLIM_INFINITY)
+        max = 0;
+    return max;
+}
+
+int
+raisefdlimit(void)
+{
+    struct rlimit rl;
+    rlim_t current, target, fallback;
+
+    if (getrlimit(RLIMIT_NOFILE, &rl) < 0)
+        return -1;
+    current = rl.rlim_cur;
+    if (current == RLIM_INFINITY)
+        return 0;
+    target = rl.rlim_max;
+    if (target == RLIM_INFINITY)
+        target = finitefdmax();
+    if (target <= current)
+        return 0;
+    rl.rlim_cur = target;
+    if (setrlimit(RLIMIT_NOFILE, &rl) == 0)
+        return 0;
+    if (errno != EINVAL)
+        return -1;
+
+    /* The system rejected the target; retry with its finite maximum. */
+    fallback = finitefdmax();
+    if (fallback >= target) {
+        errno = EINVAL;
+        return -1;
+    }
+    if (fallback <= current)
+        return 0;
+    rl.rlim_cur = fallback;
+    return setrlimit(RLIMIT_NOFILE, &rl);
+}
+
+#else /* !(HAVE_GETRLIMIT && HAVE_SETRLIMIT && RLIMIT_NOFILE) */
+
+int
+raisefdlimit(void)
+{
+    errno = ENOSYS;
+    return -1;
+}
+
+#endif /* !(HAVE_GETRLIMIT && HAVE_SETRLIMIT && RLIMIT_NOFILE) */
 
 #if HAVE_GETRLIMIT && defined(RLIMIT_NOFILE)
 

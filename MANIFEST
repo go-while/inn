@@ -996,6 +996,7 @@ tests/lib/dispatch-t.c                Tests for lib/dispatch.c
 tests/lib/fakewrite.c                 Helper functions for xwrite tests
 tests/lib/fakewrite.h                 Header file for xwrite helper functions
 tests/lib/fdflag-t.c                  Tests for lib/fdflag.c
+tests/lib/fdlimit-t.c                 Tests for lib/fdlimit.c
 tests/lib/getaddrinfo-t.c             Tests for lib/getaddrinfo.c
 tests/lib/getnameinfo-t.c             Tests for lib/getnameinfo.c
 tests/lib/hash-t.c                    Tests for lib/hash.c

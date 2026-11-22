@@ -105,6 +105,13 @@ F<readers.conf>) as the default domain name instead of I<domain>.
 
 =item *
 
+B<makehistory> now attempts to raise its soft file descriptor limit to
+the hard limit, so that a low inherited soft limit can no longer reduce the
+C<tradindexed> overview cache of B<makehistory -O> below I<overcachesize>
+when the resulting limit is high enough for that cache.
+
+=item *
+
 The LIST OVERVIEW.FMT command now advertises the byte count and line count
 metadata in their preferred format (C<:bytes> and C<:lines>) to news clients
 which have previously sent a CAPABILITIES command.  Other news clients still
