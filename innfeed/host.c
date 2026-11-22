@@ -12,11 +12,13 @@
 #include <assert.h>
 #include <ctype.h>
 #include <errno.h>
+#include <fcntl.h>
 #include <float.h>
 #include <limits.h>
 #include <math.h>
 #include <netdb.h>
 #include <sys/param.h>
+#include <sys/stat.h>
 #include <syslog.h>
 
 #include "inn/innconf.h"
@@ -60,6 +62,9 @@
 
 /* time between retrying blocked hosts in seconds */
 #define TRYBLOCKEDHOSTPERIOD 120
+
+/* largest pathetc/inn_status.head copied into the HTML status file */
+#define STATUS_HEAD_MAX      (64 * 1024)
 
 /* Disable float-equal GCC warning as it reports correct code
  * to be changed in this file.
@@ -3038,6 +3043,63 @@ convsize(double size, char **tsize)
 
 
 /*
+ * Copy the optional pathetc/inn_status.head file into the HTML status file.
+ * A missing file is skipped silently.  A file that cannot be read, is not a
+ * regular file or is larger than STATUS_HEAD_MAX bytes is skipped with a
+ * warning, logged once until the file is read again or disappears.
+ */
+static void
+hostLogStatusHead(FILE *fp)
+{
+    static bool warned = false;
+    struct stat st;
+    char *path, *header;
+    int fd;
+
+    path = concatpath(innconf->pathetc, "inn_status.head");
+    /* O_NONBLOCK: opening a FIFO without a writer must not block. */
+    fd = open(path, O_RDONLY | O_NONBLOCK);
+    if (fd < 0) {
+        if (errno == ENOENT)
+            warned = false;
+        else if (!warned) {
+            syswarn("ME oserr status header open: %s", path);
+            warned = true;
+        }
+        free(path);
+        return;
+    }
+    if (fstat(fd, &st) < 0) {
+        if (!warned)
+            syswarn("ME oserr status header stat: %s", path);
+        warned = true;
+    } else if (!S_ISREG(st.st_mode)) {
+        if (!warned)
+            warn("ME status header %s is not a regular file, ignored", path);
+        warned = true;
+    } else if (st.st_size > STATUS_HEAD_MAX) {
+        if (!warned)
+            warn("ME status header %s is larger than %d bytes, ignored", path,
+                 STATUS_HEAD_MAX);
+        warned = true;
+    } else {
+        header = xmalloc((size_t) st.st_size + 1);
+        if (xread(fd, header, st.st_size) < 0) {
+            if (!warned)
+                syswarn("ME oserr status header read: %s", path);
+            warned = true;
+        } else {
+            fwrite(header, 1, (size_t) st.st_size, fp);
+            warned = false;
+        }
+        free(header);
+    }
+    close(fd);
+    free(path);
+}
+
+
+/*
  * Log the status of the Hosts.
  */
 static void
@@ -3097,6 +3159,7 @@ hostLogStatus(void)
             fprintf(fp, "<!DOCTYPE html>\n"
                         "<html lang=\"en\">\n"
                         "<head>\n");
+            hostLogStatusHead(fp);
             fprintf(fp, "<meta http-equiv=\"refresh\" content=\"%lu\">\n",
                     (unsigned long) statsPeriod);
             fprintf(fp, "<title>%s: outgoing feeds</title>\n",
