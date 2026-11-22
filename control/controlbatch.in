@@ -75,26 +75,69 @@ cd "${BATCH}" || {
     exit 1
 }
 
-# Add the batch file set aside as batchfile.work to the file of the control
-# articles to process, batchfile.doit.  The first one is only removed once
-# the second one has been completely written, so that no control article is
-# lost when, for instance, the disk is full.  The new content of the second
-# file is first written to a temporary file in order not to leave a partial
-# copy of batchfile.work in it, which would be added again on the next run.
+# The batch file set aside as batchfile.work is handed over to the file of
+# the control articles to process, batchfile.doit, in several steps:
+#   1. batchfile.new is written, with batchfile.doit followed by
+#      batchfile.work (staging);
+#   2. batchfile.work is renamed to batchfile.work.merged, which records that
+#      batchfile.new is complete and has to replace batchfile.doit;
+#   3. batchfile.new is renamed to batchfile.doit (replacement);
+#   4. batchfile.work.merged is removed.
+# Nothing is lost when a step fails or when the run is interrupted, and
+# batchfile.work is never merged twice:  recoverwork finishes the handoff
+# at the beginning of the next run.
+handofffailed() {
+    echo "${0}: cannot add ${BATCH}/${batchfile}.work to" \
+        "${BATCH}/${batchfile}.doit" >&2
+}
+
+recoverwork() {
+    if [ -e "${batchfile}.work.merged" ]; then
+        # Step 2 was done.  If batchfile.new is there, it is complete and
+        # step 3 was not done; otherwise, it was.
+        if [ -f "${batchfile}.new" ]; then
+            mv -f "${batchfile}.new" "${batchfile}.doit" || return 1
+        fi
+        rm -f "${batchfile}.work.merged"
+    else
+        # Step 1 was interrupted, or nothing was in progress.
+        rm -f "${batchfile}.new"
+    fi
+    return 0
+}
+
 addwork() {
     rm -f "${batchfile}.new"
     if [ -s "${batchfile}.doit" ]; then
         cat "${batchfile}.doit" "${batchfile}.work" >"${batchfile}.new"
     else
         cat "${batchfile}.work" >"${batchfile}.new"
-    fi \
-        && mv -f "${batchfile}.new" "${batchfile}.doit" \
-        && rm -f "${batchfile}.work" \
-        && return 0
-    rm -f "${batchfile}.new"
-    echo "${0}: cannot add ${BATCH}/${batchfile}.work to" \
+    fi || {
+        rm -f "${batchfile}.new"
+        handofffailed
+        return 1
+    }
+    mv -f "${batchfile}.work" "${batchfile}.work.merged" || {
+        rm -f "${batchfile}.new"
+        handofffailed
+        return 1
+    }
+    # batchfile.doit must not be processed without batchfile.work, which
+    # is now only in batchfile.new:  the next run will finish this step.
+    mv -f "${batchfile}.new" "${batchfile}.doit" || {
+        handofffailed
+        rm -f "${batchlock}"
+        exit 1
+    }
+    rm -f "${batchfile}.work.merged"
+    return 0
+}
+
+recoverwork || {
+    echo "${0}: cannot finish adding ${BATCH}/${batchfile}.work to" \
         "${BATCH}/${batchfile}.doit" >&2
-    return 1
+    rm -f "${batchlock}"
+    exit 1
 }
 
 # A batch file left as batchfile.work was set aside by a previous run which
