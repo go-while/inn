@@ -122,6 +122,9 @@ for (@ARGV) {
 
             $ftp->login($user, $pass)
               or next;
+
+            # Only an FTP session logged in to that host can be reused.
+            $lasthost = $host;
         }
 
         $ftp->binary
@@ -141,7 +144,6 @@ for (@ARGV) {
     }
 
     $exit--;
-    $lasthost = $host;
 }
 
 $ftp->quit
