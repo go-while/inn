@@ -47,12 +47,21 @@ DDstart(FILE *FromServer, FILE *ToServer)
             return NULL;
         name = concatpath(innconf->pathtmp, INN_PATH_TEMPACTIVE);
         fd = mkstemp(name);
-        if (fd < 0)
+        if (fd < 0) {
+            i = errno;
+            free(name);
+            errno = i;
             return NULL;
+        }
         close(fd);
         if ((F = CA_listopen(name, FromServer, ToServer, "DISTRIB.PATS"))
-            == NULL)
+            == NULL) {
+            i = errno;
+            unlink(name);
+            free(name);
+            errno = i;
             return NULL;
+        }
     }
 
     /* Count lines. */
@@ -63,8 +72,10 @@ DDstart(FILE *FromServer, FILE *ToServer)
     if ((h = xmalloc(sizeof(DDHANDLE))) == NULL) {
         i = errno;
         fclose(F);
-        if (name != NULL)
+        if (name != NULL) {
             unlink(name);
+            free(name);
+        }
         errno = i;
         return NULL;
     }
@@ -76,8 +87,10 @@ DDstart(FILE *FromServer, FILE *ToServer)
         i = errno;
         free(h);
         fclose(F);
-        if (name != NULL)
+        if (name != NULL) {
             unlink(name);
+            free(name);
+        }
         errno = i;
         return NULL;
     }
@@ -102,8 +115,10 @@ DDstart(FILE *FromServer, FILE *ToServer)
     h->Count = ep - h->Entries;
 
     fclose(F);
-    if (name != NULL)
+    if (name != NULL) {
         unlink(name);
+        free(name);
+    }
     return h;
 }
 

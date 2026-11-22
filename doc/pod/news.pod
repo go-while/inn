@@ -133,6 +133,15 @@ files behind after a failed creation, and the buffindexed overview method
 validates its F<group.index> file and no longer frees memory twice when
 mapping overview data fails.  Many thanks to Kevin Bowling for the patches.
 
+=item *
+
+Fixed a crash of programs using the B<DDstart> function of I<libinn> with
+a connection to a news server, when F<distrib.pats> is not installed
+locally and the server rejects the C<LIST DISTRIB.PATS> command or closes
+the connection before replying.  The temporary file used for the server's
+answer is also removed after a failed exchange.  No program shipped with
+INN calls B<DDstart> that way.
+
 =back
 
 =head1 Changes in 2.7.5 (not yet released)

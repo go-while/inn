@@ -37,7 +37,8 @@ CAopen(FILE *FromServer, FILE *ToServer)
 
 
 /*
-**  Internal library routine.
+**  Internal library routine.  The caller owns pathname: it is not removed
+**  here, and the file of CAopen() or CAlistopen() is left alone.
 */
 FILE *
 CA_listopen(char *pathname, FILE *FromServer, FILE *ToServer,
@@ -66,11 +67,8 @@ CA_listopen(char *pathname, FILE *FromServer, FILE *ToServer,
     if (fgets(buff, sizeof buff, FromServer) == NULL
         || strncmp(buff, expectedanswer, strlen(expectedanswer)) != 0) {
         oerrno = errno;
-        /* Only call CAclose() if opened through CAopen(). */
-        if (strcmp(CApathname, pathname) == 0)
-            CAclose();
-        errno = oerrno;
         fclose(F);
+        errno = oerrno;
         return NULL;
     }
 
@@ -81,8 +79,11 @@ CA_listopen(char *pathname, FILE *FromServer, FILE *ToServer,
         if ((p = strchr(buff, '\n')) != NULL)
             *p = '\0';
         if (buff[0] == '.' && buff[1] == '\0') {
-            if (ferror(F) || fflush(F) == EOF || fclose(F) == EOF)
+            if (ferror(F) || fflush(F) == EOF)
                 break;
+            /* fclose() closes F even when it fails. */
+            if (fclose(F) == EOF)
+                return NULL;
             return fopen(pathname, "r");
         }
         fprintf(F, "%s\n", buff);
@@ -91,7 +92,6 @@ CA_listopen(char *pathname, FILE *FromServer, FILE *ToServer,
     /* Ran out of input before finding the terminator; quit. */
     oerrno = errno;
     fclose(F);
-    CAclose();
     errno = oerrno;
     return NULL;
 }
@@ -122,7 +122,13 @@ CAlistopen(FILE *FromServer, FILE *ToServer, const char *request)
         return NULL;
     }
     close(fd);
-    return CAfp = CA_listopen(CApathname, FromServer, ToServer, request);
+    CAfp = CA_listopen(CApathname, FromServer, ToServer, request);
+    if (CAfp == NULL) {
+        oerrno = errno;
+        CAclose();
+        errno = oerrno;
+    }
+    return CAfp;
 }
 
 
@@ -138,6 +144,7 @@ CAclose(void)
     }
     if (CApathname != NULL) {
         unlink(CApathname);
+        free(CApathname);
         CApathname = NULL;
     }
 }
