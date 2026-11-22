@@ -22,9 +22,10 @@ history database.  The news server is paused while the logs are rotated,
 with the reason C<Flushing log and syslog files> followed by the process ID
 of B<scanlogs>.  B<scanlogs> resumes it when the logs cannot be flushed or
 when it receives a signal, so that a failed rotation does not leave B<innd>
-paused.  If it cannot resume the server, it reports it and exits with a
-non-zero status; the server can then be resumed by hand with C<ctlinnd go>
-and that reason.
+paused.  If B<ctlinnd go> fails and C<ctlinnd mode> does not show that the
+server runs (or is paused by someone else), or cannot be run, it reports it and
+exits with a non-zero status; the server can then be resumed by hand with
+C<ctlinnd go> and that reason.
 
 By default, B<scanlogs> rotates and cleans out the logs.  It keeps up to
 I<logcycles> old compressed log files in I<pathlog>/OLD (the I<logcycles>

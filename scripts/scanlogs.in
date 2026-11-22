@@ -133,8 +133,9 @@ if ${ROTATE}; then
     ##  so that the server is not left paused by scanlogs.  PAUSED is "maybe"
     ##  from the moment the pause is requested (a signal can arrive before
     ##  innd's reply), "true" once it is acknowledged, and "false" again only
-    ##  when the server has been resumed.  The reason is specific to this run:
-    ##  its "go" cannot release a pause made by someone else.
+    ##  when the server is known not to be paused by this run any more.  The
+    ##  reason is specific to this run:  its "go" cannot release a pause made
+    ##  by someone else.
     PAUSED=false
     PAUSEREASON="Flushing log and syslog files $$"
     resumeserver() {
@@ -143,12 +144,16 @@ if ${ROTATE}; then
             PAUSED=false
             return 0
         }
-        ##  When the reply to the pause was not seen, the server may not be
-        ##  paused by this run at all.
-        if [ "${PAUSED}" = maybe ] \
-            && ! ctlinnd mode 2>/dev/null | grep -F "${PAUSEREASON}" >/dev/null; then
-            PAUSED=false
-            return 0
+        ##  The reply to go, or to the pause, may have been lost:  look at
+        ##  what the server does.  A failed query proves nothing.
+        if SERVERMODE=$(ctlinnd mode 2>&1); then
+            SERVERMODE=$(echo "${SERVERMODE}" | ${SED} 1q)
+            if [ "${SERVERMODE}" != "Server paused ${PAUSEREASON}" ]; then
+                ##  Running (go did work, or the pause was refused), or
+                ##  paused by someone else.
+                PAUSED=false
+                return 0
+            fi
         fi
         echo "${GOOUTPUT}" 1>&2
         echo "$0: cannot resume innd, run: ctlinnd go \"${PAUSEREASON}\"" 1>&2
