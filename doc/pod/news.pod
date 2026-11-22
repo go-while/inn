@@ -142,6 +142,12 @@ the connection before replying.  The temporary file used for the server's
 answer is also removed after a failed exchange.  No program shipped with
 INN calls B<DDstart> that way.
 
+=item *
+
+Fixed a file descriptor leak in B<nnrpd> for each article posted when
+F<distrib.pats> is an empty file.  A news client posting many articles in
+the same session could make B<nnrpd> run out of file descriptors.
+
 =back
 
 =head1 Changes in 2.7.5 (not yet released)

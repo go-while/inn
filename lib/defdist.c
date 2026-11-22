@@ -68,6 +68,16 @@ DDstart(FILE *FromServer, FILE *ToServer)
     for (i = 0; fgets(buff, sizeof buff, F) != NULL; i++)
         continue;
 
+    /* An empty file gives the empty default, like a missing one. */
+    if (i == 0) {
+        fclose(F);
+        if (name != NULL) {
+            unlink(name);
+            free(name);
+        }
+        return NULL;
+    }
+
     /* Allocate space for the handle. */
     if ((h = xmalloc(sizeof(DDHANDLE))) == NULL) {
         i = errno;
@@ -81,9 +91,7 @@ DDstart(FILE *FromServer, FILE *ToServer)
     }
     h->Count = 0;
     h->Current = NULL;
-    if (i == 0) {
-        return NULL;
-    } else if ((h->Entries = xmalloc(sizeof(DDENTRY) * i)) == NULL) {
+    if ((h->Entries = xmalloc(sizeof(DDENTRY) * i)) == NULL) {
         i = errno;
         free(h);
         fclose(F);

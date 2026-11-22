@@ -37,6 +37,18 @@ tmpfiles(void)
     return n;
 }
 
+/* Number of open file descriptors below 1024. */
+static int
+openfds(void)
+{
+    int fd, n = 0;
+
+    for (fd = 0; fd < 1024; fd++)
+        if (fcntl(fd, F_GETFD) != -1)
+            n++;
+    return n;
+}
+
 /* A stream to read the given server replies from. */
 static FILE *
 server(const char *reply)
@@ -85,10 +97,11 @@ main(void)
 {
     FILE *from, *to, *active;
     char buff[BUFSIZ];
-    char *p;
-    bool handle;
+    char *p, *path;
+    bool handle, allempty;
+    int fds, i;
 
-    plan(17);
+    plan(23);
 
     strlcpy(etcdir, "defdist-etc-XXXXXX", sizeof(etcdir));
     strlcpy(tmpdir, "defdist-tmp-XXXXXX", sizeof(tmpdir));
@@ -146,6 +159,36 @@ main(void)
     is_int(0, tmpfiles(), "LIST: file removed by CAclose");
     fclose(from);
     fclose(to);
+
+    /* An empty distrib.pats, as nnrpd reads it for every POST, must not
+       leak its descriptor. */
+    path = concatpath(etcdir, "distrib.pats");
+    active = fopen(path, "w");
+    if (active == NULL || fclose(active) != 0)
+        sysbail("can't create %s", path);
+    fds = openfds();
+    allempty = true;
+    for (i = 0; i < 20; i++) {
+        p = ddrun(NULL, &handle);
+        if (handle || strcmp(p, "") != 0)
+            allempty = false;
+        free(p);
+    }
+    ok(allempty, "empty distrib.pats: no handle, empty Distribution");
+    is_int(fds, openfds(), "empty distrib.pats: no descriptor leaked");
+    if (unlink(path) < 0)
+        sysbail("can't remove %s", path);
+    free(path);
+
+    /* The same for an empty list from the server. */
+    fds = openfds();
+    p = ddrun("215 Follows\r\n.\r\n", &handle);
+    ok(!handle, "empty LIST DISTRIB.PATS: no handle");
+    is_string("", p, "empty LIST DISTRIB.PATS: empty Distribution");
+    is_int(0, tmpfiles(), "empty LIST DISTRIB.PATS: no file left");
+    is_int(fds, openfds(),
+           "empty LIST DISTRIB.PATS: no descriptor leaked");
+    free(p);
 
     ok(rmdir(tmpdir) == 0 && rmdir(etcdir) == 0,
        "temporary directories removed");
