@@ -960,13 +960,26 @@ dbzfetch(const HASH key, off_t *value)
         offset <<= conf.dropbits;
         if (offset) /* backspace 1 character to read '\n' */
             offset--;
+        if (basef == NULL) {
+            warn("dbzfetch: history text is unavailable");
+            srch.aborted = 1;
+            return false;
+        }
+        clearerr(basef);
         if (fseeko(basef, offset, SEEK_SET) != 0) {
             syswarn("dbzfetch: seek failed");
+            srch.aborted = 1;
             return false;
         }
         keylen = fread(buffer, 1, nb2r, basef);
-        if (keylen < MIN_KEY_LENGTH) {
+        if (ferror(basef)) {
             syswarn("dbzfetch: read failed");
+            srch.aborted = 1;
+            return false;
+        }
+        if (keylen < MIN_KEY_LENGTH) {
+            warn("dbzfetch: history entry is incomplete");
+            srch.aborted = 1;
             return false;
         }
         buffer[keylen] = '\0'; /* terminate the string */
@@ -1054,9 +1067,11 @@ DBZSTORE_RESULT
 dbzstore(const HASH key, off_t data)
 {
 #ifdef DO_TAGGED_HASH
-    of_t value;
+    of_t value, full_value;
+    off_t existing;
 #else
     erec evalue;
+    bool exists;
 #endif
 
     if (!opendb) {
@@ -1069,15 +1084,19 @@ dbzstore(const HASH key, off_t data)
     }
 
 #ifdef DO_TAGGED_HASH
-    /* copy the value in to ensure alignment */
-    memcpy(&value, &data, SOF);
+    /* A tag match must be confirmed against the full history key. */
+    if (dbzfetch(key, &existing))
+        return DBZSTORE_EXISTS;
+    if (srch.aborted) {
+        prevp = FRESH;
+        return DBZSTORE_ERROR;
+    }
 
-    /* update maximum offset value if necessary */
-    if (value > conf.vused[0])
-        conf.vused[0] = value;
+    /* copy the value in to ensure alignment */
+    memcpy(&full_value, &data, SOF);
 
     /* now value is in fuzzy format */
-    value >>= conf.dropbits;
+    value = full_value >> conf.dropbits;
     debug("dbzstore: (%ld)", (long) value);
 
     if (!okayvalue(value)) {
@@ -1086,26 +1105,27 @@ dbzstore(const HASH key, off_t data)
         return DBZSTORE_ERROR;
     }
 
-    /* find the place, exploiting previous search if possible */
-    start(&srch, key, prevp);
-    while (search(&srch) != NOTFOUND)
-        continue;
-
+    /* The failed lookup left the search at a vacant slot. */
     prevp = FRESH;
+    if (!set_pag(&srch, value))
+        return DBZSTORE_ERROR;
+    if (full_value > conf.vused[0])
+        conf.vused[0] = full_value;
     conf.used[0]++;
     debug("store: used count %ld", conf.used[0]);
     dirty = 1;
-    if (!set_pag(&srch, value))
-        return DBZSTORE_ERROR;
     return DBZSTORE_OK;
 #else  /* DO_TAGGED_HASH */
 
     /* find the place, exploiting previous search if possible */
     start(&srch, key, prevp);
-    if (search(&srch) == true)
-        return DBZSTORE_EXISTS;
-
+    exists = search(&srch);
     prevp = FRESH;
+    if (exists)
+        return DBZSTORE_EXISTS;
+    if (srch.aborted)
+        return DBZSTORE_ERROR;
+
     conf.used[0]++;
     debug("store: used count %ld", conf.used[0]);
     dirty = true;

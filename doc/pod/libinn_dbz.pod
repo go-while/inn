@@ -71,13 +71,11 @@ I<name>F<.pag> file is used instead of F<.index> and F<.hash>.
 B<dbzfetch> searches the database for the specified I<key>, assigning the
 offset of the base file for the corresponding I<key> to I<value>, if any.
 
-B<dbzstore> stores the I<key>-I<data> pair in the database.  Unless the
-tagged hash format is used, it will return C<DBZSTORE_EXISTS> for duplicates
-(already existing entries), and C<DBZSTORE_OK> for success.  When the tagged
-hash format is used, duplicates are not detected; B<dbzstore> then adds
-another entry for the same key and also returns C<DBZSTORE_OK>.  It will fail
-with C<DBZSTORE_ERROR> if the database files are not writable or not opened,
-or if any other error occurs.
+B<dbzstore> inserts the I<key>-I<data> pair and returns C<DBZSTORE_OK>.
+If the key already exists, it returns C<DBZSTORE_EXISTS> and keeps the
+original offset.  The same rule applies to both index formats.
+B<dbzstore> returns C<DBZSTORE_ERROR> if the database is closed, read-only,
+or unable to complete the operation.
 
 B<dbzexists> will verify whether or not the given hash exists.  Unless
 the tagged hash format is used, I<dbz> is optimized for this operation and it
@@ -167,11 +165,6 @@ If C<DBZTEST> is defined at compile-time, then a B<main()> function will be
 included.  This will do performance tests and integrity tests.
 
 =head1 BUGS
-
-Unlike I<dbm>, I<dbz> will refuse to B<dbzstore> with a key already in the
-database, unless the tagged hash format is used, in which case duplicates are
-not detected and are silently added as separate entries.  The user is
-responsible for avoiding this.
 
 I<dbz> no longer tries to be call-compatible with I<dbm> in any way.
 
