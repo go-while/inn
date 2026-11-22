@@ -160,6 +160,88 @@ func TestExpireoverTombstoneUnverifiable(t *testing.T) {
 	}
 }
 
+// TestExpireoverTombstoneQuietCycle: with expiretombstone and delayed removal, an entry
+// expireover could not verify is kept in expireover.tombstone.retry; once a later run finds
+// the article gone, the entry is published in expireover.tombstone even when that run
+// schedules no removal, so that news.daily (which runs expirerm only for a non-empty list)
+// does not hold it back until an unrelated article expires (HIS-2).
+func TestExpireoverTombstoneQuietCycle(t *testing.T) {
+	s := NewSite(t, SiteOptions{
+		Groups:  []Group{{Name: "e2e.test"}, {Name: "e2e.expire.a"}},
+		InnConf: map[string]string{"expiretombstone": "true"},
+		Etc: map[string]string{
+			"expire.ctl": "/remember/:11\n*:A:never:never:never\n" +
+				"e2e.expire.*:A:" + expireDays + ":" + expireDays + ":" + expireDays + "\n",
+		},
+	})
+	if err := os.MkdirAll(filepath.Join(s.Dir, "log", "OLD"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	dirA := filepath.Join(s.Dir, "spool", "articles", "e2e", "expire", "a")
+	db := filepath.Join(s.Dir, "db")
+	run := func(name string, args ...string) error {
+		out, err := runFor(s, time.Minute, name, args...)
+		t.Logf("%s %s: err=%v\n%s", name, strings.Join(args, " "), err, out)
+		return err
+	}
+
+	// Cycle 1: A expires, fastrm cannot remove it.
+	idA := s.Inject(t, "e2e.expire.a", 1)[0]
+	tokenA := historyToken(t, s, idA)
+	files, _ := filepath.Glob(filepath.Join(dirA, "*"))
+	if len(files) != 1 {
+		t.Fatalf("articles in %s: %v, want one", dirA, files)
+	}
+	time.Sleep(expireWait)
+	restore := chmodUntilCleanup(t, dirA, 0o555)
+	rm := filepath.Join(s.Dir, "tmp", "rm")
+	if err := run("expireover", "-z", rm+"1"); err != nil {
+		t.Fatalf("expireover -z: %v", err)
+	}
+	if err := run("expirerm", rm+"1"); err == nil {
+		t.Fatalf("expirerm succeeded although %s could not be removed", files[0])
+	}
+
+	// Cycle 2, nothing expires: A cannot be checked and goes to the retry file.
+	if err := os.Chmod(dirA, 0); err != nil {
+		t.Fatal(err)
+	}
+	if err := run("expireover", "-z", rm+"2"); err != nil {
+		t.Fatalf("expireover -z: %v", err)
+	}
+	restore()
+	if b, err := os.ReadFile(filepath.Join(db, "expireover.tombstone.retry")); err != nil ||
+		!strings.Contains(string(b), tokenA) {
+		t.Fatalf("expireover.tombstone.retry does not list %s: %v\n%s", tokenA, err, b)
+	}
+
+	// Cycle 3, nothing expires again: A is gone by now (removed by hand), so its entry
+	// must be published without expirerm.
+	if err := os.Remove(files[0]); err != nil {
+		t.Fatal(err)
+	}
+	if err := run("expireover", "-z", rm+"3"); err != nil {
+		t.Fatalf("expireover -z: %v", err)
+	}
+	if b, err := os.ReadFile(rm + "3"); err == nil && len(strings.TrimSpace(string(b))) > 0 {
+		t.Fatalf("the third run scheduled removals:\n%s", b)
+	}
+	b, err := os.ReadFile(filepath.Join(db, "expireover.tombstone"))
+	if err != nil || !strings.Contains(string(b), tokenA) {
+		t.Errorf("expireover.tombstone does not list %s after a run without removals: %v\n%s",
+			tokenA, err, b)
+	}
+	if b, err := os.ReadFile(filepath.Join(db, "expireover.tombstone.retry")); err == nil {
+		t.Errorf("expireover.tombstone.retry still exists:\n%s", b)
+	}
+	if err := run("expire", "-v1"); err != nil {
+		t.Fatalf("expire -v1: %v", err)
+	}
+	if got := historyToken(t, s, idA); got != "/dev/null" {
+		t.Errorf("grephistory %s = %q after expire, want /dev/null (article gone)", idA, got)
+	}
+}
+
 // TestExpireCancelSnapshotRetry: with expiretombstone, an expire run that finds the
 // cancels.tombstone.processing snapshot of an interrupted run and new entries in
 // cancels.tombstone keeps both on disk until it has built the new history: when that run
@@ -208,6 +290,50 @@ func TestExpireCancelSnapshotRetry(t *testing.T) {
 	if err := os.Remove(filepath.Join(db, "history.n")); err != nil {
 		t.Fatal(err)
 	}
+	if out, err := runFor(s, time.Minute, "expire", "-v1"); err != nil {
+		t.Fatalf("expire -v1: %v\n%s", err, out)
+	}
+	for _, id := range ids {
+		if got := historyToken(t, s, id); got != "/dev/null" {
+			t.Errorf("grephistory %s = %q after expire, want /dev/null (cancelled)", id, got)
+		}
+	}
+}
+
+// TestExpireUnreadableCancelSnapshot: with expiretombstone, an expire run that cannot read
+// the cancels.tombstone.processing snapshot of an interrupted run (here: no read permission)
+// does not remove it after a successful run, so that its cancels are applied once it can be
+// read; the live cancels.tombstone is not renamed over it either (HIS-3).
+func TestExpireUnreadableCancelSnapshot(t *testing.T) {
+	s := NewSite(t, SiteOptions{InnConf: map[string]string{"expiretombstone": "true"}})
+	ids := s.Inject(t, "e2e.test", 2)
+	tokens := []string{historyToken(t, s, ids[0]), historyToken(t, s, ids[1])}
+	db := filepath.Join(s.Dir, "db")
+	snapshot := filepath.Join(db, "cancels.tombstone.processing")
+	header := "# inn-tombstone v1\n"
+	s.writeFile(t, "db/cancels.tombstone.processing", header+tokens[0]+"\n")
+	s.writeFile(t, "db/cancels.tombstone", header+tokens[1]+"\n")
+	if err := os.Chmod(snapshot, 0); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(snapshot, 0o644) })
+
+	out, err := runFor(s, time.Minute, "expire", "-v1")
+	t.Logf("expire -v1 with an unreadable snapshot: err=%v\n%s", err, out)
+	if err != nil {
+		t.Fatalf("expire -v1: %v", err)
+	}
+	if _, err := os.Stat(snapshot); err != nil {
+		t.Fatalf("the unread snapshot was removed: %v", err)
+	}
+	if err := os.Chmod(snapshot, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if b, _ := os.ReadFile(snapshot); !strings.Contains(string(b), tokens[0]) {
+		t.Errorf("the snapshot lost %s:\n%s", tokens[0], b)
+	}
+
+	// Readable again: the next run applies both.
 	if out, err := runFor(s, time.Minute, "expire", "-v1"); err != nil {
 		t.Fatalf("expire -v1: %v\n%s", err, out)
 	}
@@ -276,7 +402,8 @@ func TestNewsDailyExpdirInstall(t *testing.T) {
 	s := NewSite(t, SiteOptions{InnConf: map[string]string{"mailcmd": mailer}})
 	id := s.Inject(t, "e2e.test", 1)[0]
 	token := historyToken(t, s, id)
-	expdir := filepath.Join(s.Dir, "expdir")
+	// "-n" in the name: news.daily must not take it for expire's -n flag.
+	expdir := filepath.Join(s.Dir, "expire-new")
 	if err := os.Mkdir(expdir, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -305,4 +432,33 @@ func TestNewsDailyExpdirInstall(t *testing.T) {
 	p := s.Peer(t)
 	expect(t, p, 435, "IHAVE %s", id)
 	expect(t, p, 205, "QUIT")
+}
+
+// TestExpireAsideLeavesPaused: expire -d leaves innd paused with the reason given by -r, as
+// its manual page says, so that the caller can install the new history files before innd
+// writes to them; "ctlinnd go" with that reason resumes it (HIS-7).
+func TestExpireAsideLeavesPaused(t *testing.T) {
+	s := NewSite(t, SiteOptions{})
+	s.Inject(t, "e2e.test", 1)
+	dir := filepath.Join(s.Dir, "aside")
+	if err := os.Mkdir(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	reason := "e2e expire aside"
+	out, err := runFor(s, time.Minute, "expire", "-v1", "-d"+dir, "-r"+reason)
+	t.Logf("expire -d: err=%v\n%s", err, out)
+	if err != nil {
+		t.Fatalf("expire -d: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "history.n.done")); err != nil {
+		t.Errorf("no history.n.done: %v", err)
+	}
+	mode := s.Ctlinnd(t, "mode")
+	if !strings.Contains(mode, "Server paused "+reason) {
+		t.Errorf("innd is not paused with %q after expire -d:\n%s", reason, mode)
+	}
+	s.Ctlinnd(t, "go", reason)
+	if mode := s.Ctlinnd(t, "mode"); !strings.Contains(mode, "Server running") {
+		t.Errorf("innd is not running after ctlinnd go:\n%s", mode)
+	}
 }
