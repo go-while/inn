@@ -55,6 +55,7 @@ struct innconf {
     unsigned long hiscachesize; /* Size of the history cache in kB */
     bool ignorenewsgroups;      /* Propagate cmsgs by affected group? */
     bool immediatecancel;       /* Immediately cancel timecaf messages? */
+    bool keepdescriptions;      /* Keep descriptions of removed newsgroups? */
     unsigned long
         linecountfuzz;        /* Check linecount and reject if off by more */
     unsigned long maxartsize; /* Reject articles bigger than this */
