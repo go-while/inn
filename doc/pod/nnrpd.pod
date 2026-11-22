@@ -199,8 +199,8 @@ B<nnrpd> has no setting to limit the number of simultaneous connections
 from a single IP address.  The B<-H>, B<-T> and B<-X> flags of innd(8)
 only limit the rate of new connections.  I<maxconnections> in F<inn.conf>
 sets an overall limit that B<innd> applies when admitting peer connections.
-Local connections and peers exempted by I<nolimit> can still be admitted
-when that limit is reached.
+Local connections and peers whose I<max-connections> in incoming.conf(5)
+is 0 (the default) can still be admitted when that limit is reached.
 
 If you need such a limit, let a super-server start B<nnrpd> instead of
 B<innd>, and use the per-source limit of that super-server.  B<nnrpd> then
