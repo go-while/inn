@@ -1,0 +1,32 @@
+=head1 NAME
+
+concat, concatpath - join strings or form a pathname
+
+=head1 SYNOPSIS
+
+    #include <inn/concat.h>
+
+    char *concat(const char *first, ...);
+    char *concatpath(const char *base, const char *name);
+
+=head1 DESCRIPTION
+
+B<concat> copies the NUL-terminated strings starting with I<first> into
+one newly allocated string, in argument order.  End the argument list
+with a null pointer of type C<char *>.  An empty string is a valid
+argument.  The caller frees the result.
+
+B<concatpath> returns a newly allocated copy of I<name> if it begins
+with C</> or C<./>.  Otherwise it joins I<base>, a slash, and I<name>.
+A NULL I<base> means C<.>.  The caller frees the result.
+
+=head1 HISTORY
+
+Written by Russ Allbery.  B<concatpath> replaces the older
+B<cpcatpath>, which returned the path in a static buffer.
+
+=head1 SEE ALSO
+
+libinn(3).
+
+=cut

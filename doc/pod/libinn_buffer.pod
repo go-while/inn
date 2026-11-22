@@ -1,0 +1,88 @@
+=head1 NAME
+
+buffer_new, buffer_free, buffer_resize, buffer_compact, buffer_set, buffer_sprintf, buffer_vsprintf, buffer_append, buffer_append_sprintf, buffer_append_vsprintf, buffer_swap, buffer_find_string, buffer_read, buffer_read_all, buffer_read_file - work with a counted byte buffer
+
+=head1 SYNOPSIS
+
+    #include <inn/buffer.h>
+
+    struct buffer {
+        size_t size;
+        size_t used;
+        size_t left;
+        char *data;
+    };
+
+    struct buffer *buffer_new(void);
+    void buffer_free(struct buffer *buffer);
+    void buffer_resize(struct buffer *buffer, size_t size);
+    void buffer_compact(struct buffer *buffer);
+    void buffer_set(struct buffer *buffer, const char *data, size_t length);
+    void buffer_sprintf(struct buffer *buffer, const char *format, ...);
+    void buffer_vsprintf(struct buffer *buffer, const char *format,
+                        va_list args);
+    void buffer_append(struct buffer *buffer, const char *data, size_t length);
+    void buffer_append_sprintf(struct buffer *buffer, const char *format, ...);
+    void buffer_append_vsprintf(struct buffer *buffer, const char *format,
+                               va_list args);
+    void buffer_swap(struct buffer *one, struct buffer *two);
+    bool buffer_find_string(struct buffer *buffer, const char *string,
+                            size_t start, size_t *offset);
+    ssize_t buffer_read(struct buffer *buffer, int fd);
+    bool buffer_read_all(struct buffer *buffer, int fd);
+    bool buffer_read_file(struct buffer *buffer, int fd);
+
+=head1 DESCRIPTION
+
+A buffer has I<size> bytes of allocated space.  The first I<used> bytes
+are consumed and the following I<left> bytes are unconsumed.  Callers
+can consume bytes by advancing I<used> and decreasing I<left>.  Use
+the counts to delimit the data.
+
+B<buffer_new> allocates an empty buffer.  B<buffer_free> releases a
+buffer and its storage, and accepts NULL.  B<buffer_resize> grows the
+allocation to at least I<size> without shrinking it.  B<buffer_compact>
+moves unconsumed bytes to the start and resets I<used> to zero.
+Growth or compaction can invalidate pointers into the buffer.
+B<buffer_swap> exchanges the full contents of I<one> and I<two>.
+
+B<buffer_set> replaces the contents with I<length> bytes from I<data>
+and marks all of them unconsumed.  A zero length clears the counts and
+allows I<data> to be NULL.  B<buffer_append> appends I<length> bytes
+from I<data> to the unconsumed data, growing the buffer as needed.
+
+B<buffer_sprintf> and B<buffer_vsprintf> replace the contents with
+printf(3)-formatted data.  B<buffer_append_sprintf> and
+B<buffer_append_vsprintf> append formatted data.  The C<vsprintf>
+forms take I<args> as a va_list.  A NUL byte follows the formatted
+data in the allocation, but it is not counted in I<left>.
+
+B<buffer_find_string> searches the unconsumed bytes for I<string>,
+starting at byte I<start> relative to the first unconsumed byte.
+Use a nonempty NUL-terminated I<string> and a I<start> no larger than
+I<left>.  It returns true on a match and stores its offset relative to
+the first unconsumed byte in I<offset>.  It returns false when the
+search finds no match.
+
+B<buffer_read> reads from I<fd> into the free space after the
+unconsumed data and adds the count to I<left>.  It does not grow the
+buffer: the caller must first make room, for example with
+B<buffer_resize>.  It returns the count from read(2), or -1 with errno
+set on error, and retries EINTR and EAGAIN.  A return value of 0 means
+either end of file or no free space, so check for free space before
+calling it.  B<buffer_read_all> grows the buffer as
+needed and reads until end of file.  B<buffer_read_file> first uses
+fstat(2) to reserve space, then reads until end of file.  Both
+return true on success and false with errno set on error.
+
+=head1 HISTORY
+
+Written by Russ Allbery for INN and derived from code contributed
+to the Internet Software Consortium by Rich Salz.  The canonical
+version is maintained in the rra-c-util package.
+
+=head1 SEE ALSO
+
+libinn(3), printf(3), read(2).
+
+=cut

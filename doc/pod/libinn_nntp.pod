@@ -1,0 +1,104 @@
+=head1 NAME
+
+nntp_new, nntp_free, nntp_connect, nntp_timeout, nntp_read_line, nntp_read_response, nntp_read_command, nntp_read_multiline, nntp_write, nntp_send_line, nntp_send_line_noflush, nntp_respond, nntp_respond_noflush, nntp_flush - buffer input and output for NNTP
+
+=head1 SYNOPSIS
+
+    #include <inn/nntp.h>
+
+    struct nntp;
+
+    struct nntp *nntp_new(int in, int out, size_t maxsize, time_t timeout);
+    void nntp_free(struct nntp *nntp);
+    struct nntp *nntp_connect(const char *host, unsigned short port,
+                              size_t maxsize, time_t timeout);
+    void nntp_timeout(struct nntp *nntp, time_t timeout);
+
+    enum nntp_status nntp_read_line(struct nntp *nntp, char **line);
+    enum nntp_status nntp_read_response(struct nntp *nntp,
+                                        enum nntp_code *code, char **rest);
+    enum nntp_status nntp_read_command(struct nntp *nntp,
+                                       struct cvector *command);
+    enum nntp_status nntp_read_multiline(struct nntp *nntp, char **data,
+                                         size_t *length);
+
+    bool nntp_write(struct nntp *nntp, const char *buffer, size_t length);
+    bool nntp_send_line(struct nntp *nntp, const char *format, ...);
+    bool nntp_send_line_noflush(struct nntp *nntp, const char *format, ...);
+    bool nntp_respond(struct nntp *nntp, enum nntp_code code,
+                      const char *format, ...);
+    void nntp_respond_noflush(struct nntp *nntp, enum nntp_code code,
+                              const char *format, ...);
+    bool nntp_flush(struct nntp *nntp);
+
+=head1 DESCRIPTION
+
+B<nntp_new> allocates a connection using I<in> for input and I<out> for
+output.  B<nntp_connect> opens a stream to I<host> and I<port>, then
+allocates a connection, or returns NULL if the connection fails.  It
+leaves reading the server greeting to the caller.  B<nntp_free>
+closes the associated descriptors and frees the connection.
+
+I<maxsize> limits input buffer growth.  A zero value allows unlimited
+growth.  I<timeout> is the number of seconds to wait for input during
+a read; zero means wait forever.  B<nntp_timeout> changes it for
+subsequent reads.
+
+=head2 Reading
+
+The read routines return C<NNTP_READ_OK> on success.  The other results
+are C<NNTP_READ_EOF>, C<NNTP_READ_ERROR>, C<NNTP_READ_TIMEOUT> and
+C<NNTP_READ_LONG>.  Returned text points into the connection's input
+buffer and can be invalidated by the next read or by B<nntp_free>.
+
+Lines end with CRLF only; a bare CR or LF does not end a line.
+B<nntp_read_line> stores a NUL-terminated line without its CRLF in
+I<line>.  B<nntp_read_response> parses the response code into I<code>
+and sets I<rest> to the text after the code.  The code is read as a
+decimal number that must occupy exactly the first three characters of the
+line; if it does, a single whitespace character after it is skipped.
+Otherwise it sets I<code> to C<NNTP_INVALID_CODE> (0); I<rest> then
+points into the same line where parsing stopped, not at response text,
+and should not be used.
+B<nntp_read_command> splits a line on whitespace into the supplied
+I<command> vector.  Its strings reference the input buffer.
+
+B<nntp_read_multiline> returns the wire-format block through I<data>
+and its byte count through I<length>, including the terminating dot line.
+The data is not NUL-terminated; use I<length>.
+
+=head2 Codes and limits
+
+F<inn/nntp.h> also defines C<enum nntp_code>, which has a constant for
+every response code INN uses, such as C<NNTP_OK_ARTICLE> (220) or
+C<NNTP_FAIL_IHAVE_DEFER> (436), and the limits C<NNTP_MAXLEN_COMMAND>
+(512 octets for a command line including CRLF), C<NNTP_MAXLEN_ARG> (497
+octets for the arguments) and C<NNTP_MAXLEN_MSGID> (250 octets for a
+message-ID).
+
+=head2 Writing
+
+B<nntp_write> flushes queued output and immediately writes I<length>
+bytes from I<buffer>.  The caller supplies wire-format line endings and
+dot-stuffing where needed.  It returns true on success and false on
+failure or for a zero-length write.
+
+B<nntp_send_line> formats a line with I<format>, appends CRLF and flushes
+the output.  B<nntp_send_line_noflush> queues the same line without
+flushing; the caller sends it later with B<nntp_flush>.
+B<nntp_respond> writes I<code> followed by the formatted text and CRLF
+and flushes output.  A NULL I<format> writes just the code and CRLF.
+B<nntp_respond_noflush> queues the same response for a later flush.
+B<nntp_flush> sends buffered output.  B<nntp_send_line>,
+B<nntp_respond> and B<nntp_flush> return true when the output was sent
+and false on error.
+
+=head1 HISTORY
+
+Written by Russ Allbery in 2003.
+
+=head1 SEE ALSO
+
+libinn(3), libinn_buffer(3), libinn_network(3).
+
+=cut

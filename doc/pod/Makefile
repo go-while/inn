@@ -16,6 +16,8 @@ MAN1	= ../man/convdate.1 ../man/fastrm.1 ../man/gencancel.1 \
 
 MAN3	= ../man/libinn.3 ../man/libinn_clientlib.3 ../man/libinn_dbz.3 \
 	../man/libinn_inndcomm.3 \
+	../man/libinn_bloom.3 ../man/libinn_buffer.3 ../man/libinn_concat.3 \
+	../man/libinn_network.3 ../man/libinn_nntp.3 ../man/libinn_timer.3 \
 	../man/libinnauth.3 ../man/libinnhist.3 ../man/libinnstorage.3 \
 	../man/libinn_list.3 ../man/libinn_qio.3 \
 	../man/libinn_tst.3 ../man/libinn_uwildmat.3
@@ -96,11 +98,17 @@ maintclean: distclean
 ../man/libinnauth.3:	libinnauth.pod		; $(POD2MAN) -s 3 $? > $@
 ../man/libinnhist.3:	libinnhist.pod		; $(POD2MAN) -s 3 $? > $@
 ../man/libinnstorage.3:	libinnstorage.pod	; $(POD2MAN) -s 3 $? > $@
+../man/libinn_bloom.3: libinn_bloom.pod	; $(POD2MAN) -s 3 $? > $@
+../man/libinn_buffer.3: libinn_buffer.pod	; $(POD2MAN) -s 3 $? > $@
 ../man/libinn_clientlib.3: libinn_clientlib.pod	; $(POD2MAN) -s 3 $? > $@
+../man/libinn_concat.3: libinn_concat.pod	; $(POD2MAN) -s 3 $? > $@
 ../man/libinn_dbz.3:	libinn_dbz.pod		; $(POD2MAN) -s 3 $? > $@
 ../man/libinn_inndcomm.3: libinn_inndcomm.pod	; $(POD2MAN) -s 3 $? > $@
 ../man/libinn_list.3:	libinn_list.pod		; $(POD2MAN) -s 3 $? > $@
+../man/libinn_network.3: libinn_network.pod	; $(POD2MAN) -s 3 $? > $@
+../man/libinn_nntp.3: libinn_nntp.pod	; $(POD2MAN) -s 3 $? > $@
 ../man/libinn_qio.3:	libinn_qio.pod		; $(POD2MAN) -s 3 $? > $@
+../man/libinn_timer.3: libinn_timer.pod	; $(POD2MAN) -s 3 $? > $@
 ../man/libinn_tst.3:	libinn_tst.pod		; $(POD2MAN) -s 3 $? > $@
 ../man/libinn_uwildmat.3: libinn_uwildmat.pod	; $(POD2MAN) -s 3 $? > $@
 
