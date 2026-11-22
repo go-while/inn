@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 
@@ -52,21 +53,27 @@ func innStatusPage(t *testing.T, s *Site) string {
 
 // TestStatusHead: innd's HTML status report starts its <head> element with the contents of
 // pathetc/inn_status.head when that file exists, is readable and has at most 64 KiB; the
-// built-in refresh and title follow it. Otherwise the report has only the built-in header,
-// and an oversized file is reported once in syslog, not at every report (#41).
+// built-in refresh and title follow it. Otherwise the report has only the built-in header: a
+// missing file is skipped silently, an oversized, unreadable or non-regular file (a FIFO, which
+// must not make innd block in open) is skipped with one syslog warning, not one at every
+// report (#41).
 func TestStatusHead(t *testing.T) {
 	conf := map[string]string{"htmlstatus": "true", "status": "1"}
 	cases := []struct {
 		name       string
 		head       string // contents of inn_status.head; "" = no file
 		unreadable bool   // mode 000
+		fifo       bool   // a FIFO with no writer instead of a file
 		included   bool
+		warning    string // the one warning expected in syslog; "" = none
 	}{
 		{name: "no file"},
 		{name: "short", head: "<link rel=\"stylesheet\" href=\"/e2e-status.css\">\n", included: true},
 		{name: "64 KiB", head: statusHead(statusHeadMax), included: true},
-		{name: "oversized", head: statusHead(statusHeadMax + 1)},
-		{name: "unreadable", head: statusHead(100), unreadable: true},
+		{name: "oversized", head: statusHead(statusHeadMax + 1),
+			warning: fmt.Sprintf("larger than %d bytes", statusHeadMax)},
+		{name: "unreadable", head: statusHead(100), unreadable: true, warning: "cant open"},
+		{name: "fifo", fifo: true, warning: "not a regular file"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -77,6 +84,13 @@ func TestStatusHead(t *testing.T) {
 			if c.unreadable {
 				o.BeforeStart = func(tb testing.TB, s *Site) {
 					if err := os.Chmod(filepath.Join(s.Dir, "etc", "inn_status.head"), 0); err != nil {
+						tb.Fatal(err)
+					}
+				}
+			}
+			if c.fifo {
+				o.BeforeStart = func(tb testing.TB, s *Site) {
+					if err := syscall.Mkfifo(filepath.Join(s.Dir, "etc", "inn_status.head"), 0o644); err != nil {
 						tb.Fatal(err)
 					}
 				}
@@ -96,7 +110,7 @@ func TestStatusHead(t *testing.T) {
 			if c.head != "" && !c.included && strings.Contains(page, "e2e-status.css") {
 				t.Errorf("report contains the %s inn_status.head", c.name)
 			}
-			if c.name != "oversized" {
+			if c.warning == "" {
 				return
 			}
 			innStatusPage(t, s) // a second report: the warning must not be repeated
@@ -106,9 +120,9 @@ func TestStatusHead(t *testing.T) {
 					warnings = append(warnings, l)
 				}
 			}
-			if len(warnings) != 1 || !strings.Contains(warnings[0], fmt.Sprintf("larger than %d bytes", statusHeadMax)) {
-				t.Errorf("syslog after two reports with an oversized inn_status.head: %q, want one \"larger than %d bytes\" warning",
-					warnings, statusHeadMax)
+			if len(warnings) != 1 || !strings.Contains(warnings[0], c.warning) {
+				t.Errorf("syslog after two reports with the %s inn_status.head: %q, want one %q warning",
+					c.name, warnings, c.warning)
 			}
 		})
 	}
@@ -116,7 +130,7 @@ func TestStatusHead(t *testing.T) {
 
 // TestInnfeedStatusHead: innfeed's HTML status file (gen-html in innfeed.conf) starts its
 // <head> element with the same pathetc/inn_status.head as innd's report, and skips a file
-// larger than 64 KiB (#41).
+// larger than 64 KiB, but not one of exactly 64 KiB (#41).
 func TestInnfeedStatusHead(t *testing.T) {
 	cases := []struct {
 		name     string
@@ -124,6 +138,7 @@ func TestInnfeedStatusHead(t *testing.T) {
 		included bool
 	}{
 		{name: "short", head: "<link rel=\"stylesheet\" href=\"/e2e-status.css\">\n", included: true},
+		{name: "64 KiB", head: statusHead(statusHeadMax), included: true},
 		{name: "oversized", head: statusHead(statusHeadMax + 1)},
 	}
 	for _, c := range cases {
