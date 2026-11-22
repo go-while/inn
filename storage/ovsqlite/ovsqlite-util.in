@@ -647,10 +647,13 @@ sub dump_overview {
     while (my @row = $statement->fetchrow_array()) {
         # quote(token) returns a string in the form "X'token'" without
         # surrounding '@' characters.
-        my $len = (overview_length($row[1]))[1];
+        my ($prefix, $len) = overview_length($row[1]);
         if (!defined($len)) {
             warn "$opt{'n'}:$row[0]: Corrupt overview data\n";
             $len = 0;
+        } elsif ($prefix && $len == 0) {
+            # The zero length marker precedes a literal overview record.
+            $len = length($row[1]) - $prefix;
         }
         print "$row[0] $len $row[2] $row[3]";
         print " @" . substr($row[4], 2, -1) . "@\n";
