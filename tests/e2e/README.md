@@ -29,6 +29,8 @@ needs the Go standard library:
 |---|---|---|
 | `TestReaderGreeting` | innd, nnrpd | a connection from 127.0.0.1 goes to nnrpd: 200 greeting, CAPABILITIES |
 | `TestPostAndRead` | innd, nnrpd | POST, then GROUP, ARTICLE, HEAD, BODY, STAT, OVER, LISTGROUP, HDR and NEWNEWS on the result, with lines that need dot-stuffing |
+| `TestNewnewsKeepsGroupRange` | innd, nnrpd | NEWNEWS on another group leaves the selected group's range alone: NEXT and OVER still see all its articles |
+| `TestNewnewsOneCharacterPathhost` | innd, nnrpd | NEWNEWS lists an article whose Xref server name (pathhost) has one character, for an exact group and a wildmat |
 | `TestPeerIHAVE` | innd | IHAVE from a peer (127.0.0.2), duplicate offer gets 435 |
 | `TestPeerStreaming` | innd | MODE STREAM, pipelined CHECK and TAKETHIS, 438 and 439 for held articles |
 | `TestPeerSocketBuffers` | innd | innd's end of a peer connection keeps the kernel's socket buffers by default and gets `peerrcvbufsize` and `peersndbufsize` when set (#65; reads them with `ss -tm`, Linux only) |
