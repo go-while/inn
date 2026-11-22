@@ -22,8 +22,8 @@ inn.conf(5) regarding article storage.
 
 The F<storage.conf> file consists of a series of storage method entries.
 Blank lines and lines beginning with a number sign (C<#>) are ignored.
-The maximum number of characters in each line is 255.  The order of
-entries in this file is important, see below.
+A line may contain up to 8,189 bytes before the terminating newline.  The
+order of entries in this file is important, see below.
 
 Each entry specifies a storage method and a set of rules.  Articles which
 match all of the rules of a storage method entry will be stored using
