@@ -75,6 +75,7 @@ storage/cancel-tombstone
 storage/makehistory
 storage/sm
 util/convdate
+util/delayer
 util/innbind
 util/inndf
 util/innupgrade
