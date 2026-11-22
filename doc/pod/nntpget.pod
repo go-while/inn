@@ -79,9 +79,19 @@ of the remote server (or the local time when the remote server does not know
 that command).  The articles that arrive on the remote server while the
 transfer is running are not in the list, and are therefore fetched by the next
 invocation.  Articles listed in two invocations are fetched twice, unless
-B<-o> is used.  The file is not updated when the transfer fails; the
-Message-IDs of the articles which have not been fetched are then written to
-standard output as usual.
+B<-o> is used.  The file is replaced by a new one, which is put in place only
+when it is complete, with the permissions of the old one.
+
+The file is not updated when the transfer fails, that is to say when
+a connection breaks, or when a server gives a reply which may be temporary
+instead of a final one: any reply to B<IHAVE> other than C<335> and C<435>, any
+reply to B<ARTICLE> other than C<220> and C<430>, and C<4xx> after the article
+was sent.  The Message-IDs of the articles which have not been fetched are
+then written to standard output as usual, and B<nntpget> still exits with a
+zero status: the exit status does not tell whether the transfer was
+complete.  The timestamp therefore stays where it was while the local server
+keeps deferring articles (C<436>), and the next invocations fetch again the
+articles already transferred.
 
 =item B<-v>
 

@@ -29,6 +29,10 @@
 #include "inn/nntp.h"
 #include "inn/paths.h"
 
+#ifndef PATH_MAX
+#    define PATH_MAX 4096
+#endif
+
 /*
 **  All information about a site we are connected to.
 */
@@ -239,6 +243,7 @@ main(int ac, char *av[])
     bool Verbose = false;
     char *Update;
     time_t Mark = (time_t) -1;
+    mode_t UpdateMode = 0644;
     char *p;
 
     /* First thing, set up our identity. */
@@ -269,6 +274,8 @@ main(int ac, char *av[])
                 Usage("only one of -f, -t, or -u may be given");
             if (stat(optarg, &Sb) < 0)
                 sysdie("cannot stat %s", optarg);
+            if (i == 'u')
+                UpdateMode = Sb.st_mode & 07777;
             gt = gmtime(&Sb.st_mtime);
             snprintf(tbuff, sizeof(tbuff), "%04d%02d%02d %02d%02d%02d GMT",
                      gt->tm_year + 1900, gt->tm_mon + 1, gt->tm_mday,
@@ -368,7 +375,12 @@ main(int ac, char *av[])
             SITEquit(Remote);
             exit(1);
         }
-        fseeko(F, 0, SEEK_SET);
+        if (fseeko(F, 0, SEEK_SET) < 0) {
+            syswarn("cannot rewind %s", msgidfile);
+            fclose(F);
+            SITEquit(Remote);
+            exit(1);
+        }
     }
 
     if (Offer) {
@@ -393,11 +405,21 @@ main(int ac, char *av[])
             if (!SITEwrite(Local, buff, (int) strlen(buff))
                 || !SITEread(Local, buff)) {
                 syswarn("cannot offer %s", mesgid);
+                printf("%s\n", mesgid);
                 Failed = true;
                 break;
             }
-            if (atoi(buff) != NNTP_CONT_IHAVE)
+            i = atoi(buff);
+            if (i == NNTP_FAIL_IHAVE_REFUSE)
                 continue;
+            if (i != NNTP_CONT_IHAVE) {
+                /* 436, 400 or another reply which is not "not wanted": the
+                 * article was not offered, try it again next time. */
+                syswarn("%s to IHAVE %s", buff, mesgid);
+                printf("%s\n", mesgid);
+                Failed = true;
+                break;
+            }
         }
 
         /* Try to get the article. */
@@ -409,7 +431,17 @@ main(int ac, char *av[])
             Failed = true;
             break;
         }
-        if (atoi(buff) != NNTP_OK_ARTICLE) {
+        i = atoi(buff);
+        if (i != NNTP_OK_ARTICLE) {
+            /* Only "no such article" is final.  Any other reply, like 403
+             * or 400, may be temporary: keep the Message-ID. */
+            bool retry = (i != NNTP_FAIL_MSGID_NOTFOUND);
+
+            if (retry) {
+                syswarn("%s to ARTICLE %s", buff, mesgid);
+                printf("%s\n", mesgid);
+                Failed = true;
+            }
             if (Offer) {
                 SITEwrite(Local, ".", 1);
                 if (!SITEread(Local, buff)) {
@@ -418,6 +450,8 @@ main(int ac, char *av[])
                     break;
                 }
             }
+            if (retry)
+                break;
             continue;
         }
 
@@ -460,7 +494,8 @@ main(int ac, char *av[])
             i = atoi(buff);
             if (i == NNTP_OK_IHAVE)
                 continue;
-            if (i == NNTP_FAIL_IHAVE_DEFER) {
+            if (i == NNTP_FAIL_IHAVE_DEFER || i / 100 == 4) {
+                syswarn("%s to %s", buff, mesgid);
                 printf("%s\n", mesgid);
                 Failed = true;
                 break;
@@ -478,6 +513,10 @@ main(int ac, char *av[])
             printf("%s\n", mesgid);
             STATgot++;
         }
+    if (ferror(F)) {
+        syswarn("cannot read the list of Message-IDs");
+        Failed = true;
+    }
     fclose(F);
 
     /* Remove our temp file. */
@@ -493,22 +532,45 @@ main(int ac, char *av[])
      * standard output are not yet fetched, and the next run must ask for
      * them again.  The file gets the time taken before the list was asked
      * for, not the time of its update: the articles which arrived in between
-     * are not in this list. */
+     * are not in this list.  Build the new file apart, with that time, and
+     * put it in place only when it is complete, so that a failure never
+     * leaves the time of the end of the run. */
     if (Update && !Failed) {
         struct utimbuf times;
+        char real[PATH_MAX];
+        char *tmpname;
+        int fd;
 
-        if ((F = fopen(Update, "w")) == NULL)
+        /* The file may be a symbolic link: replace its target. */
+        if (realpath(Update, real) == NULL)
+            sysdie("cannot update %s", Update);
+        xasprintf(&tmpname, "%s.new.XXXXXX", real);
+        fd = mkstemp(tmpname);
+        if (fd < 0 || (F = fdopen(fd, "w")) == NULL)
             sysdie("cannot update %s", Update);
         fprintf(F, "got %lu offered %lu sent %lu rejected %lu\n", STATgot,
                 STAToffered, STATsent, STATrejected);
-        if (ferror(F) || fclose(F) == EOF)
+        if (ferror(F) || fclose(F) == EOF) {
+            unlink(tmpname);
             sysdie("cannot update %s", Update);
+        }
         if (Mark != (time_t) -1) {
             times.actime = Mark;
             times.modtime = Mark;
-            if (utime(Update, &times) < 0)
+            if (utime(tmpname, &times) < 0) {
+                unlink(tmpname);
                 sysdie("cannot update the time of %s", Update);
+            }
         }
+        /* Keep the permissions of the old file; the owner cannot always
+         * be kept. */
+        if (chmod(tmpname, UpdateMode) < 0)
+            syswarn("cannot set the permissions of %s", Update);
+        if (rename(tmpname, real) < 0) {
+            unlink(tmpname);
+            sysdie("cannot update %s", Update);
+        }
+        free(tmpname);
     }
 
     exit(0);
