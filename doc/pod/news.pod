@@ -133,6 +133,11 @@ files behind after a failed creation, and the buffindexed overview method
 validates its F<group.index> file and no longer frees memory twice when
 mapping overview data fails.  Many thanks to Kevin Bowling for the patches.
 
+=item *
+
+B<ovsqlite-util -F> now preserves a valid high water mark when repairing
+an unrelated article count or low water mark for the same group.
+
 =back
 
 =head1 Changes in 2.7.5 (not yet released)

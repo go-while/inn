@@ -69,7 +69,7 @@ for prog in "$server" "$writer" "$reader"; do
     fi
 done
 
-echo 23
+echo 24
 
 # Set up temp directory with config files.  Use absolute paths because
 # the C test programs chdir to the test data directory before reading
@@ -321,6 +321,60 @@ else
     echo "# Reader after restart failed (rc=$reader_rc):"
     echo "$reader_output" | sed 's/^/# /'
     printcount "not ok" "# reader after restart"
+fi
+
+# Test 24: repair an incorrect count after the highest article disappeared.
+# The previous high water mark is still valid.
+if ! perl -MDBI -MDBD::SQLite -MCompress::Zlib -e 1 >/dev/null 2>&1; then
+    printcount "ok" "# skip ovsqlite-util dependencies unavailable"
+else
+    # Supply only the pause/go control interface for this offline fixture.
+    mkdir "$tmpdir/bin"
+    cat >"$tmpdir/bin/ctlinnd" <<'EOF'
+#!/bin/sh
+case "$1,$2" in
+    -s,pause|-s,go) exit 0 ;;
+    *) exit 1 ;;
+esac
+EOF
+    chmod +x "$tmpdir/bin/ctlinnd"
+    expected=$(perl -MDBI -e '
+        my $db = DBI->connect("dbi:SQLite:dbname=$ARGV[0]", "", "",
+                              { RaiseError => 1 });
+        my ($group, $high, $count) = $db->selectrow_array(q{
+            select groupid, high, "count" from groupinfo
+             where cast(groupname as text) = ? and deleted = 0
+        }, undef, "news.groups");
+        my $changed = $db->do(q{
+            delete from artinfo where groupid = ? and artnum = ?
+        }, undef, $group, $high);
+        die "missing fixture" unless $count > 1 && $changed == 1;
+        print "$high ", $count - 1;
+    ' "$tmpdir/ovsqlite.db") || exit 1
+    if perl -e '
+        $INN::Config::newsbin = shift;
+        my $source = shift;
+        do $source;
+        die "$source: $@ $!";
+    ' "$tmpdir/bin" "$util_source" -F -p "$tmpdir" >"$tmpdir/repair.log" 2>&1; then
+        actual=$(perl -MDBI -e '
+            my $db = DBI->connect("dbi:SQLite:dbname=$ARGV[0]", "", "",
+                                  { RaiseError => 1 });
+            print join(" ", $db->selectrow_array(q{
+                select high, "count" from groupinfo
+                 where cast(groupname as text) = ? and deleted = 0
+            }, undef, "news.groups"));
+        ' "$tmpdir/ovsqlite.db") || exit 1
+    else
+        actual="repair failed"
+    fi
+    if [ "$expected" = "$actual" ]; then
+        printcount "ok" "# count repaired with original high water mark"
+    else
+        echo "# expected high and count $expected, got $actual"
+        sed 's/^/# /' "$tmpdir/repair.log"
+        printcount "not ok" "# count repaired with original high water mark"
+    fi
 fi
 
 # Clean up.
