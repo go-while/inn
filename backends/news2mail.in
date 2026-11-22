@@ -17,6 +17,8 @@
 # where the first token is the name fed to us from the INN's newsfeeds file.
 # The second token is the actual address sendmail ships the article to.
 # The third token is optional: it sets the envelope-from address.
+# An article fed to several lists is sent in one mail per envelope-from
+# address, to the lists which use it.
 #
 # In the INN's newsfeeds file, you need to have a channel feed:
 #     news2mail!:!*:Ac,Tc,Wn*:<pathbin>/news2mail
@@ -30,7 +32,7 @@
 #     - D. Stussy added support for the third optional token for envelope-from
 #       address.  (June 2008.)
 #     - Various other bug fixes, code and documentation improvements
-#       in 1999, 2000, 2002-2004, 2007, 2008, 2016, 2021-2024
+#       in 1999, 2000, 2002-2004, 2007, 2008, 2016, 2021-2024, 2026
 
 require 5.006;
 
@@ -43,6 +45,7 @@ my $cfFile = $INN::Config::pathetc . "/news2mail.cf";
 my $sm = $INN::Config::pathbin . "/sm";
 my %maddr = ();
 my %saddr = ();
+my $failures = 0;
 my $use_syslog = 0;
 
 eval { require Sys::Syslog; import Sys::Syslog; $use_syslog = 1; };
@@ -71,14 +74,14 @@ while (<CF>) {
     $maddr{$ln} = $ma;
     $saddr{$ln} = $sa if ($sa =~ /.+/);
     $sa = $INN::Config::newsuser if (!defined($saddr{$ln}));
-    syslog('debug', "List=$ln, To=<$ma>, From=<$sa>") if ($use_syslog);
+    syslog('debug', 'List=%s, To=<%s>, From=<%s>', $ln, $ma, $sa) if ($use_syslog);
 }
 close(CF);
 
 # For each incoming line from the INN channel.
 while (<STDIN>) {
     chomp;
-    syslog('info', $_) if ($use_syslog);
+    syslog('info', '%s', $_) if ($use_syslog);
 
     my ($token, $lnames) = split(/\s+/, $_, 2);
     my @addrs = split(/\s+/, $lnames);
@@ -86,26 +89,89 @@ while (<STDIN>) {
     my @bad = grep { !defined($maddr{$_}) } @addrs;
 
     if (!@good) {
-        syslog('notice', "unknown list(s): $lnames") if ($use_syslog);
+        syslog('notice', 'unknown list(s): %s', $lnames) if ($use_syslog);
         next;
     }
 
     if (@bad) {
-        syslog('info', 'skipping list(s): ', join(' ', @bad)) if ($use_syslog);
+        syslog('info', 'skipping list(s): %s', join(' ', @bad)) if ($use_syslog);
     }
 
-    my $sa = $INN::Config::newsuser;
-    my @src = grep { defined($saddr{$_}) } @good;
-    $sa = @saddr{@src} if (@src == 1);
-    mailto($token, $sa, @maddr{@good});
+    # Send one mail per envelope sender, to the lists which use it.  Lists
+    # without an envelope-from address in news2mail.cf use the news user.
+    my (@senders, %rcpts);
+    foreach my $ln (@good) {
+        my $sa = defined($saddr{$ln}) ? $saddr{$ln} : $INN::Config::newsuser;
+        push(@senders, $sa) if (!defined($rcpts{$sa}));
+        push(@{ $rcpts{$sa} }, $maddr{$ln});
+    }
+
+    # Retrieve the article once for all the e-mails, and mail nothing if it
+    # cannot be retrieved: it may have expired or been cancelled.
+    my $article = retrieve($token);
+    if (!defined($article)) {
+        $failures++;
+        next;
+    }
+    foreach my $sa (@senders) {
+        $failures++ if (!mailto($token, $article, $sa, @{ $rcpts{$sa} }));
+    }
 }
 
 syslog("info", "end") if ($use_syslog);
 
-exit 0;
+# Exit with an error status if some articles have not been mailed, which innd
+# logs as an error; the failures have been reported above.
+exit($failures ? 1 : 0);
 
+# Report an error, in the syslog and on standard error (the errlog file of
+# INN).
+sub report {
+    my ($msg) = @_;
+
+    syslog('err', '%s', $msg) if ($use_syslog);
+    warn "news2mail: $msg\n";
+}
+
+# Tell why a child process or a pipe failed, from the wait status $? and the
+# error $! taken right after close(); $? is -1 when the wait itself failed.
+sub why {
+    my ($status, $err) = @_;
+
+    return "cannot wait for the process: $err" if ($status == -1);
+    return 'killed by signal ' . ($status & 127) if ($status & 127);
+    return 'exit status ' . ($status >> 8) if ($status);
+    return "I/O error: $err";
+}
+
+# Retrieve an article with sm.  Return a reference to the array of its lines,
+# or undef when sm fails or returns nothing.
+sub retrieve {
+    my ($t) = @_;
+
+    my $pid = open(my $smgr, '-|', $sm, '-q', $t);
+    if (!$pid) {
+        report("cannot run $sm -q $t, nothing mailed: $!");
+        return undef;
+    }
+    my @lines = <$smgr>;
+    if (!close($smgr)) {
+        my $reason = why($?, "$!");
+        report("$sm -q $t failed ($reason), nothing mailed");
+        return undef;
+    }
+    if (!@lines) {
+        report("$sm -q $t returned an empty article, nothing mailed");
+        return undef;
+    }
+    return \@lines;
+}
+
+# Mail an article, given as a reference to the array of its lines, from the
+# envelope sender $s to the addresses @a.  Return true on success, and false
+# when the mail transport does not accept the message.
 sub mailto {
-    my ($t, $s, @a) = @_;
+    my ($t, $article, $s, @a) = @_;
 
     my $sendmail = $INN::Config::mta;
     # Remove %s and -f from the mta command line (we'll explicitly set
@@ -120,52 +186,71 @@ sub mailto {
         '-oee', '-odq', "-f$s", "-pNNTP:$INN::Config::pathhost", @a,
     );
 
-    syslog('debug', join(' ', @command)) if ($use_syslog);
+    syslog('debug', '%s', join(' ', @command)) if ($use_syslog);
+
+    # Do not die if the transport exits before reading the whole message:
+    # the failure is reported when closing it.
+    local $SIG{PIPE} = 'IGNORE';
 
     unless (open(SM, '|-', @command)) {
-        syslog('error', join(' ', '|', @command), 'failed!') if ($use_syslog);
-        die "bad $sendmail";
+        report("mailing $t from <$s> to " . join(' ', @a)
+            . " failed: cannot run $sendmail: $!");
+        return 0;
     }
 
-    my $smgr = "$sm -q $t |";
-
-    unless (open(SMGR, $smgr)) {
-        syslog('error', "$smgr failed!") if ($use_syslog);
-        die "bad $smgr";
-    }
+    # Remember the first error when writing to the transport.
+    my $werr;
+    my $put = sub {
+        print SM @_ or $werr = "$!" if (!defined($werr));
+    };
 
     # Headers.
-    while (<SMGR>) {
-        chomp;
+    my $inheaders = 1;
+    foreach my $text (@{$article}) {
+        # Body.
+        if (!$inheaders) {
+            $put->($text);
+            last if (defined($werr));
+            next;
+        }
+
+        chomp(my $line = $text);
 
         # Empty line signals the end of header field.
         # Do not add an Auto-Submitted header field when gatewaying.
-        if (/^$/) {
-            print SM "To: " . join(",\n\t", @a) . "\n";
-            print SM "\n";
-            last;
+        if ($line =~ /^$/) {
+            $put->("To: " . join(",\n\t", @a) . "\n\n");
+            $inheaders = 0;
+            next;
         }
 
         # Skip unnecessary header fields.
-        next if /^X-/i;
-        next if /^To:/i;
-        next if /^NNTP-Posting-Date:/i;
-        next if /^NNTP-Posting-Host:/i;
-        next if /^Lines:/i;
-        next if /^Xref:/i;
-        next if /^Path:/i;
+        next if $line =~ /^X-/i;
+        next if $line =~ /^To:/i;
+        next if $line =~ /^NNTP-Posting-Date:/i;
+        next if $line =~ /^NNTP-Posting-Host:/i;
+        next if $line =~ /^Lines:/i;
+        next if $line =~ /^Xref:/i;
+        next if $line =~ /^Path:/i;
 
         # Convert Newsgroups header field into X-Newsgroups header field.
-        s/^Newsgroups:/X-Newsgroups:/i;
+        $line =~ s/^Newsgroups:/X-Newsgroups:/i;
 
-        print SM "$_\n";
+        $put->("$line\n");
+        last if (defined($werr));
     }
 
-    # Body.
-    while (<SMGR>) {
-        print SM $_;
-    }
+    # The transport exits with a non-zero status when it cannot take the
+    # message, which close() reports.  Close it even after a write error, to
+    # reap the child.
+    my $closed = close(SM);
+    my $status = $?;
+    my $cerr = "$!";
+    return 1 if ($closed && !defined($werr));
 
-    close(SMGR);
-    close(SM);
+    my $reason = defined($werr)
+      ? "cannot write to the transport: $werr"
+      : why($status, $cerr);
+    report("mailing $t from <$s> to " . join(' ', @a) . " failed: $reason");
+    return 0;
 }
