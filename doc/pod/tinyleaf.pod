@@ -4,7 +4,7 @@ tinyleaf - Very simple IHAVE-only NNTP server
 
 =head1 SYNOPSIS
 
-B<tinyleaf> I<spool> [I<processor>]
+B<tinyleaf> [B<-s> I<bytes>] [B<-t> I<seconds>] I<spool> [I<processor>]
 
 =head1 DESCRIPTION
 
@@ -40,9 +40,23 @@ mechanism is to invoke B<tinyleaf> via tcpd(8) from TCP wrappers and use
 F</etc/hosts.allow> and F</etc/hosts.deny> to restrict who can talk to the
 server.)
 
-B<tinyleaf> has a (currently hard-coded) maximum message size of S<1 MB> and a
-(similarly hard-coded) timeout of ten minutes for each command or chunk of
-article data.
+=head1 OPTIONS
+
+=over 4
+
+=item B<-s> I<bytes>
+
+Set the maximum size of an article in wire format, including the terminating
+dot line.  The default is 1048576 bytes.  The input buffer also uses this
+limit, rounded up to a multiple of 1024 bytes.  If the buffer fills before a
+complete command or article is received, B<tinyleaf> closes the connection.
+
+=item B<-t> I<seconds>
+
+Set the maximum time to wait for the next command or chunk of article data.
+The default is 600 seconds.  Both options take positive decimal integers.
+
+=back
 
 =head1 EXAMPLE
 
@@ -79,7 +93,6 @@ program.
 
 =head1 BUGS
 
-The timeout and maximum message size should really be configurable.
 B<tinyleaf> should also probably not just respond 500 to every command
 other than HELP, IHAVE, and QUIT; there are more useful (and more
 expected) error codes that could be returned.
