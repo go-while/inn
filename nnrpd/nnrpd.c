@@ -36,12 +36,6 @@
 #include "inn/secrets.h"
 #include "inn/version.h"
 
-/* Silent this warning because of the way we deal with EXTERN. */
-#if defined(__llvm__) || defined(__clang__)
-#    pragma GCC diagnostic ignored "-Wmissing-variable-declarations"
-#endif
-
-#define MAINLINE
 #include "nnrpd.h"
 
 #include "tls.h"
@@ -99,6 +93,63 @@ typedef struct _CMDENT {
     const char *Help;
 } CMDENT;
 
+
+/* Shared reader state. */
+bool PERMauthorized;
+bool PERMcanauthenticate;
+#if defined(HAVE_OPENSSL) || defined(HAVE_SASL)
+bool PERMcanauthenticatewithoutSSL;
+#endif
+bool PERMcanpost;
+bool PERMcanpostgreeting;
+bool PERMcanread;
+bool PERMneedauth;
+bool PERMspecified;
+bool PERMgroupmadeinvalid;
+ACCESSGROUP *PERMaccessconf;
+bool Offlinepost;
+bool initialSSL;
+#if defined(HAVE_BLACKLIST) || defined(HAVE_BLOCKLIST)
+bool BlocklistEnabled;
+#endif
+char **PERMreadlist;
+char **PERMpostlist;
+struct client Client;
+char Username[SMBUF];
+char PERMuser[SMBUF];
+FILE *locallog;
+ARTNUM ARTnumber;
+ARTNUM ARThigh;
+ARTNUM ARTlow;
+unsigned long ARTcount;
+long MaxBytesPerSecond;
+long ARTget;
+long ARTgettime;
+long ARTgetsize;
+long OVERcount;
+long OVERhit;
+long OVERmiss;
+long OVERtime;
+long OVERsize;
+long OVERdbz;
+long OVERseek;
+long OVERget;
+long OVERartcheck;
+double IDLEtime;
+unsigned long GRParticles;
+long GRPcount;
+char *GRPcur;
+long POSTreceived;
+long POSTrejected;
+
+bool BACKOFFenabled;
+char *VirtualPath;
+int VirtualPathlen;
+struct history *History;
+struct line NNTPline;
+struct vector *OVextra;
+int overhdr_xref;
+bool LLOGenable;
 
 char *ACTIVE = NULL;
 char *ACTIVETIMES = NULL;

@@ -89,8 +89,8 @@ STORAGEDEPS	= $(LIBSTORAGE) $(LIBHIST) $(LIBINN)
 STORAGELIBS	= $(STORAGEDEPS) $(STORAGE_LIBS)
 
 # All of the innd object files other than innd.o, for INN unit testing.
-INNOBJS		= ../innd/art.o ../innd/cc.o ../innd/chan.o ../innd/icd.o \
-		../innd/keywords.o ../innd/lc.o ../innd/nc.o \
+INNOBJS		= ../innd/art.o ../innd/cc.o ../innd/chan.o ../innd/globals.o \
+		../innd/icd.o ../innd/keywords.o ../innd/lc.o ../innd/nc.o \
 		../innd/newsfeeds.o ../innd/ng.o ../innd/perl.o \
 		../innd/proc.o ../innd/python.o ../innd/rc.o ../innd/site.o \
 		../innd/status.o ../innd/util.o ../innd/wip.o
