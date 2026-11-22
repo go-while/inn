@@ -342,7 +342,9 @@ group_rebuild(const char *group, const char *path)
     struct article artdata;
     struct stat st;
 
+    /* Check that the directory can be read before anything is changed. */
     files = article_list(path);
+    vector_free(files);
 
     index = tdx_index_open(true);
     if (index == NULL)
@@ -355,12 +357,17 @@ group_rebuild(const char *group, const char *path)
         if (entry == NULL)
             die("cannot find group %s", group);
     }
+    if (!tdx_index_rebuild_start(index, entry))
+        die("cannot start index rebuild for %s", group);
+
+    /* Read the directory again now that the group is locked: innd may have
+       stored and indexed new articles since the check above, and the
+       rebuilt overview replaces the one they were added to. */
+    files = article_list(path);
     info = *entry;
     data = tdx_data_rebuild_start(group);
     if (data == NULL)
         die("cannot start data rebuild for %s", group);
-    if (!tdx_index_rebuild_start(index, entry))
-        die("cannot start index rebuild for %s", group);
 
     histpath = concatpath(innconf->pathhistory, INN_PATH_HISTORY);
     flags = HIS_RDONLY | HIS_ONDISK;
