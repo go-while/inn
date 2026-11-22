@@ -9,7 +9,8 @@ SEC1	= convdate.1 fastrm.1 gencancel.1 getlist.1 \
 
 SEC3	= libinn.3 libinn_clientlib.3 \
 	libinn_confparse.3 libinn_dbz.3 libinn_innconf.3 libinn_inndcomm.3 \
-	libinn_list.3 libinn_qio.3 libinn_tst.3 libinn_uwildmat.3 \
+	libinn_list.3 \
+	libinn_network_innbind.3 libinn_qio.3 libinn_tst.3 libinn_uwildmat.3 \
 	libinnauth.3 libinnhist.3 libinnstorage.3
 
 SEC3PM	= INN__Config.3pm \
