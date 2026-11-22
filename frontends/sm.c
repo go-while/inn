@@ -117,6 +117,17 @@ store_article_common(char *text, size_t size)
     handle.groups = start;
     handle.groupslen = end - start;
 
+    /* Find the Path header field body, which the path key of storage.conf
+       matches, as innd does (without the final CRLF). */
+    start = wire_findheader(text, size, "Path", true);
+    if (start != NULL) {
+        end = wire_endheader(start, text + size - 1);
+        if (end == NULL)
+            die("cannot find end of Path header field");
+        handle.path = start;
+        handle.pathlen = end - start - 1;
+    }
+
     /* Store the article. */
     token = SMstore(handle);
     free(handle.iov);
