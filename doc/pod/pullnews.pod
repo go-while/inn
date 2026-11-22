@@ -162,6 +162,8 @@ Remove these named header fields (colon-separated list) from fed articles.
 
 Checkpoint (save) the config file every I<checkpt> articles
 (default is C<0>, that is to say at the end of the session).
+The config file is replaced as a whole when it has been completely written,
+which needs a permission to write in its directory.
 
 =item B<-l> I<logfile>
 
@@ -237,6 +239,13 @@ value, the less gets logged.  The default is C<0>.
 Rather than feeding the downloaded articles to a destination server, instead
 create a batch file that can later be fed to a server using B<rnews>.  See
 rnews(1) for more information about the batch file format.
+
+The config file is saved only after the articles that it counts as done have
+been written to I<file>.  If I<file> cannot be written or closed (for instance
+when the disk is full), B<pullnews> exits with an error and the config file
+keeps the progress of its last checkpoint: the articles after it will be
+downloaded again.  I<file> may then end with an incomplete article, which
+B<rnews> will refuse.
 
 =item B<-R>
 

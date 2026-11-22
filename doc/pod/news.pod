@@ -101,6 +101,17 @@ The newsmaster's e-mail address mentioned in the help message returned
 by B<nnrpd> now uses I<fromhost> (set in F<inn.conf> or overridden in
 F<readers.conf>) as the default domain name instead of I<domain>.
 
+=item *
+
+Fixed B<pullnews> recording in its config file articles which were not in the
+output file yet when the B<-r> flag was used, so that a full disk or an error
+at the close of the file made the next run skip them.  The config file is now
+saved only after the output has been written, and B<pullnews> exits with an
+error when it cannot.  The config file itself is also written to a new file,
+which replaces the old one only when it is complete, instead of being
+truncated first, which lost its servers, credentials and progress when the
+write failed.
+
 =back
 
 =item *
