@@ -139,9 +139,7 @@ static char xref_header[] = "Xref";
 static void
 process_newnews(char *group, bool AllGroups, time_t date)
 {
-    int low, high;
     char **xrefs;
-    int count;
     void *handle;
     char *p;
     time_t arrived;
@@ -158,10 +156,8 @@ process_newnews(char *group, bool AllGroups, time_t date)
         return;
     if (!AllGroups && !PERMmatch(groups, grplist))
         return;
-    if (!OVgroupstats(group, &low, &high, &count, NULL))
+    if (!OVgroupstats(group, &ARTlow, &ARThigh, NULL, NULL))
         return;
-    ARTlow = low;
-    ARThigh = high;
     if ((handle = OVopensearch(group, ARTlow, ARThigh)) != NULL) {
         ARTNUM artnum;
         unsigned long artcount = 0;

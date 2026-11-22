@@ -182,19 +182,20 @@ verify_group(void *data, void *cookie)
 {
     struct group *g = (struct group *) data;
     bool *status = (bool *) cookie;
-    int low, high, count, flag;
+    ARTNUM low, high;
+    int count, flag;
 
     if (!OVgroupstats(g->group, &low, &high, &count, &flag)) {
         warn("No stats for %s", g->group);
         *status = false;
         return;
     }
-    if ((unsigned long) low != g->low) {
-        warn("Low wrong for %s: %d != %lu", g->group, low, g->low);
+    if (low != g->low) {
+        warn("Low wrong for %s: %lu != %lu", g->group, low, g->low);
         *status = false;
     }
-    if ((unsigned long) high != g->high) {
-        warn("High wrong for %s: %d != %lu", g->group, high, g->high);
+    if (high != g->high) {
+        warn("High wrong for %s: %lu != %lu", g->group, high, g->high);
         *status = false;
     }
     if ((unsigned long) count != g->count) {

@@ -6,7 +6,7 @@
 BEGIN_DECLS
 
 bool ovdb_open(int mode);
-bool ovdb_groupstats(const char *group, int *lo, int *hi, int *count,
+bool ovdb_groupstats(const char *group, ARTNUM *lo, ARTNUM *hi, int *count,
                      int *flag);
 bool ovdb_groupadd(const char *group, ARTNUM lo, ARTNUM hi, char *flag);
 bool ovdb_groupdel(const char *group);

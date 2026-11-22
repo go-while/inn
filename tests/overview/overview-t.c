@@ -232,21 +232,22 @@ overview_verify_groups(void *data, void *cookie)
 {
     struct group *group = (struct group *) data;
     bool *status = (bool *) cookie;
-    int low, high, count, flag;
+    ARTNUM low, high;
+    int count, flag;
 
     if (!OVgroupstats(group->group, &low, &high, &count, &flag)) {
         warn("Unable to get data for %s", group->group);
         *status = false;
         return;
     }
-    if ((unsigned long) low != group->low) {
+    if (low != group->low) {
         warn("Low article wrong for %s: %lu != %lu", group->group,
-             (unsigned long) low, group->low);
+             low, group->low);
         *status = false;
     }
-    if ((unsigned long) high != group->high) {
+    if (high != group->high) {
         warn("High article wrong for %s: %lu != %lu", group->group,
-             (unsigned long) high, group->high);
+             high, group->high);
         *status = false;
     }
     if ((unsigned long) count != group->count) {
@@ -512,7 +513,8 @@ overview_verify_readonly_remap(void)
     char target[] = "remap.1024";
     char byte;
     int ready[2], resume[2], result[2];
-    int i, low, high, count, seenflag, status;
+    int i, count, seenflag, status;
+    ARTNUM low, high;
     pid_t child;
     bool okay = true;
 

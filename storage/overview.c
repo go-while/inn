@@ -111,14 +111,15 @@ bool
 overview_group(struct overview *overview, const char *group,
                struct overview_group *stats)
 {
-    int lo, hi, count, flag;
+    ARTNUM lo, hi;
+    int count, flag;
     bool status;
 
     status = overview->method->groupstats(group, &lo, &hi, &count, &flag);
     if (!status)
         return false;
-    stats->high = hi;
     stats->low = lo;
+    stats->high = hi;
     stats->count = count;
     stats->flag = flag;
     return true;

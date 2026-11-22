@@ -160,12 +160,15 @@ static void
 do_groupstats(struct reader *r)
 {
     struct rs_groupstats *reply;
+    ARTNUM low, high;
     char *group = (char *) (r->buf) + sizeof(struct rs_cmd);
     reply = xmalloc(sizeof(struct rs_groupstats));
 
     debug("OVDB: rs: do_groupstats '%s'", group);
-    if (ovdb_groupstats(group, &reply->lo, &reply->hi, &reply->count,
-                        &reply->flag)) {
+    if (ovdb_groupstats(group, &low, &high, &reply->count, &reply->flag)) {
+        /* Keep the existing OVDB reader protocol layout. */
+        reply->lo = (int) low;
+        reply->hi = (int) high;
         reply->status = CMD_GROUPSTATS;
         reply->aliaslen = 0;
     } else {

@@ -6,8 +6,8 @@
 BEGIN_DECLS
 
 bool buffindexed_open(int mode);
-bool buffindexed_groupstats(const char *group, int *lo, int *hi, int *count,
-                            int *flag);
+bool buffindexed_groupstats(const char *group, ARTNUM *lo, ARTNUM *hi,
+                            int *count, int *flag);
 bool buffindexed_groupadd(const char *group, ARTNUM lo, ARTNUM hi, char *flag);
 bool buffindexed_groupdel(const char *group);
 bool buffindexed_add(const char *group, ARTNUM artnum, TOKEN token, char *data,

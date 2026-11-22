@@ -127,7 +127,7 @@ ovdb_open(int mode UNUSED)
 }
 
 bool
-ovdb_groupstats(const char *group UNUSED, int *lo UNUSED, int *hi UNUSED,
+ovdb_groupstats(const char *group UNUSED, ARTNUM *lo UNUSED, ARTNUM *hi UNUSED,
                 int *count UNUSED, int *flag UNUSED)
 {
     return false;
@@ -1704,7 +1704,7 @@ ovdb_open(int mode)
 
 
 bool
-ovdb_groupstats(const char *group, int *lo, int *hi, int *count, int *flag)
+ovdb_groupstats(const char *group, ARTNUM *lo, ARTNUM *hi, int *count, int *flag)
 {
     int ret;
     struct groupinfo gi;

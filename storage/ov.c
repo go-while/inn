@@ -75,7 +75,7 @@ OVopen(int mode)
 }
 
 bool
-OVgroupstats(char *group, int *lo, int *hi, int *count, int *flag)
+OVgroupstats(char *group, ARTNUM *lo, ARTNUM *hi, int *count, int *flag)
 {
     if (!ov.open) {
         /* must be opened */
