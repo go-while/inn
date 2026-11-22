@@ -6,7 +6,7 @@ use strict;
 use warnings;
 use File::Temp qw(tempdir);
 use IPC::Open2;
-use Test::More tests => 10;
+use Test::More;
 
 my $binary = "$ENV{C_TAP_BUILD}/../innd/tinyleaf";
 my $spool = tempdir(CLEANUP => 1);
@@ -14,14 +14,16 @@ my $article = "Subject: test\r\n\r\nbody\r\n.\r\n";
 
 sub session {
     my ($input, @options) = @_;
+    my $hold = ref($input) eq 'SCALAR';
+    $input = $$input if $hold;
     my $pid = open2(my $out, my $in, $binary, @options, $spool);
     local $SIG{ALRM} = sub { kill 'KILL', $pid; die "tinyleaf timed out\n" };
     local $SIG{PIPE} = 'IGNORE';
     alarm 15;
     print {$in} $input if defined $input;
-    close $in if defined $input;
+    close $in if defined $input && !$hold;
     my @replies = <$out>;
-    close $in unless defined $input;
+    close $in if !defined($input) || $hold;
     close $out;
     waitpid $pid, 0;
     my $status = $?;
@@ -50,3 +52,22 @@ is($status, 0, 'read timeout closes the idle session');
 isnt($status, 0, 'zero size rejected');
 ($status) = session('', '-t', '2s');
 isnt($status, 0, 'invalid timeout rejected');
+
+($status) = session('', $spool, 'extra');
+isnt($status, 0, 'reject more than two positional arguments');
+my $partial = "IHAVE <partial\@example.test>\r\nSubject: partial\r\n";
+($status, $reply) = session(\$partial, '-t', 1);
+like($reply, qr/^335 /m, 'entered article transfer');
+isnt($status, 0, 'timeout during article closes session');
+is_deeply([glob("$spool/*")], \@files, 'partial article was discarded');
+
+$binary = "$ENV{C_TAP_BUILD}/innd/tinyleaf-status";
+for my $case (['LONG', 'Command'], ['IHAVE <full@example.test>', 'Article']) {
+    my ($command, $context) = @$case;
+    ($status, $reply) = session("$command\r\nQUIT\r\n");
+    like($reply, qr/^400 $context /m, "$context buffer-full status gives 400 with default options");
+    unlike($reply, qr/^205 /m, "$context buffer-full status ends the session");
+    is($status, 0, "$context handler shut down cleanly");
+}
+is_deeply([glob("$spool/*")], \@files, 'buffer-full status left no spooled article');
+done_testing();

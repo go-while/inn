@@ -49,7 +49,9 @@ server.)
 Set the maximum size of an article in wire format, including the terminating
 dot line.  The default is 1048576 bytes.  The input buffer also uses this
 limit, rounded up to a multiple of 1024 bytes.  If the buffer fills before a
-complete command or article is received, B<tinyleaf> closes the connection.
+complete command or article is received, B<tinyleaf> replies 400 and closes
+the connection.  Only the spool and optional processor are accepted as
+positional arguments.
 
 =item B<-t> I<seconds>
 
