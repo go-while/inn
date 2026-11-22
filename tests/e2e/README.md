@@ -66,6 +66,7 @@ needs the Go standard library:
 | `TestBytesBodyStartsWithDot` | innd, nnrpd | the `:bytes` overview field is the article's size also when its body begins with a dot-stuffed line |
 | `TestOvsqliteReaderSeesNewArticle` | innd, nnrpd, ovsqlite-server | with ovsqlite, GROUP shows an article as soon as innd has accepted it, with and without `walmode` |
 | `TestTimecafExpireoverCurrentFile` | innd, expireover | expireover removes an expired timecaf article in the CAF file innd is writing to, without waiting for innd to move on to another file |
+| `TestTombstoneCheckUnreadableLog` | innd, nnrpd, sm, grephistory | with `expiretombstone` and `nnrpdcheckart`, OVER does not list an article removed with `sm -r`, also when nnrpd cannot read `cancels.tombstone` |
 
 ## Running
 
