@@ -5,6 +5,7 @@ package e2e
 import (
 	"fmt"
 	"io/fs"
+	"os"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -219,5 +220,93 @@ func TestTdxUtilRebuildBytesLines(t *testing.T) {
 					strings.Join(after, "\n"), strings.Join(before, "\n"))
 			}
 		})
+	}
+}
+
+// TestTdxUtilRebuildRenameFailure: when tdx-util -R cannot rename the rebuilt index and data
+// files of a group into place, it fails and the group keeps its old index entry, so that
+// readers still get the right overview from the old files; the rebuild works once the
+// rename can be done. A non-empty directory where the backup of the old index goes makes
+// the first rename fail. The group starts at article 1001, so that the index base (the
+// first article number minus 128) of the rebuilt index differs from the old one.
+// tdx-util used to update the group entry (base, low and high water marks, count and
+// inode) and unlock the group before renaming the files, so after the failure readers
+// looked up the old index with the base of the new one and got the overview of other
+// articles, and the articles left out of the rebuild disappeared.
+func TestTdxUtilRebuildRenameFailure(t *testing.T) {
+	s := NewSite(t, SiteOptions{ // tradspool and tradindexed
+		BeforeStart: func(tb testing.TB, s *Site) {
+			active := strings.Replace(s.ReadFile(tb, "db/active"),
+				"e2e.test 0000000000 0000000001 ", "e2e.test 0000001000 0000001001 ", 1)
+			s.writeFile(tb, "db/active", active)
+		},
+	})
+	ids := s.Inject(t, "e2e.test", 6)
+	before := overviewLines(t, s, "e2e.test")
+	if len(before) != len(ids) {
+		t.Fatalf("OVER before the rebuild: %d lines, want %d:\n%s", len(before), len(ids),
+			strings.Join(before, "\n"))
+	}
+	if !strings.HasPrefix(before[0], "1001\t") {
+		t.Fatalf("first article of e2e.test is not 1001: %q", before[0])
+	}
+
+	// Rebuild from articles 1003 to 1006 only, so that the new index has another base.
+	dir := t.TempDir()
+	spool := filepath.Join(s.Dir, "spool", "articles", "e2e", "test")
+	for n := 1003; n <= 1006; n++ {
+		b, err := os.ReadFile(filepath.Join(spool, fmt.Sprint(n)))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, fmt.Sprint(n)), b, 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	var idx string
+	err := filepath.WalkDir(filepath.Join(s.Dir, "spool", "overview"), func(path string, d fs.DirEntry, err error) error {
+		if err == nil && d.Name() == "e2e.test.IDX" {
+			idx = path
+		}
+		return err
+	})
+	if err != nil || idx == "" {
+		t.Fatalf("index file of e2e.test not found (%v)", err)
+	}
+	bak := idx + "-BAK"
+	if err := os.MkdirAll(filepath.Join(bak, "block"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	out, err := s.TryRun("tdx-util", "-R", dir, "-n", "e2e.test")
+	t.Logf("tdx-util -R with %s blocked: %v\n%s", filepath.Base(bak), err, out)
+	if err == nil {
+		t.Errorf("tdx-util -R exited 0 although the rebuilt files could not be renamed")
+	}
+	if err := os.RemoveAll(bak); err != nil {
+		t.Fatal(err)
+	}
+	if got := overviewLines(t, s, "e2e.test"); !slices.Equal(got, before) {
+		t.Fatalf("OVER after the failed rebuild:\n%s\nwant (unchanged):\n%s",
+			strings.Join(got, "\n"), strings.Join(before, "\n"))
+	}
+
+	// Without the obstacle, the rebuild gives the overview of articles 1003 to 1006.
+	s.Run(t, "tdx-util", "-R", dir, "-n", "e2e.test")
+	got := overviewLines(t, s, "e2e.test")
+	var want, have []string
+	for i, id := range ids[2:] {
+		want = append(want, fmt.Sprintf("%d %s", i+1003, id))
+	}
+	for _, l := range got {
+		if f := strings.Split(l, "\t"); len(f) > 4 {
+			have = append(have, f[0]+" "+f[4])
+		} else {
+			have = append(have, l)
+		}
+	}
+	if !slices.Equal(have, want) {
+		t.Errorf("OVER after the rebuild (number, Message-ID):\n%s\nwant:\n%s",
+			strings.Join(have, "\n"), strings.Join(want, "\n"))
 	}
 }
