@@ -437,26 +437,29 @@ if ${DOEXPIRE}; then
             fi
             exit 1
         fi
-        ##  expire -d unpaused innd when it finished.  Pause it again, so
-        ##  that it closes the old history files and writes nothing to them
-        ##  while they are replaced; it opens the new ones on go.  Without
-        ##  -n, a running innd that cannot be paused is an error (the old
-        ##  history is left in place); one that is not running needs no
-        ##  pause.
-        HISPAUSED=false
-        case "${EXPIREFLAGS}" in
-        *-n*) ;;
+        ##  innd must not run while the history files are replaced: expire -d
+        ##  leaves it paused with ${REASON} (it was already paused or
+        ##  throttled when expire ran with -n).  Check its mode, pause it if
+        ##  it runs, and fail closed: when it cannot be paused or does not
+        ##  answer, leave the old history in place.  It opens the new files
+        ##  on go.
+        HISMODE=$(ctlinnd -t "$TOUT" mode 2>/dev/null | ${SED} 1q)
+        case "${HISMODE}" in
+        "Server running"*)
+            ctlinnd -t "$TOUT" -s pause "${REASON}" 2>&1 \
+                && HISMODE="Server paused ${REASON}"
+            ;;
+        esac
+        case "${HISMODE}" in
+        "Server paused"* | "Server throttled"*) ;;
         *)
-            if ctlinnd -t "$TOUT" -s pause "${REASON}" 2>&1; then
-                HISPAUSED=true
-            elif ctlinnd -t "$TOUT" mode >/dev/null 2>&1; then
-                (
-                    echo "$0: Cannot pause news to install the new history"
-                    echo "files of ${EXPDIR}; the old ones are left in place."
-                    ${INNSTAT}
-                ) | eval ${MAIL}
-                exit 1
-            fi
+            (
+                echo "$0: Cannot make sure that the server is paused"
+                echo "(mode: ${HISMODE:-no answer}).  The new history files"
+                echo "are left in ${EXPDIR} and the old ones in place."
+                ${INNSTAT}
+            ) | eval ${MAIL}
+            exit 1
             ;;
         esac
 
@@ -481,17 +484,24 @@ if ${DOEXPIRE}; then
         if [ -n "${HISFAILED}" ]; then
             (
                 echo "$0: Cannot move ${EXPDIR}/${HISFAILED} to ${HISTDIR}"
-                echo "The history database is incomplete.  Move the remaining"
-                echo "history.n files of ${EXPDIR} to ${HISTDIR} (without the .n)"
-                echo "and remove history.n.done before starting or unpausing the"
-                echo "server (ctlinnd go with the reason shown by ctlinnd mode)."
+                echo "The history database is incomplete and the server is left"
+                echo "paused.  Move the remaining history.n files of ${EXPDIR}"
+                echo "to ${HISTDIR} (without the .n) and remove history.n.done"
+                echo "before unpausing it (ctlinnd go with the reason shown by"
+                echo "ctlinnd mode)."
                 ${INNSTAT}
             ) | eval ${MAIL}
             exit 1
         fi
         rm -f ${EXPDIR}/history.n.done
 
-        ${HISPAUSED} && MESSAGE="${REASON}"
+        ##  Unpause innd if it was paused for the expiration, not if it was
+        ##  already paused or throttled before.
+        case "${HISMODE}" in
+        "Server paused ${REASON}"*)
+            MESSAGE="${REASON}"
+            ;;
+        esac
     fi
 
     ##  Restart the server if we need to.

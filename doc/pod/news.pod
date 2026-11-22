@@ -135,16 +135,20 @@ mapping overview data fails.  Many thanks to Kevin Bowling for the patches.
 
 =item *
 
-When B<news.daily> is run with the I<expdir> keyword, B<innd> is now paused
-while the new history files are moved into place.  As B<expire> unpauses it
-when it finishes, B<innd> kept writing to the old files while they were
-replaced and did not open the new ones, and the final C<ctlinnd go> of
-B<news.daily> failed.  A failure to move one of the new files, for instance
-because the history filesystem is full, also no longer goes unnoticed:
-B<news.daily> used to remove the completion marker and leave B<innd> running
-with an empty history file or with files of both generations.  It now leaves
-the server paused, keeps the files not yet moved, and notifies the
-newsmaster.
+B<expire> now leaves the server paused when it is run with the B<-d> flag
+(or B<-f>), as its manual page always said: whoever installs the new history
+files has to unpause the server with C<ctlinnd go> afterwards.  This matters
+if you run C<expire -d> by hand; B<news.daily> does it for you.  Because
+B<expire> unpaused the server, B<innd> kept accepting articles and writing
+them to the old history files while B<news.daily>, run with the I<expdir>
+keyword, replaced them; B<innd> did not open the new files, and the final
+C<ctlinnd go> of B<news.daily> failed.  A failure to move one of the new
+files, for instance because the history filesystem is full, also no longer
+goes unnoticed: B<news.daily> used to remove the completion marker and leave
+B<innd> running with an empty history file or with files of both
+generations.  It now leaves the server paused, keeps the files not yet moved,
+and notifies the newsmaster.  It also no longer replaces the history files
+when it cannot confirm that the server is paused.
 
 =back
 
