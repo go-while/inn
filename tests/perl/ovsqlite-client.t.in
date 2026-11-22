@@ -1,0 +1,255 @@
+#!/usr/bin/perl
+#
+# Tests for the framing of requests and responses in INN::ovsqlite_client,
+# the Perl client of ovsqlite-server, against a fake server on a Unix domain
+# socket: requests and responses transferred a few bytes at a time, calls
+# interrupted by a signal (EINTR), and the decoding of SQL errors.
+#
+# Plain TAP output: Test::More is not part of every base Perl package.
+
+use 5.008;
+use strict;
+use warnings;
+
+use Errno qw(EINTR);
+use File::Spec;
+use Socket;
+
+# When $short is true, every sysread and syswrite transfers at most 3 bytes and
+# every fourth call fails with EINTR, as when a signal interrupts it.  The
+# overrides must be in place before the client module is compiled.
+our ($short, $calls, $interrupted, $partial) = (0, 0, 0, 0);
+
+BEGIN {
+    *CORE::GLOBAL::syswrite = sub (*$;$$) {
+        my $fh = $_[0];
+        my $len = @_ > 2 ? $_[2] : length($_[1]);
+        my $off = @_ > 3 ? $_[3] : 0;
+
+        if ($short) {
+            if (++$calls % 4 == 0) {
+                $interrupted++;
+                $! = EINTR;
+                return undef;    ## no critic (ProhibitExplicitReturnUndef)
+            }
+            if ($len > 3) {
+                $len = 3;
+                $partial++;
+            }
+        }
+        return CORE::syswrite($fh, $_[1], $len, $off);
+    };
+    *CORE::GLOBAL::sysread = sub (*\$$;$) {
+        my ($fh, $bufref, $len, $off) = @_;
+
+        if ($short) {
+            if (++$calls % 4 == 0) {
+                $interrupted++;
+                $! = EINTR;
+                return undef;    ## no critic (ProhibitExplicitReturnUndef)
+            }
+            if ($len > 3) {
+                $len = 3;
+                $partial++;
+            }
+        }
+        return defined($off)
+          ? CORE::sysread($fh, $$bufref, $len, $off)
+          : CORE::sysread($fh, $$bufref, $len);
+    };
+}
+
+# Load the client from the source tree.
+my $source = $ENV{C_TAP_SOURCE};
+if (!$source) {
+    my ($vol, $dir) = File::Spec->splitpath(File::Spec->rel2abs($0));
+    $source = File::Spec->catdir($vol . $dir, File::Spec->updir);
+}
+unshift(@INC, File::Spec->catdir($source, File::Spec->updir, 'perl'));
+require INN::ovsqlite_client;
+
+if (!INN::ovsqlite_client::HAVE_PF_UNIX()) {
+    print "1..0 # SKIP no Unix domain sockets\n";
+    exit 0;
+}
+
+# Unbuffered output: the fake server is a forked copy of this process, and
+# must not print a buffered plan line a second time when it exits.
+local $| = 1;
+
+my $count = 0;
+
+sub ok {
+    my ($result, $name) = @_;
+
+    $count++;
+    print(($result ? "ok" : "not ok") . " $count - $name\n");
+    return $result;
+}
+
+print "1..9\n";
+
+# Read exactly $len bytes on the server side (no overrides there).
+sub server_read {
+    my ($fh, $len) = @_;
+    my ($buf, $got) = ("", 0);
+
+    while (length($buf) < $len) {
+        $got = CORE::sysread($fh, $buf, $len - length($buf), length($buf));
+        if (!defined($got)) {
+            next if $! == EINTR;
+            die "server read: $!\n";
+        }
+        return undef if !$got;   ## no critic (ProhibitExplicitReturnUndef)
+    }
+    return $buf;
+}
+
+sub server_write {
+    my ($fh, $buf) = @_;
+    my ($off, $got) = (0, 0);
+
+    while ($off < length($buf)) {
+        $got = CORE::syswrite($fh, $buf, length($buf) - $off, $off);
+        if (!defined($got)) {
+            next if $! == EINTR;
+            die "server write: $!\n";
+        }
+        $off += $got;
+    }
+    return;
+}
+
+sub frame {
+    my ($payload) = @_;
+    return pack("L", length($payload) + 4) . $payload;
+}
+
+# The fake server: checks each request byte for byte and answers with the
+# next scripted response.  A request it does not expect gets the
+# bad_request fatal error, which the client reports.
+sub serve {
+    my ($listen) = @_;
+    my $ok = frame(pack("C", INN::ovsqlite_client::response_ok()));
+    my @script = (
+        [pack("C L L", INN::ovsqlite_client::request_hello(), 1, 0), [$ok]],
+        [pack("C C", INN::ovsqlite_client::request_set_cutofflow(), 1), [$ok]],
+        # A response written in two parts with a pause between them.
+        [
+            pack("C C", INN::ovsqlite_client::request_set_cutofflow(), 0),
+            [substr($ok, 0, 2), substr($ok, 2)],
+        ],
+        [
+            pack("C C", INN::ovsqlite_client::request_set_cutofflow(), 1),
+            [
+                frame(
+                    pack(
+                        "C l L/a", INN::ovsqlite_client::response_sql_error(),
+                        19, "constraint failed",
+                    ),
+                ),
+            ],
+        ],
+        # An SQL error without its message.
+        [
+            pack("C C", INN::ovsqlite_client::request_set_cutofflow(), 0),
+            [
+                frame(
+                    pack(
+                        "C l", INN::ovsqlite_client::response_sql_error(), 19,
+                    ),
+                ),
+            ],
+        ],
+    );
+    my $conn;
+
+    accept($conn, $listen) or die "accept: $!\n";
+    for my $step (@script) {
+        my ($want, $parts) = @$step;
+        my $len = server_read($conn, 4);
+        return if !defined($len);
+        my $request = server_read($conn, unpack("L", $len) - 4);
+        return if !defined($request);
+        if ($request ne $want) {
+            server_write(
+                $conn,
+                frame(pack("C", INN::ovsqlite_client::response_bad_request())),
+            );
+            return;
+        }
+        for my $i (0 .. $#$parts) {
+            select(undef, undef, undef, 0.2) if $i > 0;
+            server_write($conn, $parts->[$i]);
+        }
+    }
+    server_read($conn, 4);    # wait for the client to close
+    return;
+}
+
+# A short directory of our own: socket paths have a small length limit.
+my $dir = File::Spec->catdir(File::Spec->tmpdir(), "inn-ovsqlite-client-$$");
+mkdir($dir, 0700) or die "mkdir $dir: $!\n";
+my $path = File::Spec->catfile($dir, 'ovsqlite.sock');
+my $listen;
+socket($listen, PF_UNIX, SOCK_STREAM, 0) or die "socket: $!\n";
+bind($listen, pack_sockaddr_un($path)) or die "bind: $!\n";
+listen($listen, 1) or die "listen: $!\n";
+
+my $pid = fork();
+die "fork: $!\n" if !defined($pid);
+if ($pid == 0) {
+    alarm(60);
+    eval { serve($listen) };
+    print STDERR "# fake server: $@" if $@;
+    exit 0;
+}
+close($listen);
+alarm(60);
+
+my ($client, $code, $errmsg);
+
+# The handshake and a request, a few bytes at a time and interrupted.
+$short = 1;
+$client = eval { INN::ovsqlite_client->new(path => $path) };
+ok(defined($client), "handshake with short and interrupted transfers")
+  or print "# ", ($@ ? $@ : "no error\n");
+$code = eval { $client->set_cutofflow(cutofflow => 1, errmsg => $errmsg) };
+ok(
+    defined($code) && $code == INN::ovsqlite_client::response_ok(),
+    "request with short and interrupted transfers",
+) or print "# ", ($@ || "code $code: $errmsg"), "\n";
+ok($partial > 0 && $interrupted > 0, "transfers were cut and interrupted");
+
+# A response that arrives in two parts.
+$short = 0;
+$code = eval { $client->set_cutofflow(cutofflow => 0, errmsg => $errmsg) };
+ok(
+    defined($code) && $code == INN::ovsqlite_client::response_ok(),
+    "response read in two parts",
+) or print "# ", ($@ || "code $code: $errmsg"), "\n";
+
+# SQL errors.
+$short = 1;
+$errmsg = undef;
+$code = eval { $client->set_cutofflow(cutofflow => 1, errmsg => $errmsg) };
+ok(
+    defined($code) && $code == INN::ovsqlite_client::response_sql_error(),
+    "SQL error response code",
+) or print "# ", ($@ || "code $code"), "\n";
+ok(
+    defined($errmsg) && $errmsg eq "SQL error: (19) constraint failed",
+    "SQL error status and message",
+) or print "# errmsg: ", (defined($errmsg) ? $errmsg : "undef"), "\n";
+$short = 0;
+$code = eval { $client->set_cutofflow(cutofflow => 0, errmsg => $errmsg) };
+ok(!defined($code), "truncated SQL error rejected");
+ok(scalar($@ =~ /Truncated SQL error response/),
+    "truncated SQL error reported")
+  or print "# ", ($@ ? $@ : "no error\n");
+
+close($client) if defined($client);
+waitpid($pid, 0);
+ok($? == 0, "fake server done");
+unlink($path);
+rmdir($dir);

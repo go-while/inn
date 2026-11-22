@@ -43,7 +43,7 @@ TESTS	= authprogs/ident.t expire/tombstone.t expire/tombstone-hisexpire.t \
 
 EXTRA	= runtests clients/server-list docs/pod.t lib/xmalloc nnrpd/auth-test \
 	  overview/ovsqlite-read.t overview/ovsqlite-write.t \
-	  perl/minimum-version.t
+	  perl/minimum-version.t perl/ovsqlite-client.t
 
 BENCHMARKS = lib/history-bench
 
@@ -376,6 +376,9 @@ overview/xref.t: overview/xref-t.o tap/basic.o $(STORAGEDEPS)
 
 perl/minimum-version.t: perl/minimum-version.t.in $(FIXSCRIPT)
 	$(FIX) -i perl/minimum-version.t.in
+
+perl/ovsqlite-client.t: perl/ovsqlite-client.t.in $(FIXSCRIPT)
+	$(FIX) -i perl/ovsqlite-client.t.in
 
 storage/caf.t: storage/caf-t.o tap/basic.o $(STORAGEDEPS)
 	$(LINKDEPS) storage/caf-t.o tap/basic.o $(STORAGELIBS) $(LIBS)
