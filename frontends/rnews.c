@@ -190,20 +190,20 @@ Reject(const char *article, size_t length UNUSED, const char *reason,
         filename = concat(PathBadNews, "/XXXXXX", (char *) 0);
         fd = mkstemp(filename);
         if (fd < 0) {
-            warn("cannot create temporary file");
+            syswarn("cannot create temporary file");
             free(filename);
             return;
         }
         F = fdopen(fd, "w");
         if (F == NULL) {
-            warn("cannot fdopen %s", filename);
+            syswarn("cannot fdopen %s", filename);
             free(filename);
             return;
         }
         if (fwrite(article, 1, length, F) != length)
-            warn("cannot fwrite to %s", filename);
+            syswarn("cannot fwrite to %s", filename);
         if (fclose(F) == EOF)
-            warn("cannot close %s", filename);
+            syswarn("cannot close %s", filename);
         free(filename);
     }
 }
