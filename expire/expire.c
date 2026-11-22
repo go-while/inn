@@ -393,7 +393,11 @@ EXPremove(const TOKEN *token)
 **      that drops cancels arriving during HISexpire)
 **
 **  At startup, also recovers any leftover .processing snapshot from a
-**  previous expire run that crashed before unlinking.
+**  previous expire run that crashed before unlinking.  While such a
+**  snapshot exists, the live cancels.tombstone is read but not renamed:
+**  renaming it would replace the snapshot, the only copy on disk of
+**  entries not yet applied to history.  The leftover is unlinked after a
+**  successful run and the live file is consumed by the next one.
 **
 **  consuming=true means this is a real run that will replace the
 **  history database; we rename cancels.tombstone to .processing under
@@ -462,11 +466,14 @@ EXPloadtombstone(bool consuming, char **out_expireover_path,
     n_leftover = tombstone_read(h, leftover, NULL);
 
     /* On a real run, atomically snapshot the live cancels.tombstone,
-       then read it.  On dry-run / tracing / alt-output, just read
-       the live file directly: no consume happens, so there is no
-       need to detach it (and detach-then-restore has a TOCTOU race
-       with concurrent appenders). */
-    if (consuming) {
+       then read it, unless a leftover snapshot is present: rename(2)
+       would replace it, and it must stay on disk until this run has
+       applied it to history.  The live file is then just read, and
+       consumed by the next run.  On dry-run / tracing / alt-output,
+       just read the live file directly: no consume happens, so there
+       is no need to detach it (and detach-then-restore has a TOCTOU
+       race with concurrent appenders). */
+    if (consuming && !leftover_present) {
         cancels_snapshot = tombstone_rename_for_processing(cancels_path);
         if (cancels_snapshot != NULL)
             n_cancels = tombstone_read(h, cancels_snapshot, NULL);
@@ -481,35 +488,15 @@ EXPloadtombstone(bool consuming, char **out_expireover_path,
         printf("Loaded %lu + %lu + %lu tombstone entries (%lu unique)\n",
                n_expireover, n_cancels, n_leftover, hash_count(h));
 
-    /* Reconcile the leftover with the active snapshot.  Only relevant
-       on a real consuming run; dry-run leaves the leftover where it
-       is for the next consuming run to pick up.
-       (a) leftover empty: just free the path string
-       (b) leftover non-empty + no live snapshot: promote leftover to
-           be the snapshot so the caller's single unlink covers it
-       (c) leftover non-empty + live snapshot: unlink the leftover now
-           (its contents are already in the hashset); the snapshot
-           remains and is unlinked on success */
-    if (consuming) {
-        if (n_leftover > 0 && cancels_snapshot == NULL) {
-            cancels_snapshot = leftover;
-            leftover = NULL;
-        } else if (n_leftover > 0) {
-            if (unlink(leftover) < 0)
-                syswarn("can't unlink %s", leftover);
-        } else if (leftover_present && cancels_snapshot == NULL) {
-            /* Leftover existed but was empty.  Treat it as the
-               snapshot so the caller cleans it up after a
-               successful run. */
-            cancels_snapshot = leftover;
-            leftover = NULL;
-        } else if (leftover_present) {
-            /* Both leftover and live snapshot existed; leftover
-               empty.  Unlink it now; snapshot will be cleaned up
-               on success. */
-            if (unlink(leftover) < 0)
-                syswarn("can't unlink %s", leftover);
-        }
+    /* On a real consuming run, a leftover (empty or not) is the
+       snapshot: the live file was not renamed above, so the caller's
+       single unlink after a successful run covers it, and an
+       interrupted run leaves it in place for the next one.  Dry-run
+       leaves the leftover where it is for the next consuming run to
+       pick up. */
+    if (consuming && leftover_present) {
+        cancels_snapshot = leftover;
+        leftover = NULL;
     }
     free(leftover);
     leftover = NULL;
