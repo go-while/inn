@@ -134,9 +134,8 @@ What to put into the Path header field to represent the local site.  This path
 identity is added to the Path header field body of all articles that pass
 through the system, including locally posted articles, and is also used when
 processing some control messages and when naming the server in status reports.
-There is no default value; this parameter must be set in F<inn.conf> or INN
-will not start.  A good value to use is the fully qualified hostname of the
-system.
+The default is the fully qualified hostname of the system.  If INN cannot
+determine that name, set this parameter explicitly so B<innd> can start.
 
 The main purpose of the path identity is to avoid being proposed by your peers
 articles that already contain your path identity in their Path header fields.
@@ -477,11 +476,13 @@ as posted to unwanted newsgroups in the F<news> log file.
 
 =item I<wipcheck>
 
-If INN is offered an article by a peer on one channel, it will return
-deferral responses (code 436) to all other offers of that article for this
-many seconds.  (After this long, if the peer that offered the article
-still hasn't sent it, it will be accepted from other channels.)  The
-default value is C<5> and probably doesn't need to be changed.
+When a peer offers an article, B<innd> defers competing offers on other
+channels for this many seconds (436 for IHAVE or 431 for CHECK).  If
+I<resendid> is false in F<incoming.conf> for the peer making the competing
+offer, B<innd> refuses that offer instead.  While an article transfer is in
+progress, B<innd> can extend the interval based on transfer times on the
+original channel.  The default value is C<5> and probably doesn't need to
+be changed.
 
 =item I<wipexpire>
 
@@ -579,10 +580,11 @@ default is true.
 Controls the Bloom filter used by B<expireover> to accelerate overview
 expiration.  The value is the reciprocal of the desired false positive
 rate: for example, C<10000> means a 1-in-10,000 (0.01%) false positive
-rate.  Higher values use more memory but produce fewer false positives.
-At the default of C<10000>, memory usage is approximately 20 bits per
-article in the history database (e.g., S<48 MB> for 20 million articles,
-S<2.4 GB> for 1 billion articles).
+rate.  Values between supported settings are rounded up, and values above
+C<10000000> use that maximum.  At the default of C<10000>, the filter
+uses approximately 20 bits per estimated history entry.  The estimate
+is based on the size of the C<hisv6> history file or the space used in
+the C<hissqlite> database.
 
 Setting this to C<0> disables the Bloom filter entirely, falling back
 to per-article history lookups (the pre-existing behavior).  This is
@@ -1036,8 +1038,8 @@ XPAT).  The primary use of this setting is to prevent B<nnrpd> from returning
 information about articles which are no longer present on the server but which
 still have overview data available.  Checking existence with an unconditional
 C<SMretrieve> slows down the overview commands; with I<expiretombstone> also
-enabled (see below) the check uses an in-memory hash lookup instead and is
-cheaper than disabling the check on tradspool/timehash/timecaf backends.
+enabled (see below), B<nnrpd> can use an in-memory hash lookup to avoid
+a per-article storage lookup on the tradspool, timehash and timecaf backends.
 The trade-off remains: enabling this reduces the number of "article is
 missing" errors seen by the client.  This is a boolean value and the default
 is true.
@@ -1095,8 +1097,8 @@ and the default is unset.
 =item I<nnrpdloadlimit>
 
 If set to a value other than C<0>, connections to nnrpd will be refused
-if the system load average is higher than this value.  The default value
-is C<16>.
+if the one-minute load average, rounded to the nearest integer, is higher
+than this value.  The default value is C<16>.
 
 =item I<noreader>
 
@@ -1721,8 +1723,8 @@ default value.
 How frequently (in seconds) innd(8) should write out a status
 report.  The report is written to I<pathhttp>/inn_status.html or
 I<pathlog>/inn.status depending on the value of I<htmlstatus>.  If this
-is set to C<0> or C<false>, status reporting is disabled.  The default
-value is C<600> (that is to say reports are written every 10 minutes).
+is set to C<0>, status reporting is disabled.  The default value is C<600>
+(that is to say reports are written every 10 minutes).
 
 =item I<timer>
 
@@ -1810,16 +1812,16 @@ overview storage method.  The default value is C<1024> (S<1 MB>).
 
 =item I<maxcmdreadsize>
 
-If set to anything other than C<0>, maximum buffer size (in bytes) for
-reading NNTP command will have this value.  It should not be large on
-systems which are slow to process and store articles, as that would lead
+A nonzero value limits how many bytes innd(8) reads at a time while
+receiving NNTP commands.  It should not be large on systems which are
+slow to process and store articles, as that would lead
 to innd(8) spending a long time on each channel and keeping other channels
 waiting.  The default value is BUFSIZ defined in stdio.h (usually between
 C<1024> and C<8192> in most environments, see setbuf(3)).
 
 =item I<maxforks>
 
-How many times to attempt a fork(2) before giving up.  The default value
+How many times to retry a failed fork(2) before giving up.  The default value
 is C<10>.
 
 =item I<maxlisten>
@@ -1831,30 +1833,25 @@ you notice that some connection requests get dropped.
 
 =item I<nicekids>
 
-If set to anything other than C<0>, all child processes of innd(8) will
-have this nice(2) value.  This is usually used to give all child processes
-of innd(8) a lower priority (higher nice value) so that innd(8) can get
-the lion's share of the CPU when it needs it.  The default value is C<4>.
+The default nice(2) increment for child processes spawned by innd(8).
+This is usually used to give child processes a lower priority (higher nice
+value) so that innd(8) can get the lion's share of the CPU when it needs
+it.  The default value is C<4>.
 
 =item I<nicenewnews>
 
-If set to anything greater than C<0>, all nnrpd(8) processes that receive
-and process a NEWNEWS command will nice(2) themselves to this value
-(giving other nnrpd processes a higher priority).  The default value is
-C<0>.  Note that this value will be ignored if set to a lower value than
-I<nicennrpd> (or I<nicekids> if nnrpd(8) is spawned from innd(8)).
+The nice(2) increment that nnrpd(8) applies the first time it searches
+newsgroups for a NEWNEWS command.  This increment is cumulative with
+I<nicennrpd>.  The default value is C<0>.
 
 =item I<nicennrpd>
 
-If set to anything greater than C<0>, all nnrpd(8) processes will nice(2)
-themselves to this value.  This gives other news processes a higher
-priority and can help overchan(8) keep up with incoming news (if that's
+At startup, nnrpd(8) increases its inherited nice value by this amount.
+A positive value gives other news processes a higher priority and can
+help overchan(8) keep up with incoming news (if that's
 the object, be sure overchan(8) isn't also set to a lower priority via
-I<nicekids>).  The default value is C<0>, which will cause nnrpd(8)
-processes spawned from innd(8) to use the value of I<nicekids>, while
-nnrpd(8) run as a daemon will use the system default priority.  Note that
-for nnrpd(8) processes spawned from innd(8), this value will be ignored if
-set to a value lower than I<nicekids>.
+I<nicekids>).  This increment is cumulative with I<nicekids> for processes
+spawned by innd(8).  The default value is C<0>.
 
 =item I<pauseretrytime>
 
