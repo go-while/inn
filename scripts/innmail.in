@@ -94,23 +94,35 @@ if ($pid == 0) {
     die "$0: Fork failed: $!\n";
 }
 
-print $MTA "To: ", join(",\n\t", @addrs), "\n";
-print $MTA "Subject: $opt{'s'}\n";
-print $MTA "$opt{'a'}\n" if defined($opt{'a'});
-print $MTA "\n";
-while (<STDIN>) {
-    print $MTA $_;
-}
+# An MTA that exits without reading the whole message must not kill innmail
+# with SIGPIPE: the write error and the exit status of the MTA are reported
+# below.  The MTA was started above with the default action for SIGPIPE.
+$SIG{PIPE} = 'IGNORE';
 
-# Closing the pipe waits for the MTA.  Report a failure to submit the mail
-# in the exit status, so that the caller can notice it.
-if (!close $MTA) {
-    if ($! != 0) {
-        warn "$0: Cannot send the mail to $smarr[0]: $!\n";
-    } elsif ($? & 127) {
+my $written = print $MTA "To: ", join(",\n\t", @addrs), "\n";
+$written &&= print $MTA "Subject: $opt{'s'}\n";
+if ($written && defined($opt{'a'})) {
+    $written = print $MTA "$opt{'a'}\n";
+}
+$written &&= print $MTA "\n";
+while ($written && defined(my $line = <STDIN>)) {
+    $written = print $MTA $line;
+}
+my $writeerror = $written ? undef : "$!";
+
+# Closing the pipe flushes it and waits for the MTA, also after a write
+# error.  Report a failure to submit the mail in the exit status, so that
+# the caller can notice it.
+my $closed = close $MTA;
+my $closeerror = "$!";
+if (!$closed || defined($writeerror)) {
+    if ($? & 127) {
         warn "$0: $smarr[0] was killed by signal " . ($? & 127) . "\n";
-    } else {
+    } elsif ($? >> 8) {
         warn "$0: $smarr[0] exited with status " . ($? >> 8) . "\n";
+    } else {
+        warn "$0: Cannot send the mail to $smarr[0]: "
+          . (defined($writeerror) ? $writeerror : $closeerror) . "\n";
     }
     exit 1;
 }
