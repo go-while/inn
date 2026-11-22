@@ -133,6 +133,19 @@ files behind after a failed creation, and the buffindexed overview method
 validates its F<group.index> file and no longer frees memory twice when
 mapping overview data fails.  Many thanks to Kevin Bowling for the patches.
 
+=item *
+
+When B<news.daily> is run with the I<expdir> keyword, B<innd> is now paused
+while the new history files are moved into place.  As B<expire> unpauses it
+when it finishes, B<innd> kept writing to the old files while they were
+replaced and did not open the new ones, and the final C<ctlinnd go> of
+B<news.daily> failed.  A failure to move one of the new files, for instance
+because the history filesystem is full, also no longer goes unnoticed:
+B<news.daily> used to remove the completion marker and leave B<innd> running
+with an empty history file or with files of both generations.  It now leaves
+the server paused, keeps the files not yet moved, and notifies the
+newsmaster.
+
 =back
 
 =head1 Changes in 2.7.5 (not yet released)

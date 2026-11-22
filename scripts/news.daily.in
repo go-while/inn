@@ -437,23 +437,61 @@ if ${DOEXPIRE}; then
             fi
             exit 1
         fi
-        cp /dev/null ${HISTORY}
-        mv -f ${EXPDIR}/history.n ${HISTORY}
-        mv -f ${EXPDIR}/history.n.dir ${HISTORY}.dir
-        if [ X${TAGGEDHASH} = XDO ]; then
-            mv -f ${EXPDIR}/history.n.pag ${HISTORY}.pag
-        else
-            mv -f ${EXPDIR}/history.n.index ${HISTORY}.index
-            mv -f ${EXPDIR}/history.n.hash ${HISTORY}.hash
-        fi
-        rm -f ${EXPDIR}/history.n.done
-
+        ##  expire -d unpaused innd when it finished.  Pause it again, so
+        ##  that it closes the old history files and writes nothing to them
+        ##  while they are replaced; it opens the new ones on go.  Without
+        ##  -n, a running innd that cannot be paused is an error (the old
+        ##  history is left in place); one that is not running needs no
+        ##  pause.
+        HISPAUSED=false
         case "${EXPIREFLAGS}" in
         *-n*) ;;
         *)
-            MESSAGE="${REASON}"
+            if ctlinnd -t "$TOUT" -s pause "${REASON}" 2>&1; then
+                HISPAUSED=true
+            elif ctlinnd -t "$TOUT" mode >/dev/null 2>&1; then
+                (
+                    echo "$0: Cannot pause news to install the new history"
+                    echo "files of ${EXPDIR}; the old ones are left in place."
+                    ${INNSTAT}
+                ) | eval ${MAIL}
+                exit 1
+            fi
             ;;
         esac
+
+        ##  The old history file is emptied first because expdir is used
+        ##  when its filesystem cannot hold both generations.  If a file
+        ##  cannot be moved, the history in place is incomplete or mixes
+        ##  both generations: do not unpause the server, keep the files not
+        ##  yet moved and history.n.done in ${EXPDIR}, and report it.
+        if [ X${TAGGEDHASH} = XDO ]; then
+            HISEXTS="dir pag"
+        else
+            HISEXTS="dir index hash"
+        fi
+        HISFAILED=
+        cp /dev/null ${HISTORY}
+        mv -f ${EXPDIR}/history.n ${HISTORY} || HISFAILED=history.n
+        for EXT in ${HISEXTS}; do
+            test -z "${HISFAILED}" || break
+            mv -f ${EXPDIR}/history.n.${EXT} ${HISTORY}.${EXT} \
+                || HISFAILED=history.n.${EXT}
+        done
+        if [ -n "${HISFAILED}" ]; then
+            (
+                echo "$0: Cannot move ${EXPDIR}/${HISFAILED} to ${HISTDIR}"
+                echo "The history database is incomplete.  Move the remaining"
+                echo "history.n files of ${EXPDIR} to ${HISTDIR} (without the .n)"
+                echo "and remove history.n.done before starting or unpausing the"
+                echo "server (ctlinnd go with the reason shown by ctlinnd mode)."
+                ${INNSTAT}
+            ) | eval ${MAIL}
+            exit 1
+        fi
+        rm -f ${EXPDIR}/history.n.done
+
+        ${HISPAUSED} && MESSAGE="${REASON}"
     fi
 
     ##  Restart the server if we need to.

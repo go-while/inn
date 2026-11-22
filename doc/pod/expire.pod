@@ -69,11 +69,13 @@ leave history entries for deleted articles.  See hissqlite(5).
 If the B<-d> flag is used with the C<hisv6> history method, then the new
 F<history> file and database is created in the specified directory I<dir>.
 This is useful when the filesystem does not have sufficient space to hold both
-the old and new history files.  When this flag is used, B<expire> leaves the
-server paused and creates a zero-length file named after the new history file,
-with an extension of C<.done> to indicate that it has successfully completed
-the expiration.  The calling script should install the new history file and
-unpause the server.  The B<-r> flag should be used with this flag.
+the old and new history files.  When this flag is used, B<expire> creates a
+zero-length file named after the new history file, with an extension of
+C<.done> to indicate that it has successfully completed the expiration.  As
+B<expire> unpauses the server when it finishes, the calling script should
+pause it again, install the new history files and unpause it, so that B<innd>
+closes the old files and opens the new ones.  The B<-r> flag should be used
+with this flag.
 
 This option is not available with the C<hissqlite> history method.
 
