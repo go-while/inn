@@ -1663,6 +1663,16 @@ recommended.  This is a boolean value and the default is true.
 Set this to true to log C<ctlinnd cancel> commands to syslog.  This is a
 boolean value and the default is false.
 
+=item I<compressformat>
+
+The program and optional arguments scanlogs(8) uses to compress archived
+logs.  Set this string to C<"gzip -9">, C<"xz --memlimit=50%">, or C<cat>
+for plain logs.  Supported program names are B<gzip>, B<bzip2>, B<compress>,
+B<xz> and B<cat>.  An absolute executable path is also accepted.  Options
+are separated by whitespace and passed literally.  Use filter options that
+read standard input and write the compressed result to standard output.
+When unset, the default comes from B<--with-log-compress> at build time.
+
 =item I<logcycles>
 
 How many old logs scanlogs(8) keeps.  scanlogs(8) is generally run by

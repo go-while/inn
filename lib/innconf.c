@@ -253,6 +253,7 @@ static const struct config config_table[] = {
      * should be enough to diagnose the most common cases of malfunction
      * and abuse.  Where more is needed, it is easy for the news admin
      * to increase it. */
+    {K(compressformat),             STRING(NULL)      },
     {K(logcycles),                  UNUMBER(3)        },
 };
 

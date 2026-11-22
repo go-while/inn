@@ -175,6 +175,7 @@ htmlstatus:                  true
 incominglogfrequency:        200
 logartsize:                  true
 logcancelcomm:               false
+#compressformat:             "gzip -9"
 logcycles:                   3
 logipaddr:                   true
 logsitename:                 true

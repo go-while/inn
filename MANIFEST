@@ -1076,4 +1076,5 @@ tests/util                            Test suite for utilities (Directory)
 tests/util/convdate.t                 Tests for expire/convdate
 tests/util/innbind-t.c                Tests for backends/innbind
 tests/util/inndf.t                    Tests for backends/inndf
+tests/util/scanlogs.t                 Tests for log rotation and compression
 tests/util/innupgrade.t               Tests for scripts/innupgrade
