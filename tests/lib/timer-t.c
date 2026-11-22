@@ -14,7 +14,7 @@
 
 static char summary[512];
 
-static void
+static void __attribute__((__format__(printf, 2, 0)))
 capture_notice(size_t length UNUSED, const char *format, va_list args,
                int error UNUSED)
 {
