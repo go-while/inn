@@ -133,6 +133,16 @@ files behind after a failed creation, and the buffindexed overview method
 validates its F<group.index> file and no longer frees memory twice when
 mapping overview data fails.  Many thanks to Kevin Bowling for the patches.
 
+=item *
+
+When B<tdx-util> B<-R> could not rename the rebuilt overview files of a
+newsgroup into place, the group index already described the new files
+while the old ones were kept, so readers could get the overview data of
+other articles.  As during expiration, the water marks and the article
+count of the group are now updated only after the new files are renamed,
+and the previous inode and base of the index are restored in the group
+entry if the renaming fails.
+
 =back
 
 =head1 Changes in 2.7.5 (not yet released)
