@@ -223,6 +223,8 @@ pathname.  An entry is dropped only when the storage manager reports that
 its article does not exist or that its token is malformed; entries are kept,
 with an error exit status, when it cannot tell because of a storage error.
 B<sm> has a new B<-e> flag to tell a missing article from a retrieval error.
+When limited to one peer with its own B<-e> flag, B<procbatch> checks only
+the articles of the entries for that peer.
 
 =back
 

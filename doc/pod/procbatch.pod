@@ -81,7 +81,9 @@ files will still be put here before being moved into their final location.
 
 =item B<-e> I<peer>
 
-Only process entries for I<peer>.
+Only process entries for I<peer>.  With B<-c>, only the articles of these
+entries are checked: a storage error for an article that only other peers
+want does not affect the run.
 
 =item B<-h>
 

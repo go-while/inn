@@ -150,6 +150,18 @@ my (%opt, %hosts);
 my ($missing, $unchecked) = (0, 0);
 getopts("cd:e:hmqs:t:uv", \%opt) || die $usage;
 
+# Tell whether an entry, given as the fields of its line in the batchfile,
+# is for a peer to process: any of them without -e, and only that peer with
+# -e.  The first two fields are the article and its Message-ID.
+sub selected {
+    my @F = @_;
+    return 1 unless $opt{'e'};
+    foreach my $host (@F[2 .. $#F]) {
+        return 1 if $host eq $opt{'e'};
+    }
+    return 0;
+}
+
 HELP_MESSAGE() if $opt{'h'};
 die "Cannot specify both -q and -v\n\n" . $usage if ($opt{'q'} && $opt{'v'});
 
@@ -172,14 +184,17 @@ warn "Specifying -t without -m has no effect!" if $opt{'t'} and not $opt{'m'};
 
 print "Using $inputFile\n" if $opt{'v'};
 
-# With -c, first collect the storage tokens of the batchfile and ask the
-# storage manager about all of them at once.
+# With -c, first collect the storage tokens of the batchfile (only those of
+# the entries to process, so that an article only wanted by another peer
+# cannot make this run fail) and ask the storage manager about all of them
+# at once.
 my ($missingArticles, $unknownArticles) = ({}, {});
 if ($opt{'c'}) {
     my %tokens;
     open(my $TOKENS, '<', $inputFile) || die "$0: open ($inputFile): $!\n";
     while (<$TOKENS>) {
-        $tokens{$1} = 1 if m!^(\@[0-9A-F]+\@) <.+@.+> \S+!;
+        next unless m!^(\@[0-9A-F]+\@) <.+@.+> \S+!;
+        $tokens{$1} = 1 if selected(split);
     }
     close $TOKENS;
     ($missingArticles, $unknownArticles) = check_articles(keys %tokens)
@@ -199,6 +214,9 @@ while (<$INPUT>) {
 
     # Check the format of the line vigorously
     next unless (m!^\S+/\d+ <.+@.+> \S+! || m!^@[0-9A-F]+@ <.+@.+> \S+!);
+
+    # Skip the entries of other peers.
+    next unless selected(@F);
 
     if ($opt{'c'}) {
         if ($F[0] =~ /^\@/) {
