@@ -229,8 +229,8 @@ Report errors found in F<incoming.conf> via syslog(3) and exit normally.
 =item B<-t> I<seconds>
 
 Normally, B<innd> will flush any changes to C<hisv6> F<history> and F<active>
-files after 300 seconds of inactivity.  This option changes that timeout to
-I<seconds>.
+files every 300 seconds, even while processing traffic.  This option changes
+that interval to I<seconds>.
 
 This setting is not used for the C<hissqlite> history method whose writes are
 in autocommit mode.
