@@ -23,12 +23,16 @@ will be truncated to zero length.
 The maximum file size B<shrinkfile> can handle is 2,147,483,647 bytes.
 
 The end of the file to keep is copied to a temporary file created in the same
-directory as the file, which then replaces it with B<rename>(2) once it has
-been completely written.  If anything goes wrong (for instance when the disk is
-full), the file is left as it was.  The new file has the same permissions and,
-when possible, the same owner as the old one; a file shrunk through a symbolic
-link is replaced where the link points to, and hard links to the old file are
-not kept.
+directory as the file (or as the target of a symbolic link, which is replaced
+and not the link), which then replaces it with B<rename>(2) once it has been
+completely written.  If anything goes wrong (for instance when the disk is
+full), the file is left as it was.  The new file has the same permissions and
+the same owner and group as the old one; if it cannot be given them, the file
+is not replaced.  This has consequences: free space for the new file and write
+permission in the directory are needed; the new file is another inode, so
+B<shrinkfile> must not be run on a file which a program has open for writing
+(its later writes go to the old file, which is lost), hard links to the old
+file are not kept, and ACLs and extended attributes are not copied.
 
 A newline will be added to any non-empty file that does not end with a
 newline, if naturally the resulting file size does not exceed I<size>
@@ -79,7 +83,8 @@ Prints to standard output a status line if a file was shrunk.
 =head1 EXIT STATUS
 
 B<shrinkfile> exits with status C<0> when all the files were processed
-successfully, and with status C<1> when a file could not be shrunk.  With the
+successfully, and with status C<1> when a file could not be opened or
+shrunk.  With the
 B<-n> flag, the status is as described above.
 
 =head1 EXAMPLES

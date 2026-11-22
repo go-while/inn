@@ -35,6 +35,10 @@
 
 #define MAX_SIZE 0x7fffffffUL
 
+#ifndef PATH_MAX
+#    define PATH_MAX 4096
+#endif
+
 static void Usage(void) __attribute__((__noreturn__));
 
 
@@ -142,10 +146,14 @@ Process(FILE *F, char *name, off_t size, off_t maxsize, bool *Changedp)
     FILE *tmp;
     struct stat Sb;
     char buff[BUFSIZ + 1];
-    char *resolved, *tmpname;
+    char resolved[PATH_MAX];
+    char *tmpname;
+    struct stat Tb;
     int c;
     size_t i;
+    size_t copied = 0;
     bool err;
+    bool need_newline = false;
 
     /* Get the file's size. */
     if (fstat((int) fileno(F), &Sb) < 0) {
@@ -183,10 +191,9 @@ Process(FILE *F, char *name, off_t size, off_t maxsize, bool *Changedp)
             return AppendNewline(name);
         }
     } else if (!EndsWithNewline(F)) {
-        if (!AppendNewline(name)) {
-            fclose(F);
-            return false;
-        }
+        /* The newline is added to the new file, never to the original, which
+         * stays as it is until the new file is complete. */
+        need_newline = true;
     }
 
     /* We now have a file that ends with a newline that is bigger than
@@ -200,6 +207,11 @@ Process(FILE *F, char *name, off_t size, off_t maxsize, bool *Changedp)
 
     while ((c = getc(F)) != '\n')
         if (c == EOF) {
+            /* The missing final newline ends the line. */
+            if (need_newline && !ferror(F)) {
+                need_newline = false;
+                break;
+            }
             syswarn("cannot read");
             fclose(F);
             return false;
@@ -208,22 +220,27 @@ Process(FILE *F, char *name, off_t size, off_t maxsize, bool *Changedp)
     /* Copy the rest of the file to a temporary file in the same directory.
      * The original is replaced only when the copy is complete and has
      * reached the disk. */
-    resolved = realpath(name, NULL);
-    if (resolved == NULL)
-        resolved = xstrdup(name);
+    if (realpath(name, resolved) == NULL) {
+        syswarn("cannot find the real name of %s", name);
+        fclose(F);
+        return false;
+    }
     tmp = OpenStaging(resolved, &tmpname);
     if (tmp == NULL) {
-        free(resolved);
         fclose(F);
         return false;
     }
     err = false;
-    while ((i = fread(buff, 1, sizeof buff, F)) > 0)
+    while ((i = fread(buff, 1, sizeof buff, F)) > 0) {
+        copied += i;
         if (fwrite(buff, 1, i, tmp) != i) {
             err = true;
             break;
         }
+    }
     if (ferror(F))
+        err = true;
+    if (!err && need_newline && copied > 0 && fputc('\n', tmp) == EOF)
         err = true;
     if (err) {
         syswarn("cannot copy to temporary file %s", tmpname);
@@ -231,20 +248,29 @@ Process(FILE *F, char *name, off_t size, off_t maxsize, bool *Changedp)
         fclose(tmp);
         unlink(tmpname);
         free(tmpname);
-        free(resolved);
         return false;
     }
     fclose(F);
 
-    /* Give the new file the mode and the owner of the old one. */
-    if (fflush(tmp) == EOF || ferror(tmp) || fsync(fileno(tmp)) < 0
-        || fchmod(fileno(tmp), Sb.st_mode & 07777) < 0) {
+    /* Give the new file the owner and the mode of the old one, in this
+     * order as changing the owner can remove set-ID bits, and check that
+     * it worked. */
+    if (fflush(tmp) == EOF || ferror(tmp) || fsync(fileno(tmp)) < 0) {
         syswarn("cannot write temporary file %s", tmpname);
         err = true;
-    } else if (fchown(fileno(tmp), Sb.st_uid, Sb.st_gid) < 0
-               && errno != EPERM) {
-        syswarn("cannot change the owner of temporary file %s", tmpname);
-        err = true;
+    } else {
+        /* An unprivileged user cannot always give a file to another one;
+         * it is only an error if the owner or group would change. */
+        if (fchown(fileno(tmp), Sb.st_uid, Sb.st_gid) < 0 && errno != EPERM)
+            syswarn("cannot change the owner of %s", tmpname);
+        if (fchmod(fileno(tmp), Sb.st_mode & 07777) < 0
+            || fstat(fileno(tmp), &Tb) < 0 || Tb.st_uid != Sb.st_uid
+            || Tb.st_gid != Sb.st_gid
+            || (Tb.st_mode & 07777) != (Sb.st_mode & 07777)) {
+            syswarn("cannot give the owner and permissions of %s to %s", name,
+                    tmpname);
+            err = true;
+        }
     }
     if (fclose(tmp) == EOF && !err) {
         syswarn("cannot close temporary file %s", tmpname);
@@ -257,7 +283,6 @@ Process(FILE *F, char *name, off_t size, off_t maxsize, bool *Changedp)
     if (err)
         unlink(tmpname);
     free(tmpname);
-    free(resolved);
     if (err)
         return false;
     *Changedp = true;
@@ -394,6 +419,7 @@ main(int ac, char *av[])
     while ((p = *av++) != NULL) {
         if ((F = fopen(p, "r")) == NULL) {
             syswarn("cannot open %s", p);
+            Failed = true;
             continue;
         }
 

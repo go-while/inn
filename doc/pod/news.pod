@@ -101,16 +101,6 @@ The newsmaster's e-mail address mentioned in the help message returned
 by B<nnrpd> now uses I<fromhost> (set in F<inn.conf> or overridden in
 F<readers.conf>) as the default domain name instead of I<domain>.
 
-=item *
-
-Fixed B<shrinkfile> destroying the file it was asked to shrink when a read or
-write error happened, for instance when the temporary directory was full: the
-file was truncated first, and then rewritten from an incomplete copy, while
-the program still exited with a zero status.  The end of the file is now
-written to a temporary file in the same directory, which replaces the file
-only when it is complete, and B<shrinkfile> exits with a non-zero status when
-a file could not be shrunk.
-
 =back
 
 =item *
@@ -142,6 +132,18 @@ metadata of CAF files, retries partial writes and no longer leaves temporary
 files behind after a failed creation, and the buffindexed overview method
 validates its F<group.index> file and no longer frees memory twice when
 mapping overview data fails.  Many thanks to Kevin Bowling for the patches.
+
+=item *
+
+Fixed B<shrinkfile> destroying the file it was asked to shrink when a read or
+write error happened, for instance when the temporary directory was full: the
+file was truncated first, and then rewritten from an incomplete copy, while
+the program still exited with a zero status.  The end of the file is now
+written to a temporary file in the same directory, which replaces the file
+only when it is complete, with its permissions and owner.  This needs free
+space and write permission in the directory, and the file must not be open
+for writing by another program.  B<shrinkfile> exits with a non-zero status
+when a file could not be opened or shrunk.
 
 =back
 
