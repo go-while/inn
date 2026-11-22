@@ -1,5 +1,7 @@
 /* Test suite for general channel handling. */
 
+#define LIBTEST_NEW_FORMAT 1
+
 #include "portable/system.h"
 
 #include <fcntl.h>
@@ -49,7 +51,7 @@ main(void)
     int fd;
     CHANNEL *cp;
 
-    test_init(15);
+    plan(15);
     initialize();
     message_handlers_notice(0);
 
@@ -64,10 +66,10 @@ main(void)
         sysdie("file descriptor %d too high (see rlimitnofile in inn.conf)",
                fd);
     cp = CHANcreate(fd, CTany, CSwriting, reader, writedone);
-    ok_int(1, fd, cp->fd);
-    ok_int(2, CTany, cp->Type);
-    ok_int(3, CSwriting, cp->State);
-    ok(4, !CHANsleeping(cp));
+    is_int(fd, cp->fd, "new channel uses the supplied descriptor");
+    is_int(CTany, cp->Type, "new channel has the requested type");
+    is_int(CSwriting, cp->State, "new channel has the requested state");
+    ok(!CHANsleeping(cp), "new channel is awake");
     WCHANset(cp, "some output", strlen("some output"));
     WCHANadd(cp);
     CHANreadloop();
@@ -85,8 +87,8 @@ writedone(CHANNEL *cp)
     int fd;
     time_t now;
 
-    ok(5, true);
-    ok_int(6, cp->Out.left, 0);
+    ok(true, "writer callback ran");
+    is_int(cp->Out.left, 0, "output buffer is drained");
     close(cp->fd);
     cp->fd = -1;
     fd = open("output", O_RDONLY | O_EXCL);
@@ -97,35 +99,38 @@ writedone(CHANNEL *cp)
                fd);
     newcp = CHANcreate(fd, CTany, CSgetbody, reader, NULL);
     RCHANadd(newcp);
-    ok(7, !CHANsleeping(newcp));
+    ok(!CHANsleeping(newcp), "new channel remains awake");
     now = time(NULL);
     SCHANadd(cp, now + 60, &Now, wakeup, xstrdup("some random text"));
-    ok(8, CHANsleeping(cp));
+    ok(CHANsleeping(cp), "put the channel to sleep");
 }
 
 static void
 reader(CHANNEL *cp)
 {
-    ok(9, true);
-    ok_int(10, strlen("some output"), CHANreadtext(cp));
-    ok_int(11, strlen("some output"), cp->In.used);
+    ok(true, "input is ready to read");
+    is_int(strlen("some output"), CHANreadtext(cp),
+           "read the expected byte count");
+    is_int(strlen("some output"), cp->In.used,
+           "record the expected number of input bytes");
     /* FIXME: As long as the In buffer does not use the normal meanings of
        .used and .left, we cannot use buffer_append.
        buffer_append(&cp->In, "", 1); */
     memcpy(cp->In.data + cp->In.used, "", 1);
     cp->In.used++;
     cp->In.left--;
-    ok_string(12, "some output", cp->In.data);
+    is_string("some output", cp->In.data, "input contains the written text");
     SCHANwakeup(&Now);
 }
 
 __attribute__((__noreturn__)) static void
 wakeup(CHANNEL *cp)
 {
-    ok(13, true);
-    ok_string(14, "some random text", cp->Argument);
+    ok(true, "the wakeup callback ran");
+    is_string("some random text", cp->Argument,
+              "the callback argument survives sleep");
     CHANclose(cp, CHANname(cp));
-    ok_int(15, CTfree, cp->Type);
+    is_int(CTfree, cp->Type, "close frees the channel");
     CHANshutdown();
     unlink("output");
     exit(0);

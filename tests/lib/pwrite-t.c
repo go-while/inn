@@ -1,5 +1,7 @@
 /* pwrite test suite. */
 
+#define LIBTEST_NEW_FORMAT 1
+
 #include "portable/system.h"
 
 #include <errno.h>
@@ -26,23 +28,29 @@ main(void)
         sysdie("Can't create .testout");
     memset(result, 0, sizeof(result));
 
-    test_init(6);
+    plan(6);
 
-    ok(1, test_pwrite(fd, buf + 129, 127, 129) == 127);
-    ok(2, write(fd, buf, 64) == 64);
-    ok(3, test_pwrite(fd, buf + 64, 65, 64) == 65);
+    ok(test_pwrite(fd, buf + 129, 127, 129) == 127,
+       "write the last 127 bytes at an explicit offset");
+    ok(write(fd, buf, 64) == 64,
+       "ordinary write starts at the original offset");
+    ok(test_pwrite(fd, buf + 64, 65, 64) == 65,
+       "write the middle bytes at an explicit offset");
     status = read(fd, result, 64);
-    ok(4, (status == 64) && !memcmp(result, buf + 64, 64));
+    ok((status == 64) && !memcmp(result, buf + 64, 64),
+       "ordinary read starts after the ordinary write");
 
     if (lseek(fd, 0, SEEK_SET) == (off_t) -1)
         sysdie("Can't rewind .testout");
     status = read(fd, result, 256);
-    ok(5, (status == 256) && !memcmp(result, buf, 256));
+    ok((status == 256) && !memcmp(result, buf, 256),
+       "all bytes are in the correct places");
 
     close(fd);
     errno = 0;
     status = test_pwrite(fd, result, 1, 0);
-    ok(6, (status == -1) && (errno == EBADF));
+    ok((status == -1) && (errno == EBADF),
+       "pwrite on a closed descriptor sets EBADF");
 
     if (unlink(".testout") < 0)
         sysdie("Can't unlink .testout");

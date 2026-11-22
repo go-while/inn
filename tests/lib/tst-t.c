@@ -1,5 +1,7 @@
 /* Test suite for ternary search tries. */
 
+#define LIBTEST_NEW_FORMAT 1
+
 #include "portable/system.h"
 
 #include "inn/libinn.h"
@@ -31,52 +33,74 @@ main(void)
     char Strange[] = "Strange";
     char change[] = "\231hange";
 
-    test_init(38);
+    plan(38);
 
     tst = tst_init(2);
-    ok(1, tst != NULL);
-    ok(2, tst_insert(tst, SUC "test", test, 0, NULL) == TST_OK);
-    ok_string(3, "test", tst_search(tst, SUC "test"));
-    ok(4, tst_insert(tst, SUC "test", foo, 0, &existing) == TST_DUPLICATE_KEY);
-    ok_string(5, "test", existing);
-    ok(6, tst_insert(tst, SUC "test", foo, TST_REPLACE, &existing) == TST_OK);
-    ok_string(7, "test", existing);
-    ok_string(8, "foo", tst_search(tst, SUC "test"));
-    ok(9, tst_insert(tst, SUC "testing", testing, 0, NULL) == TST_OK);
-    ok(10, tst_insert(tst, SUC "t", t, 0, NULL) == TST_OK);
-    ok(11, tst_insert(tst, SUC "Strange", Strange, 0, NULL) == TST_OK);
-    ok(12, tst_insert(tst, SUC "\231hange", change, 0, NULL) == TST_OK);
-    ok(13, tst_insert(tst, SUC "", foo, 0, NULL) == TST_NULL_KEY);
-    ok(14, tst_insert(tst, NULL, foo, 0, NULL) == TST_NULL_KEY);
-    ok_string(15, "testing", tst_search(tst, SUC "testing"));
-    ok_string(16, "t", tst_search(tst, SUC "t"));
-    ok_string(17, "Strange", tst_search(tst, SUC "Strange"));
-    ok_string(18, "\231hange", tst_search(tst, SUC "\231hange"));
-    ok_string(19, "foo", tst_search(tst, SUC "test"));
-    ok(20, tst_search(tst, SUC "") == NULL);
-    ok(21, tst_search(tst, SUC "Peter") == NULL);
-    ok(22, tst_search(tst, SUC "foo") == NULL);
-    ok(23, tst_search(tst, SUC "te") == NULL);
-    ok_string(24, "Strange", tst_delete(tst, SUC "Strange"));
-    ok(25, tst_search(tst, SUC "Strange") == NULL);
-    ok_string(26, "t", tst_delete(tst, SUC "t"));
-    ok(27, tst_search(tst, SUC "t") == NULL);
-    ok_string(28, "testing", tst_search(tst, SUC "testing"));
-    ok_string(29, "foo", tst_search(tst, SUC "test"));
-    ok_string(30, "testing", tst_delete(tst, SUC "testing"));
-    ok_string(31, "foo", tst_search(tst, SUC "test"));
-    ok_string(32, "\231hange", tst_delete(tst, SUC "\231hange"));
-    ok_string(33, "foo", tst_delete(tst, SUC "test"));
-    ok(34, tst_search(tst, NULL) == NULL);
-    ok(35, tst_delete(tst, NULL) == NULL);
+    ok(tst != NULL, "allocate a tree");
+    ok(tst_insert(tst, SUC "test", test, 0, NULL) == TST_OK,
+       "insert the first key");
+    is_string("test", tst_search(tst, SUC "test"), "find the first key");
+    ok(tst_insert(tst, SUC "test", foo, 0, &existing) == TST_DUPLICATE_KEY,
+       "detect a duplicate key");
+    is_string("test", existing, "return the existing value for a duplicate");
+    ok(tst_insert(tst, SUC "test", foo, TST_REPLACE, &existing) == TST_OK,
+       "replace the existing value");
+    is_string("test", existing, "return the former value on replacement");
+    is_string("foo", tst_search(tst, SUC "test"),
+              "lookup returns the replacement");
+    ok(tst_insert(tst, SUC "testing", testing, 0, NULL) == TST_OK,
+       "insert a key that extends an existing key");
+    ok(tst_insert(tst, SUC "t", t, 0, NULL) == TST_OK,
+       "insert a prefix of existing keys");
+    ok(tst_insert(tst, SUC "Strange", Strange, 0, NULL) == TST_OK,
+       "insert a capitalized key");
+    ok(tst_insert(tst, SUC "\231hange", change, 0, NULL) == TST_OK,
+       "insert a key containing a high byte");
+    ok(tst_insert(tst, SUC "", foo, 0, NULL) == TST_NULL_KEY,
+       "reject an empty key");
+    ok(tst_insert(tst, NULL, foo, 0, NULL) == TST_NULL_KEY,
+       "reject a null key");
+    is_string("testing", tst_search(tst, SUC "testing"),
+              "find the extended key");
+    is_string("t", tst_search(tst, SUC "t"), "find the prefix key");
+    is_string("Strange", tst_search(tst, SUC "Strange"),
+              "find the capitalized key");
+    is_string("\231hange", tst_search(tst, SUC "\231hange"),
+              "find the high-byte key");
+    is_string("foo", tst_search(tst, SUC "test"), "find the replaced value");
+    ok(tst_search(tst, SUC "") == NULL, "empty key is absent");
+    ok(tst_search(tst, SUC "Peter") == NULL, "unrelated key is absent");
+    ok(tst_search(tst, SUC "foo") == NULL, "a value is not a key");
+    ok(tst_search(tst, SUC "te") == NULL, "uninserted prefix is absent");
+    is_string("Strange", tst_delete(tst, SUC "Strange"),
+              "delete capitalized key and return its value");
+    ok(tst_search(tst, SUC "Strange") == NULL,
+       "capitalized key is absent after deletion");
+    is_string("t", tst_delete(tst, SUC "t"), "delete the short prefix key");
+    ok(tst_search(tst, SUC "t") == NULL,
+       "short prefix is absent after deletion");
+    is_string("testing", tst_search(tst, SUC "testing"),
+              "deleting a prefix preserves its extension");
+    is_string("foo", tst_search(tst, SUC "test"),
+              "deleting a prefix preserves existing key");
+    is_string("testing", tst_delete(tst, SUC "testing"),
+              "delete one extended key");
+    is_string("foo", tst_search(tst, SUC "test"),
+              "deleting an extension preserves its prefix");
+    is_string("\231hange", tst_delete(tst, SUC "\231hange"),
+              "delete the high-byte key");
+    is_string("foo", tst_delete(tst, SUC "test"),
+              "delete the key with the replaced value");
+    ok(tst_search(tst, NULL) == NULL, "null key lookup is absent");
+    ok(tst_delete(tst, NULL) == NULL, "null key deletion is absent");
     tst_cleanup(tst);
-    ok(36, true);
+    ok(true, "clean up the tree");
 
     words = fopen("/usr/dict/words", "r");
     if (words == NULL)
         words = fopen("/usr/share/dict/words", "r");
     if (words == NULL) {
-        skip_block(37, 2, "/usr/share/dict/words not available");
+        skip_block(2, "/usr/share/dict/words not available");
         exit(0);
     }
 
@@ -98,7 +122,7 @@ main(void)
             }
         }
     }
-    ok(37, !reported);
+    ok(!reported, "insert each nonempty dictionary word");
 
     if (fseek(words, 0, SEEK_SET) < 0) {
         fclose(words);
@@ -131,7 +155,7 @@ main(void)
     }
     tst_cleanup(tst);
     fclose(words);
-    ok(38, !reported);
+    ok(!reported, "find and delete dictionary words");
 
     return 0;
 }
