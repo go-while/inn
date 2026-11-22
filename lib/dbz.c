@@ -190,6 +190,13 @@ static int canttag_warned; /* flag to control can't tag warning */
 #    endif
 
 #endif /* DEFSIZE */
+
+/* Smallest table size that dbzfresh() and dbzagain() write in a .dir file. */
+#ifdef DO_TAGGED_HASH
+#    define MINSIZE 2
+#else
+#    define MINSIZE (64 * 1024)
+#endif
 /*
  * We read configuration info from the .dir file into this structure,
  * so we can avoid wired-in assumptions for an existing database.
@@ -1191,6 +1198,13 @@ getconf(FILE *df, dbzconfig *cp)
         return false;
     }
 #endif /* DO_TAGGED_HASH */
+    /* A smaller table size cannot come from INN, and a size of zero would
+       later be used as a divisor when looking up a key. */
+    if (cp->tsize < MINSIZE) {
+        warn("dbz: bad table size (%ld) in .dir history file", cp->tsize);
+        warn("dbz: you should consider running makedbz manually");
+        return false;
+    }
     debug("size %ld", cp->tsize);
 
     /* second line, the usages */
