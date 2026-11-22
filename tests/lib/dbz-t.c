@@ -95,6 +95,23 @@ write_history(const char *path, HASH key)
     return (off_t) strlen(first);
 }
 
+/*
+**  The smallest table size that dbz accepts, computed as MINSIZE in lib/dbz.c:
+**  the minimum applied to a given size, or DEFSIZE when that is smaller (a
+**  DEFSIZE override given in CFLAGS also applies here).
+*/
+#ifdef DO_TAGGED_HASH
+#    define TEST_MINSIZE 2L
+#else
+#    define TEST_MINSIZE (64L * 1024)
+#endif
+#if defined(DEFSIZE)
+#    if DEFSIZE < TEST_MINSIZE
+#        undef TEST_MINSIZE
+#        define TEST_MINSIZE ((long) DEFSIZE)
+#    endif
+#endif
+
 int
 main(void)
 {
@@ -104,21 +121,22 @@ main(void)
     HASH key;
     off_t offset;
     off_t value = 0;
-    /* Table sizes that dbzfresh and dbzagain never write, and the smallest
-       one they do write (see MINSIZE in lib/dbz.c). */
-#ifdef DO_TAGGED_HASH
-    const char *bad[] = {"0", "-1", "-65536", "1"};
-    const char *smallest = "2";
-#else
-    const char *bad[] = {"0", "-1", "-65536", "1", "65535"};
-    const char *smallest = "65536";
-#endif
+    /* Table sizes that dbzfresh and dbzagain never write, ending with the
+       one just below the smallest they write (65535 with the stock untagged
+       build, 1 with the tagged hash), and that smallest one (65536 or 2). */
+    char below[32], smallest[32];
+    const char *bad[] = {"0", "-1", "-65536", "1", NULL};
     const char *suffixes[] = {"", ".dir", ".index", ".hash", ".pag"};
     size_t i, nbad;
     bool opened;
     FILE *f;
 
+    snprintf(below, sizeof(below), "%ld", TEST_MINSIZE - 1);
+    snprintf(smallest, sizeof(smallest), "%ld", TEST_MINSIZE);
+    bad[ARRAY_SIZE(bad) - 1] = below;
     nbad = ARRAY_SIZE(bad);
+    if (TEST_MINSIZE - 1 == 1)
+        nbad--; /* "1" is already in the list */
     plan(4 + nbad + 1 + 2);
 
     tmpdir = test_tmpdir();
