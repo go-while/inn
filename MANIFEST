@@ -1020,6 +1020,7 @@ tests/lib/network/addr-ipv4-t.c       Tests for lib/network.c (IPv4-oriented)
 tests/lib/network/addr-ipv6-t.c       Tests for lib/network.c (IPv6-oriented)
 tests/lib/network/client-t.c          Tests for lib/network.c (client-oriented)
 tests/lib/network/server-t.c          Tests for lib/network.c (server-oriented)
+tests/lib/nntp-t.c                    Tests for lib/nntp.c
 tests/lib/pread-t.c                   Tests for lib/pread.c
 tests/lib/pwrite-t.c                  Tests for lib/pwrite.c
 tests/lib/qio-t.c                     Tests for lib/qio.c

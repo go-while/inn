@@ -29,7 +29,7 @@ TESTS	= authprogs/ident.t expire/tombstone.t expire/tombstone-hisexpire.t \
 	lib/inet_ntoa.t lib/inet_ntop.t lib/innconf.t lib/list.t lib/md5.t \
 	lib/messageid.t lib/messages.t lib/mkstemp.t \
 	lib/network/addr-ipv4.t lib/network/addr-ipv6.t \
-	lib/network/client.t lib/network/server.t \
+	lib/network/client.t lib/network/server.t lib/nntp.t \
 	lib/pread.t lib/pwrite.t lib/qio.t lib/readin.t lib/reallocarray.t \
 	lib/reservedfd.t \
 	lib/setenv.t lib/snprintf.t lib/strlcat.t \
@@ -262,6 +262,9 @@ lib/network/client.t: lib/network/client-t.o tap/basic.o tap/messages.o tap/stri
 lib/network/server.t: lib/network/server-t.o tap/basic.o tap/messages.o tap/string.o $(LIBINN)
 	$(LINK) lib/network/server-t.o tap/basic.o tap/messages.o \
 	    tap/string.o $(LIBINN) $(LIBS)
+
+lib/nntp.t: lib/nntp-t.o tap/basic.o $(LIBINN)
+	$(LINK) lib/nntp-t.o tap/basic.o $(LIBINN) $(LIBS)
 
 lib/pread.o: ../lib/pread.c
 	$(CC) $(CFLAGS) -DTESTING -c -o $@ ../lib/pread.c
