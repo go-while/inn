@@ -22,9 +22,13 @@ will be truncated to zero length.
 
 The maximum file size B<shrinkfile> can handle is 2,147,483,647 bytes.
 
-Temporary files are created in the I<pathtmp> directory as set in F<inn.conf>.
-The C<TMPDIR> environment variable may be used to specify a different
-directory.
+The end of the file to keep is copied to a temporary file created in the same
+directory as the file, which then replaces it with B<rename>(2) once it has
+been completely written.  If anything goes wrong (for instance when the disk is
+full), the file is left as it was.  The new file has the same permissions and,
+when possible, the same owner as the old one; a file shrunk through a symbolic
+link is replaced where the link points to, and hard links to the old file are
+not kept.
 
 A newline will be added to any non-empty file that does not end with a
 newline, if naturally the resulting file size does not exceed I<size>
@@ -71,6 +75,12 @@ Uppercase letters are also allowed.
 Prints to standard output a status line if a file was shrunk.
 
 =back
+
+=head1 EXIT STATUS
+
+B<shrinkfile> exits with status C<0> when all the files were processed
+successfully, and with status C<1> when a file could not be shrunk.  With the
+B<-n> flag, the status is as described above.
 
 =head1 EXAMPLES
 
