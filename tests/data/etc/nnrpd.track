@@ -2,4 +2,6 @@ Router.Example.Test:Router
 *.lab.example.test:Lab
 192.0.2.1:Address
 node*.cluster.test:Cluster
+192.168.1.:Subnet
+.Legacy.Example:Legacy
 *:Rest

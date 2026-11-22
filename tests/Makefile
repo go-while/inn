@@ -340,8 +340,10 @@ nnrpd/auth-ext.t: nnrpd/auth-ext-t.o ../nnrpd/auth-ext.o tap/basic.o tap/message
 	$(LINK) nnrpd/auth-ext-t.o ../nnrpd/auth-ext.o tap/basic.o \
 	    tap/messages.o tap/string.o $(LIBINN)
 
-nnrpd/track.t: nnrpd/track-t.o ../nnrpd/track.o tap/basic.o $(LIBINN)
-	$(LINK) nnrpd/track-t.o ../nnrpd/track.o tap/basic.o $(LIBINN) $(LIBS)
+nnrpd/track.t: nnrpd/track-t.o ../nnrpd/track.o tap/basic.o tap/messages.o \
+		tap/string.o $(LIBINN)
+	$(LINK) nnrpd/track-t.o ../nnrpd/track.o tap/basic.o tap/messages.o \
+	    tap/string.o $(LIBINN) $(LIBS)
 
 nnrpd/auth-test: nnrpd/auth-test.in $(FIXSCRIPT)
 	$(FIX) -i nnrpd/auth-test.in

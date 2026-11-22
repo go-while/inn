@@ -5,24 +5,53 @@
 #include "portable/system.h"
 
 #include "inn/innconf.h"
+#include "inn/messages.h"
 #include "nnrpd.h"
 
 #define MAX_LEN 180
 
-/* Match the complete name, allowing a wildcard between two literal parts. */
+/* A leading or trailing dot also accepts legacy suffix and prefix rules. */
 static bool
 match_host(const char *host, const char *pattern)
 {
     const char *star = strchr(pattern, '*');
-    size_t length, prefix, suffix;
+    size_t length = strlen(host);
+    size_t prefix, suffix;
 
-    if (star == NULL)
+    if (star == NULL) {
+        size_t n = strlen(pattern);
+
+        if (pattern[0] == '.')
+            return length >= n && strcasecmp(host + length - n, pattern) == 0;
+        if (pattern[n - 1] == '.')
+            return strncasecmp(host, pattern, n) == 0;
         return strcasecmp(host, pattern) == 0;
-    length = strlen(host);
+    }
     prefix = star - pattern;
     suffix = strlen(star + 1);
     return length >= prefix + suffix && strncasecmp(host, pattern, prefix) == 0
            && strcasecmp(host + length - suffix, star + 1) == 0;
+}
+
+/* Readers run in separate processes.  Use a marker in the run directory
+ * so that a legacy catch-all does not generate a warning per connection. */
+static void
+warn_empty_host(void)
+{
+    static bool warned;
+    char *marker;
+    int fd;
+
+    if (warned)
+        return;
+    marker = concatpath(innconf->pathrun, "nnrpd.track.warned");
+    fd = open(marker, O_WRONLY | O_CREAT | O_EXCL, 0600);
+    if (fd >= 0 || errno != EEXIST)
+        warn("empty host field in nnrpd.track matches every client");
+    if (fd >= 0)
+        close(fd);
+    free(marker);
+    warned = true;
 }
 
 /*
@@ -66,12 +95,17 @@ TrackClient(char *client, char *user, size_t len)
             } else {
                 p = NULL;
             }
-            if (line[0] != '\0' && match_host(client, line)) {
-                RARTon = true;
-                if (p != NULL)
-                    strlcpy(user, p, len);
-                break;
+            if (line[0] == '\0') {
+                if (p == NULL)
+                    continue;
+                warn_empty_host();
+            } else if (!match_host(client, line)) {
+                continue;
             }
+            RARTon = true;
+            if (p != NULL)
+                strlcpy(user, p, len);
+            break;
         }
         fclose(fd);
     } else {
