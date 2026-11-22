@@ -319,9 +319,17 @@ sub receive_response($$$) {
             $errmsg = sprintf("Unrecognised error 0x%.2X", $code);
         }
         if ($code == response_sql_error) {
-            my ($status, $msg);
+            my ($status, $msglen, $msg);
 
-            ($status, $msg) = unpack("x l L/a", $_[0]);
+            # The SQLite status (int32) and the length (uint32) and text of
+            # its error message follow the response code.
+            if (length($_[1]) >= 9) {
+                ($status, $msglen) = unpack("x l L", $_[1]);
+            }
+            if (!defined($msglen) || length($_[1]) - 9 < $msglen) {
+                croak "Truncated SQL error response from server";
+            }
+            $msg = substr($_[1], 9, $msglen);
             $errmsg .= sprintf(": (%d) %s", $status, $msg);
         }
     }
