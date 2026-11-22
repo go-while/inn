@@ -967,6 +967,41 @@ Usage(void)
 }
 
 
+/* The name the session last authenticated as, for the process title. */
+static char TitleUser[SMBUF];
+
+
+/*
+**  Remember the current PERMuser as the name to show in the process title.
+**  Called only where a name has been assigned to an authorized session, so
+**  that a failed attempt which changes PERMuser (AUTHINFO GENERIC sets it to
+**  "<none>") does not change the name in the title.
+*/
+void
+SetTitleUser(void)
+{
+    strlcpy(TitleUser, PERMuser, sizeof(TitleUser));
+}
+
+
+static bool
+ShowUserInTitle(void)
+{
+    return PERMaccessconf && PERMaccessconf->addprocesstitleuser
+           && PERMauthorized && !PERMneedauth && TitleUser[0] != '\0';
+}
+
+
+static void
+ReaderTitle(const char *command, bool show_user)
+{
+    if (show_user)
+        setproctitle("%s %s %s", TitleUser, Client.host, command);
+    else
+        setproctitle("%s %s", Client.host, command);
+}
+
+
 int
 main(int argc, char *argv[])
 {
@@ -999,7 +1034,7 @@ main(int argc, char *argv[])
     int clienttimeout;
     char *ConfFile = NULL;
     char *path;
-    bool validcommandtoolong;
+    bool validcommandtoolong, show_title_user;
 
     int respawn = 0;
 
@@ -1417,7 +1452,7 @@ main(int argc, char *argv[])
     }
 
     /* Proceed with initialization. */
-    setproctitle("%s connect", Client.host);
+    ReaderTitle("connect", ShowUserInTitle());
 
     /* Were we told to reject connections? */
     if (Reject) {
@@ -1654,12 +1689,26 @@ main(int argc, char *argv[])
                   NNTP_FAIL_AUTH_NEEDED);
             continue;
         }
-        setproctitle("%s %s", Client.host, av[0]);
+        show_title_user = ShowUserInTitle();
+        ReaderTitle(av[0], show_title_user);
 
         (*cp->Function)(ac, av);
 
         if (PushedBack)
             break;
+
+        /* Authentication or a new TLS layer can change the applicable
+         * access group and the user shown while the connection is idle. */
+        if (cp->Function == CMDauthinfo
+#ifdef HAVE_OPENSSL
+            || cp->Function == CMDstarttls
+#endif
+        ) {
+            bool show_after = ShowUserInTitle();
+
+            if (show_title_user || show_after)
+                ReaderTitle(cp->Name, show_after);
+        }
         if (PERMaccessconf)
             clienttimeout = PERMaccessconf->clienttimeout;
         else

@@ -580,6 +580,27 @@ people.  Otherwise, any of these people would be able to send an authenticated
 withdrawal of an article originally sent by another person with the same
 identity or IP.
 
+=item I<addprocesstitleuser>
+
+Whether to put the username of an authenticated reader in front of the
+B<nnrpd> process title.  This is a boolean value and defaults to false.
+When enabled, the title of an authenticated session reads:
+
+    <user> <host> <command>
+
+where <user> is the identity assigned to the connection, <host> is the
+client host and <command> is the command being run, instead of the usual
+C<< <host> <command> >>.  The identity may include C<@> followed by the
+I<default-domain> of the auth group that assigned it.  Sessions that have
+not authenticated show the usual title.  When enabled, the name may be
+visible to local users through tools such as B<ps>.
+
+After authentication with AUTHINFO SASL, this parameter only applies if
+an auth group matching the connection has also assigned a username
+through a I<res> program or a I<default> parameter; otherwise, B<nnrpd>
+uses built-in default access settings for the session, in which this
+parameter is false.
+
 =item I<domain>
 
 When set, the value of this parameter is used for the domain part (the

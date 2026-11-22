@@ -133,6 +133,12 @@ files behind after a failed creation, and the buffindexed overview method
 validates its F<group.index> file and no longer frees memory twice when
 mapping overview data fails.  Many thanks to Kevin Bowling for the patches.
 
+=item *
+
+B<nnrpd> can show authenticated usernames in process titles when the
+I<addprocesstitleuser> option is enabled for the reader's access group.
+The option is off by default.
+
 =back
 
 =head1 Changes in 2.7.5 (not yet released)
