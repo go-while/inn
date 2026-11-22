@@ -135,9 +135,16 @@ mapping overview data fails.  Many thanks to Kevin Bowling for the patches.
 
 =item *
 
-Storage class selection now compares the time from arrival to the requested
-expiry with the range in F<storage.conf>.  Rebuilding tradspool tokens uses
-the arrival time recorded on the spool file.
+For new articles, storage class selection measures the time from receipt to
+the date in the Expires header field.  An C<expires> rule in F<storage.conf>
+with only a positive minimum used to catch nearly every article with that
+header.  It now selects only articles meeting the minimum, and rules with
+a maximum can match articles within their range.
+
+A later tradspool rebuild also applies these rules to articles already on
+disk.  It uses each file's modification time as the arrival time, so a
+restore that changes file timestamps can change the storage class and the
+F<expire.ctl> policy that applies.
 
 =back
 

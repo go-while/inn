@@ -46,7 +46,7 @@ export INNCONF
 mkdir -p spool
 
 # Print out the number of tests
-echo 9
+echo 10
 
 # First, store the articles.
 $sm -s <articles/1 >spool/tokens
@@ -157,7 +157,7 @@ rm -f spool/example/test/1
 
 # Model a spool file received four days ago that expired two days ago.
 # Its original two-day lifetime still selects class 1 during makehistory.
-expires_article -172800 | $sm -s >/dev/null
+checkclass "$(expires_article -172800 | $sm -s)" 02
 perl -e '$t = time - 345600; utime($t, $t, @ARGV) == 1 or die $!' \
     spool/example/test/1
 rebuilt=$($makehistory -x -O -S | sed -n 's/ .*//p')
