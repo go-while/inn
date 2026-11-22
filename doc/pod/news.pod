@@ -133,6 +133,15 @@ files behind after a failed creation, and the buffindexed overview method
 validates its F<group.index> file and no longer frees memory twice when
 mapping overview data fails.  Many thanks to Kevin Bowling for the patches.
 
+=item *
+
+B<expireover> no longer purges the overview data of newsgroups it has not
+reached when reading the F<active> file stops early because of a read error
+or a line longer than 32 KB.  With the ovsqlite overview method, all the
+newsgroups listed after that point were taken for newsgroups removed from
+the server, and their overview data was deleted.  B<expireover> now reports
+the problem, purges nothing and exits with status 1.
+
 =back
 
 =head1 Changes in 2.7.5 (not yet released)
