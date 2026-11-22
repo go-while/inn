@@ -548,9 +548,10 @@ OVEXPremove(TOKEN token, bool deletedgroups, char **xref, int ngroups)
              * now so the eventual expire run can consume it.  The
              * .NEW -> final rename is performed by expirerm after
              * fastrm succeeds (see expirerm.in); if expirerm fails or
-             * is skipped, the .NEW file is wiped by the next
-             * expireover and never consumed, so a partial rmfile
-             * never lets expire drop history for live articles. */
+             * is skipped, the next expireover checks each entry of the
+             * .NEW file again and keeps only those of articles confirmed
+             * gone, so a partial rmfile never lets expire drop history
+             * for live articles. */
             if (OVtombstonefile != NULL) {
                 fprintf(OVtombstonefile, "%s\n", TokenToText(token));
                 if (ferror(OVtombstonefile)) {

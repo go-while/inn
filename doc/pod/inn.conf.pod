@@ -600,7 +600,8 @@ This is a non-negative integer, and the default is C<10000>.
 Whether INN tools record cancellation tombstones so a subsequent
 B<expire> run can skip per-article storage existence checks.  When
 enabled (and I<groupbaseexpiry> is also true), two log files in
-I<pathdb> capture every cancellation:
+I<pathdb> capture every cancellation, and a third file holds the entries
+B<expireover> could not verify:
 
 =over 4
 
@@ -622,9 +623,19 @@ When B<expireover> finds entries of a previous run that were never
 consumed (for instance because B<fastrm> failed), it checks each article
 again: entries of articles still on disk are dropped, and entries whose
 check fails for another reason than the article being absent (a
-permission problem or an I/O error) are kept in
-F<expireover.tombstone.retry>, which B<expire> does not read, and checked
-again by the next B<expireover> run.
+permission problem or an I/O error) are kept in the third file, described
+below, and checked again by the next B<expireover> run.  If one of these
+files cannot be read completely, B<expireover> stops without expiring
+anything, so that no entry is lost.  When a delayed-removal run schedules
+no removal, B<expireover> renames F<expireover.tombstone.NEW> itself, as
+B<expirerm> is then not run.
+
+=item F<expireover.tombstone.retry>
+
+Written by B<expireover>: the entries of previous runs whose article could
+not be checked.  B<expire> does not read it.  While B<expireover> runs, it
+also holds the entries already confirmed gone, until they are safely in
+F<expireover.tombstone.NEW>.
 
 =item F<cancels.tombstone>
 
