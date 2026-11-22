@@ -129,21 +129,28 @@ while (<$INPUT>) {
             next;
         }
 
-        if ($hosts{$host}) {
-            print { $hosts{$host} } "$F[0] $F[1]\n";
-        } else {
+        if (!$hosts{$host}) {
             my $outputFile = "$destDir/$host.tmp";
             print "Starting $host\n" if ($opt{'v'});
             open $hosts{$host}, '>>', $outputFile
               or die "open >>$outputFile: $!\n";
-            print { $hosts{$host} } "$F[0] $F[1]\n";
         }
+        print { $hosts{$host} } "$F[0] $F[1]\n"
+          or die "$0: cannot write to $destDir/$host.tmp: $!\n";
     }
 }
 close $INPUT;
 
+# All the output files must be complete before any of them is moved and
+# before the input file is removed.  A write error (for instance because
+# the file system is full) only shows up when the buffered output is
+# flushed, so stop there and keep the input file.
 foreach my $host (keys %hosts) {
-    close $hosts{$host};
+    close $hosts{$host}
+      or die "$0: cannot write to $destDir/$host.tmp: $!\n";
+}
+
+foreach my $host (keys %hosts) {
     my $outputFile = "$destDir/$host.tmp";
     my $tmpTape = "$tapeDir/$host.tmp";
     my $tapeFile = "$tapeDir/$host";

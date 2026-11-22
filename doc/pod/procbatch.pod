@@ -100,7 +100,10 @@ B<-m>.
 
 =item B<-u>
 
-Unlink the input batchfile after processing.
+Unlink the input batchfile after processing.  The input batchfile is kept
+when an output file could not be completely written (for instance because
+the file system is full); B<procbatch> then reports the error and exits
+with a non-zero status.
 
 =item B<-v>
 
