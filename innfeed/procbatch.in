@@ -155,7 +155,7 @@ getopts("cd:e:hmqs:t:uv", \%opt) || die $usage;
 # -e.  The first two fields are the article and its Message-ID.
 sub selected {
     my @F = @_;
-    return 1 unless $opt{'e'};
+    return 1 unless defined $opt{'e'};
     foreach my $host (@F[2 .. $#F]) {
         return 1 if $host eq $opt{'e'};
     }
@@ -209,7 +209,7 @@ if ($opt{'c'}) {
 open(my $INPUT, '<', $inputFile) || die "$0: open ($inputFile): $!\n";
 
 while (<$INPUT>) {
-    chop;
+    chomp;
     my @F = split;
 
     # Check the format of the line vigorously
@@ -234,7 +234,7 @@ while (<$INPUT>) {
 
     for (my $i = 2; $i <= $#F; $i++) {
         my $host = $F[$i];
-        next if ($opt{'e'} && $opt{'e'} ne $host);
+        next if (defined $opt{'e'} && $opt{'e'} ne $host);
 
         # Keep out host names with any funny characters (from
         # corrupted files)

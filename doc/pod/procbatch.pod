@@ -83,7 +83,8 @@ files will still be put here before being moved into their final location.
 
 Only process entries for I<peer>.  With B<-c>, only the articles of these
 entries are checked: a storage error for an article that only other peers
-want does not affect the run.
+want does not affect the run, and the articles reported as dropped (with
+B<-v>) and their count are those of I<peer> only.
 
 =item B<-h>
 
@@ -112,7 +113,9 @@ B<-m>.
 
 =item B<-u>
 
-Unlink the input batchfile after processing.
+Unlink the input batchfile after processing.  Note that, combined with
+B<-e>, the batchfile is removed although the entries for other peers have
+not been processed.
 
 =item B<-v>
 
