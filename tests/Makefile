@@ -24,7 +24,7 @@ TESTS	= authprogs/ident.t expire/tombstone.t expire/tombstone-hisexpire.t \
 	lib/dispatch.t lib/fdflag.t \
 	lib/getaddrinfo.t lib/getnameinfo.t lib/hash.t \
 	lib/hashtab.t lib/headers.t lib/hex.t \
-	lib/hissqlite.t lib/hissqlite-convert.t \
+	lib/hissqlite.t lib/hissqlite-convert.t lib/hisv6-walk.t \
 	lib/inet_aton.t \
 	lib/inet_ntoa.t lib/inet_ntop.t lib/innconf.t lib/list.t lib/md5.t \
 	lib/messageid.t lib/messages.t lib/mkstemp.t \
@@ -204,6 +204,9 @@ lib/hissqlite.t: lib/hissqlite-t.o tap/basic.o $(STORAGEDEPS)
 
 lib/hissqlite-convert.t: lib/hissqlite-convert-t.o tap/basic.o $(STORAGEDEPS)
 	$(LINKDEPS) lib/hissqlite-convert-t.o tap/basic.o $(STORAGELIBS) $(LIBS)
+
+lib/hisv6-walk.t: lib/hisv6-walk-t.o tap/basic.o $(STORAGEDEPS)
+	$(LINKDEPS) lib/hisv6-walk-t.o tap/basic.o $(STORAGELIBS) $(LIBS)
 
 lib/history-bench: lib/history-bench.o $(STORAGEDEPS)
 	$(LINKDEPS) lib/history-bench.o $(STORAGELIBS) $(LIBS)
