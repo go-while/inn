@@ -119,10 +119,9 @@ not on any local expiration policies or anything in F<expire.ctl>!
 If <mintime> is non-zero, then this entry B<will not match> any article
 without an Expires header field.  This key is therefore only really
 useful for assigning articles with requested longer expire times to
-a separate storage method.  Articles only match if the time until
-expiration (that is to say, the amount of time into the future that
-the Expires header field of the article requests that it remain around)
-falls in the interval specified by <mintime> and <maxtime>.
+a separate storage method.  Articles only match if the time from arrival to
+the date in the Expires header field falls in the interval specified by
+<mintime> and <maxtime>.
 
 The format of these parameters is C<0d0h0m0s> (days, hours, minutes, and
 seconds into the future).  If <maxtime> is C<0s> or is not specified, there is
