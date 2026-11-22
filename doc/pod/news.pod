@@ -243,6 +243,15 @@ detection of malformed Xref records stored with tradspool and of corrupt
 history records.  The overview and storage backends also validate more
 structures before using them.  Many thanks to Kevin Bowling for the patches.
 
+=item *
+
+When B<tdx-util> B<-R> could not rename the rebuilt overview files of a
+newsgroup into place, the group index already described the new files
+while the old ones were kept, so readers could get the overview data of
+other articles.  As during expiration, the group stays locked until the
+new files are in place, and its previous index entry is restored if they
+cannot be renamed.
+
 =back
 
 =head1 Changes in 2.7.4 (2026-06-22)
