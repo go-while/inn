@@ -1,0 +1,69 @@
+=head1 NAME
+
+tombstone_hash_create, tombstone_read, tombstone_rename_for_processing, tombstone_present, tombstone_ensure_header - work with expire tombstone logs
+
+=head1 SYNOPSIS
+
+    #include <inn/hashtab.h>
+    #include <inn/storage.h>
+    #include <inn/tombstone.h>
+
+    #define TOMBSTONE_HEADER "# inn-tombstone v1\n"
+
+    struct hash *tombstone_hash_create(size_t size);
+
+    unsigned long tombstone_read(struct hash *h, const char *path,
+                                 bool *out_error);
+
+    char *tombstone_rename_for_processing(const char *path);
+
+    bool tombstone_present(struct hash *h, const TOKEN *token);
+
+    void tombstone_ensure_header(const char *path);
+
+=head1 DESCRIPTION
+
+These libinnstorage(3) routines work with the files described under
+I<expiretombstone> in inn.conf(5).
+
+B<tombstone_hash_create> creates a hash table keyed by storage tokens.
+I<size> is the initial size hint and the table can grow.  The entries
+inserted into the table must be TOKEN objects allocated with malloc(3):
+the table frees them with free(3) when it is destroyed.  Each entry is
+its own key.  B<tombstone_read> inserts such entries itself.
+
+B<tombstone_read> adds storage tokens from I<path> to the table I<h>.  It
+ignores empty lines and lines beginning with C<#>, warns about malformed
+entries and ignores duplicates.  It returns the number of valid entries
+seen, including duplicates.  A missing file counts as a successful
+read of zero entries.  If I<out_error> is not B<NULL>, B<tombstone_read>
+sets I<*out_error> to false on entry and to true if the read was
+incomplete, that is, if opening the file failed for a reason other than
+a missing file or if a stream read error occurred.  Such errors are also
+logged.  Entries added before a read error remain in the table.
+
+B<tombstone_rename_for_processing> obtains an exclusive lock on I<path>
+and renames it to I<path>C<.processing> while holding the lock.  An
+existing I<path>C<.processing> file is overwritten.  It returns a newly
+allocated snapshot path, which the caller must free and should unlink
+after processing.  It returns B<NULL> if the source is missing or if
+opening, locking or renaming it fails.
+
+B<tombstone_present> returns true if I<token> is in the table I<h> and
+false otherwise.
+
+B<tombstone_ensure_header> opens or creates I<path> (with mode 0664,
+subject to the umask) and obtains an exclusive lock.  If the file starts
+with B<TOMBSTONE_HEADER>, it leaves the file as is.  Otherwise it shifts
+existing contents to make room for the header at the start.  It reports
+I/O errors through logging.
+
+=head1 HISTORY
+
+Written by Kevin Bowling in 2026.
+
+=head1 SEE ALSO
+
+expire(8), inn.conf(5), libinn(3), libinnstorage(3).
+
+=cut
