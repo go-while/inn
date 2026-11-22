@@ -136,9 +136,10 @@ mapping overview data fails.  Many thanks to Kevin Bowling for the patches.
 =item *
 
 When both I<expiretombstone> and I<nnrpdcheckart> are set, B<nnrpd> no
-longer lists removed or cancelled articles as present when it cannot read
-F<cancels.tombstone> completely (for instance because of its permissions);
-it then checks the existence of articles in the storage manager.
+longer lists removed or cancelled articles as present when its reload of
+F<cancels.tombstone> reports an error opening or reading the file (for
+instance because of its permissions); it then checks the existence of
+articles in the storage manager.
 
 =back
 
