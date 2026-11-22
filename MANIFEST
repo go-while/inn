@@ -190,11 +190,17 @@ doc/man/innwatch.ctl.5                Manpage for innwatch.ctl config file
 doc/man/innxbatch.8                   Manpage for innxbatch
 doc/man/innxmit.8                     Manpage for innxmit
 doc/man/libinn.3                      Manpage for INN library routines
+doc/man/libinn_bloom.3                Manpage for bloom routines
+doc/man/libinn_buffer.3               Manpage for buffer routines
 doc/man/libinn_clientlib.3            Manpage for C News library interface
+doc/man/libinn_concat.3               Manpage for concat routines
 doc/man/libinn_dbz.3                  Manpage for DBZ database interface
 doc/man/libinn_inndcomm.3             Manpage for part of INN library
 doc/man/libinn_list.3                 Manpage for list routines
+doc/man/libinn_network.3              Manpage for network routines
+doc/man/libinn_nntp.3                 Manpage for nntp routines
 doc/man/libinn_qio.3                  Manpage for fast I/O file routines
+doc/man/libinn_timer.3                Manpage for timer routines
 doc/man/libinn_tst.3                  Manpage for ternary search tree routines
 doc/man/libinn_uwildmat.3             Manpage for uwildmat library routine
 doc/man/libinnauth.3                  Manpage for authprogs utility routines
@@ -317,11 +323,17 @@ doc/pod/innxbatch.pod                 Master file for innxbatch.8
 doc/pod/innxmit.pod                   Master file for innxmit.8
 doc/pod/install.pod                   Master file for INSTALL
 doc/pod/libinn.pod                    Master file for libinn.3
+doc/pod/libinn_bloom.pod              Master file for libinn_bloom.3
+doc/pod/libinn_buffer.pod             Master file for libinn_buffer.3
 doc/pod/libinn_clientlib.pod          Master file for libinn_clientlib.3
+doc/pod/libinn_concat.pod             Master file for libinn_concat.3
 doc/pod/libinn_dbz.pod                Master file for libinn_dbz.3
 doc/pod/libinn_inndcomm.pod           Master file for libinn_inndcomm.3
 doc/pod/libinn_list.pod               Master file for libinn_list.3
+doc/pod/libinn_network.pod            Master file for libinn_network.3
+doc/pod/libinn_nntp.pod               Master file for libinn_nntp.3
 doc/pod/libinn_qio.pod                Master file for libinn_qio.3
+doc/pod/libinn_timer.pod              Master file for libinn_timer.3
 doc/pod/libinn_tst.pod                Master file for libinn_tst.3
 doc/pod/libinn_uwildmat.pod           Master file for libinn_uwildmat.3
 doc/pod/libinnauth.pod                Master file for libinnauth.3

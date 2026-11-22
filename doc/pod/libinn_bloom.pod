@@ -1,0 +1,51 @@
+=head1 NAME
+
+bloom_create, bloom_add, bloom_check, bloom_free, bloom_count, bloom_nhash, bloom_bits - test set membership with a Bloom filter
+
+=head1 SYNOPSIS
+
+    #include <inn/bloom.h>
+
+    struct bloom_filter;
+
+    struct bloom_filter *bloom_create(size_t estimated_entries,
+                                      unsigned long fp_inv);
+    void bloom_add(struct bloom_filter *bf, const HASH *hash);
+    bool bloom_check(const struct bloom_filter *bf, const HASH *hash);
+    void bloom_free(struct bloom_filter *bf);
+    size_t bloom_count(const struct bloom_filter *bf);
+    unsigned int bloom_nhash(const struct bloom_filter *bf);
+    size_t bloom_bits(const struct bloom_filter *bf);
+
+=head1 DESCRIPTION
+
+B<bloom_create> creates an empty filter sized for I<estimated_entries>
+and a requested false positive rate expressed as the reciprocal I<fp_inv>.
+For example, C<1000> requests a rate of one in a thousand.  The
+implementation chooses parameters from a fixed table.  The actual false
+positive rate depends on the filter size and how many entries are added.
+An estimate of zero is treated as one.
+
+B<bloom_create> never returns NULL.  It terminates the program with an
+error message if memory cannot be allocated.  If the requested size
+would overflow size_t, it also terminates on 64-bit builds; on 32-bit
+builds the filter size is capped instead, which raises the false positive
+rate.
+
+B<bloom_add> records I<hash> in I<bf>.  B<bloom_check> returns true if
+I<hash> may have been added and false if it is absent.  B<bloom_count>
+returns the number of additions, including duplicate additions.
+B<bloom_nhash> returns the number of bit positions derived from each
+hash, and B<bloom_bits> returns the size of the filter in bits.
+
+B<bloom_free> releases I<bf> and its storage.  It accepts NULL.
+
+=head1 HISTORY
+
+Written by Kevin Bowling in 2026.
+
+=head1 SEE ALSO
+
+libinn(3).
+
+=cut

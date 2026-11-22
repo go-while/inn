@@ -1,0 +1,70 @@
+=head1 NAME
+
+TMRinit, TMRstart, TMRstop, TMRsummary, TMRnow, TMRfree, TMRnow_double - collect and report elapsed-time statistics
+
+=head1 SYNOPSIS
+
+    #include <inn/timer.h>
+
+    void TMRinit(unsigned int count);
+    void TMRstart(unsigned int timer);
+    void TMRstop(unsigned int timer);
+    void TMRsummary(const char *prefix, const char *const *labels);
+    unsigned long TMRnow(void);
+    void TMRfree(void);
+    double TMRnow_double(void);
+
+=head1 DESCRIPTION
+
+B<TMRinit> initializes profiling for I<count> timer identifiers, numbered
+from zero.  The library reserves C<TMR_HISHAVE>, C<TMR_HISGREP>,
+C<TMR_HISWRITE> and C<TMR_HISSYNC>.  Application identifiers begin at
+C<TMR_APPLICATION>.  I<count> includes the reserved identifiers, so an
+application with I<n> timers of its own passes C<TMR_APPLICATION> + I<n>.
+A I<count> of zero disables the timers.
+
+B<TMRstart> starts I<timer>.  B<TMRstop> stops it, adds the elapsed
+milliseconds to its total, and increments its invocation count.
+When timers are nested, stop the innermost timer first.  The same
+identifier can be recorded under different parents.  Each parent
+chain has its own totals.
+
+B<TMRsummary> logs the interval length in milliseconds and the totals
+and counts for each timer, formatting nested names from child to parent.
+I<prefix> is optional and can be NULL.  I<labels> supplies application
+names indexed by timer identifier minus C<TMR_APPLICATION>.  The summary
+starts a new measurement interval.
+B<innd> calls it every I<timer> seconds, as set by the I<timer>
+parameter in inn.conf(5).
+
+B<TMRnow> returns elapsed wall-clock time in milliseconds since the last
+summary or initialization.  B<TMRnow_double> returns the current
+wall-clock time in seconds since the epoch, including fractional seconds.
+The state is process-wide.  Finish any active measurements before making
+a summary, calling B<TMRfree> to release the timer state, or initializing
+it again.
+
+=head1 RESTRICTIONS
+
+Recursion on one timer is not allowed: do not start a timer while that
+same timer is running.  Starting a different timer while one is running
+makes the new timer a sub-timer, which must be stopped first.
+
+The timers keep global state and are not thread-safe.
+
+Misuse is reported with a warning rather than a failure.  A B<TMRstop>
+call for a timer other than the running one, or when no timer is
+running, only warns and is ignored.  B<TMRstart> with an identifier at
+or above the count given to B<TMRinit> only warns and is ignored.
+Install suitable message handlers if the warnings should be logged.
+
+=head1 HISTORY
+
+The general timer library was written by Alex Kiernan and incorporated
+into INN by Russ Allbery.
+
+=head1 SEE ALSO
+
+gettimeofday(2), inn.conf(5), libinn(3).
+
+=cut
