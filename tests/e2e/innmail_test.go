@@ -99,3 +99,59 @@ func TestInnmailAddresses(t *testing.T) {
 		})
 	}
 }
+
+// TestInnmailMTAFailure: innmail exits with status 1 and says why when the MTA reads the
+// whole message but then fails, with a non-zero exit status (75, EX_TEMPFAIL, and 69,
+// EX_UNAVAILABLE) or killed by a signal; it exits 0 when the MTA accepts the message.
+// innmail used to exit 0 in every case, so that its callers could not notice that the
+// mail was not sent.
+func TestInnmailMTAFailure(t *testing.T) {
+	dir := t.TempDir()
+	mta := filepath.Join(t.TempDir(), "mta")
+	script := "#! /bin/sh\n" +
+		"d='" + dir + "'\n" +
+		"head -c 4096 > \"$d/mail\"\n" +
+		"st=$(cat \"$d/status\")\n" +
+		"if [ \"$st\" = signal ]; then kill -TERM $$; sleep 5; fi\n" +
+		"exit \"$st\"\n"
+	if err := os.WriteFile(mta, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	s := NewSite(t, SiteOptions{InnConf: map[string]string{"mta": `"` + mta + ` -oi %s"`}})
+
+	for _, tc := range []struct {
+		status string // what the MTA does after reading the message
+		code   int    // the exit status of innmail
+		warn   string // what innmail says on standard error
+	}{
+		{"0", 0, ""},
+		{"75", 1, "exited with status 75"},
+		{"69", 1, "exited with status 69"},
+		{"signal", 1, "killed by signal 15"},
+	} {
+		t.Run(tc.status, func(t *testing.T) {
+			if err := os.WriteFile(filepath.Join(dir, "status"), []byte(tc.status+"\n"), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			os.Remove(filepath.Join(dir, "mail"))
+			out, err := s.runInput("body\n", "innmail", "-s", "Test", "joe")
+			t.Logf("innmail with the MTA ending with %s: %v\n%s", tc.status, err, out)
+			code := 0
+			var ee *exec.ExitError
+			if errors.As(err, &ee) {
+				code = ee.ExitCode()
+			} else if err != nil {
+				t.Fatal(err)
+			}
+			if code != tc.code {
+				t.Errorf("innmail exited with status %d, want %d", code, tc.code)
+			}
+			if tc.warn != "" && !strings.Contains(out, tc.warn) {
+				t.Errorf("innmail does not say %q", tc.warn)
+			}
+			if mail, err := os.ReadFile(filepath.Join(dir, "mail")); err != nil || !strings.HasSuffix(string(mail), "\n\nbody\n") {
+				t.Errorf("the MTA did not get the whole message (%v):\n%s", err, mail)
+			}
+		})
+	}
+}
