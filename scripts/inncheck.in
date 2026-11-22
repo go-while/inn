@@ -745,28 +745,33 @@ sub newsfeeds {
     ##  Expand the variables in a string like innd does: a known variable is
     ##  replaced by its value, with a modifier (! or @) just before it added
     ##  before each of the elements of the value; an unknown one is left as is.
-    ##  Return undef if the result is longer than $max_expand, without
-    ##  building it.
+    ##  Return undef if the result is longer than $max_expand, as soon as the
+    ##  bytes emitted so far exceed it, without building more.
     my $expand = sub {
         my ($str) = @_;
-        my $total = length($str);
+        my ($out, $total, $pos) = ('', 0, 0);
 
-        my $done = eval {
-            $str =~ s{([!\@]?)\$([A-Za-z0-9]+)}{
-                my ($mod, $name) = ($1, $2);
-                my $new = "$mod\$$name";
-                if (exists($variables{$name})) {
-                    $new = $variables{$name};
-                    $new =~ s/,/,$mod/g if $mod ne '';
-                    $new = $mod . $new;
-                }
-                $total += length($new) - length($mod) - length($name) - 1;
-                die "too long\n" if $total > $max_expand;
-                $new;
-            }ge;
-            1;
-        };
-        return $done ? $str : undef;
+        while ($str =~ /([!\@]?)\$([A-Za-z0-9]+)/g) {
+            my ($start, $end) = ($-[0], $+[0]);
+            my ($mod, $name) = ($1, $2);
+
+            my $literal = substr($str, $pos, $start - $pos);
+            my $new = "$mod\$$name";
+            if (exists($variables{$name})) {
+                $new = $variables{$name};
+                $new =~ s/,/,$mod/g if $mod ne '';
+                $new = $mod . $new;
+            }
+            $total += length($literal) + length($new);
+            return undef if $total > $max_expand;
+            $out .= $literal . $new;
+            $pos = $end;
+        }
+
+        my $tail = substr($str, $pos);
+        $total += length($tail);
+        return undef if $total > $max_expand;
+        return $out . $tail;
     };
 
   INPUTNEWSFEEDS:
@@ -813,7 +818,7 @@ sub newsfeeds {
         }
 
         ##  Substitute variables.
-        my $expanded = length($_) > $max_expand ? undef : $expand->($_);
+        my $expanded = $expand->($_);
         if (!defined($expanded)) {
             eprint "$file:$line: entry longer than $max_expand bytes "
               . "once variables are expanded\n";
