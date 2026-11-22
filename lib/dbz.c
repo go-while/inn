@@ -580,7 +580,7 @@ dbzagain(const char *name, const char *oldname)
     result = getconf(f, &c);
     Fclose(f);
     if (!result) {
-        syswarn("dbzagain: getconf failed");
+        warn("dbzagain: getconf failed");
         return false;
     }
 
