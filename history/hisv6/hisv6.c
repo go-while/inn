@@ -1007,7 +1007,9 @@ hisv6_traverse(struct hisv6 *h, struct hisv6_walkstate *cookie,
                bool (*callback)(struct hisv6 *, void *, const HASH *hash,
                                 time_t, time_t, time_t, const TOKEN *))
 {
-    bool r = false;
+    /* An empty history is a valid one:  the traversal only fails when a
+       line cannot be read or processed. */
+    bool r = true;
     QIOSTATE *qp;
     void *p;
     size_t line;
@@ -1061,6 +1063,16 @@ again:
                 /* if we're not ignoring errors set the status */
                 if (!cookie->ignore)
                     r = false;
+                else {
+                    /* Skip it like any other malformed line.  QIOread
+                       returns NULL for a line too long only once it has
+                       read the end of that line, and the next call returns
+                       the following line, so this is not the end of the
+                       file:  stopping here would silently leave out the
+                       rest of the history. */
+                    ++line;
+                    goto again;
+                }
             } else {
                 hisv6_seterror(h,
                                concat("can't read line ", h->histpath,

@@ -133,6 +133,16 @@ files behind after a failed creation, and the buffindexed overview method
 validates its F<group.index> file and no longer frees memory twice when
 mapping overview data fails.  Many thanks to Kevin Bowling for the patches.
 
+=item *
+
+A line of the F<history> file too long to be read (more than 32 KB, which
+only a damaged file has) no longer ends the reading of that file.  B<expire>
+run with B<-n> treated it as the end of the file, and its new F<history>
+file then lacked every entry after that line; when connected to the server,
+B<expire> paused B<innd> there, for the rest of the file.  Such a line is now
+skipped like the other malformed lines.  B<expire> also no longer fails on
+an empty F<history> file.
+
 =back
 
 =head1 Changes in 2.7.5 (not yet released)

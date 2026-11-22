@@ -19,6 +19,10 @@ recovered.  Unlike a from-spool rebuild with B<makehistory>, this preserves
 both the exact arrival, posting, and expiration timestamps and the
 I<remembered> (token-less) entries, which a rebuild cannot reconstruct.
 
+Malformed lines of the source, such as a line of a damaged F<history> file
+too long to be read, are skipped, and a warning reports the last one; an empty
+source history gives an empty database.
+
 The new database is built in a temporary file and atomically renamed into
 place only on full success, so an interrupted or failed run never leaves a
 usable-but-incomplete destination.  B<hissqlite-convert> refuses to run if
