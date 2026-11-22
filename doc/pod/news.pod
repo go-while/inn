@@ -133,6 +133,14 @@ files behind after a failed creation, and the buffindexed overview method
 validates its F<group.index> file and no longer frees memory twice when
 mapping overview data fails.  Many thanks to Kevin Bowling for the patches.
 
+=item *
+
+B<innmail> now exits with a non-zero status and says why when the MTA
+fails, for instance when it rejects the message or cannot queue it, or
+exits before reading the whole message.  It previously exited with status 0
+in the first case and could be killed by C<SIGPIPE> in the second, so
+callers could not tell why the mail was not sent.
+
 =back
 
 =head1 Changes in 2.7.5 (not yet released)
