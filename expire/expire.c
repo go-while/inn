@@ -42,6 +42,7 @@ static FILE *EXPunlinkfile;
 static EXPIRECLASS EXPclasses[NUM_STORAGE_CLASSES + 1];
 static char *EXPreason;
 static time_t EXPremember;
+static bool EXPforgetall;
 static time_t Now;
 static time_t RealNow;
 
@@ -227,6 +228,10 @@ EXPreadfile(FILE *F)
             }
             if (!EXPgetnum(i, fields[1], &EXPremember, "remember"))
                 return false;
+            /* Only an explicit decimal zero requests a purge.  A small
+             * nonzero interval can round to the same time_t cutoff. */
+            EXPforgetall = (strchr(fields[1], '0') != NULL
+                            && strpbrk(fields[1], "123456789") == NULL);
             continue;
         }
 
@@ -939,6 +944,13 @@ main(int ac, char *av[])
         HISctl(History, HISCTLS_IGNOREOLD, &IgnoreOld);
         if (Size != 0)
             HISctl(History, HISCTLS_NPAIRS, &Size);
+    }
+
+    if (EXPforgetall && !HISctl(History, HISCTLS_EXPIRE_REMEMBERED,
+                                &EXPforgetall)) {
+        warn("history method %s cannot purge remembered entries",
+             innconf->hismethod);
+        CleanupAndExit(Server, false, 1);
     }
 
     val = true;

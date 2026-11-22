@@ -101,10 +101,12 @@ update hist set token = ?2, expires = ?3 where hash = ?1;
 -- HISexpire pass 2: delete remembered entries older than the /remember/
 -- posting-time threshold (indexed by hist_remember).  Bounded to a chunk per
 -- step (LIMIT) so each autocommit holds the write lock only briefly; the
--- caller loops until a step deletes nothing.
+-- caller loops until a step deletes nothing.  A NULL threshold selects all
+-- remembered entries for a zero-day retention policy.
 -- .expire_remembered
 delete from hist where hash in (
     select hash from hist
         where token is null
-            and (case when posted > 0 then posted else arrived end) < ?1
+            and (?1 is null
+                 or (case when posted > 0 then posted else arrived end) < ?1)
         limit 10000);
