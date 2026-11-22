@@ -133,6 +133,14 @@ files behind after a failed creation, and the buffindexed overview method
 validates its F<group.index> file and no longer frees memory twice when
 mapping overview data fails.  Many thanks to Kevin Bowling for the patches.
 
+=item *
+
+The history database now refuses to open a F<history.dir> file whose table
+size is smaller than what INN writes, such as a damaged file might have.
+A table size of zero previously made programs reading the history from disk,
+like B<nnrpd> and B<grephistory>, crash on their first lookup.  The error
+says to rebuild the database with B<makedbz>.
+
 =back
 
 =head1 Changes in 2.7.5 (not yet released)
@@ -242,14 +250,6 @@ parser, the reset of timecaf resources after failed operations, and the
 detection of malformed Xref records stored with tradspool and of corrupt
 history records.  The overview and storage backends also validate more
 structures before using them.  Many thanks to Kevin Bowling for the patches.
-
-=item *
-
-The history database now refuses to open a F<history.dir> file whose table
-size is smaller than what INN ever writes, as a damaged file could have.
-A table size of zero previously made programs reading the history from disk,
-like B<nnrpd> and B<grephistory>, crash on their first lookup.  The error
-says to rebuild the database with B<makedbz>.
 
 =back
 

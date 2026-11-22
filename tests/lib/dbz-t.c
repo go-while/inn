@@ -74,6 +74,27 @@ try_open(const char *path)
     return opened;
 }
 
+/*
+**  Write the history text file at path: a first line for another article,
+**  then one for the article with the given hash.  The tagged hash format
+**  checks the key against this file in dbzfetch.  Returns the offset of the
+**  second line, to store in the database.
+*/
+static off_t
+write_history(const char *path, HASH key)
+{
+    static const char first[] = "[00000000000000000000000000000000]\t1~-~1\n";
+    FILE *f;
+
+    f = fopen(path, "w");
+    if (f == NULL)
+        sysbail("cannot write %s", path);
+    if (fputs(first, f) == EOF
+        || fprintf(f, "[%s]\t2~-~2\n", HashToText(key)) < 0 || fclose(f) != 0)
+        sysbail("cannot write %s", path);
+    return (off_t) strlen(first);
+}
+
 int
 main(void)
 {
@@ -81,15 +102,24 @@ main(void)
     char *original;
     dbzoptions opt;
     HASH key;
+    off_t offset;
     off_t value = 0;
+    /* Table sizes that dbzfresh and dbzagain never write, and the smallest
+       one they do write (see MINSIZE in lib/dbz.c). */
+#ifdef DO_TAGGED_HASH
     const char *bad[] = {"0", "-1", "-65536", "1"};
-    const char *suffixes[] = {".dir", ".index", ".hash", ".pag"};
+    const char *smallest = "2";
+#else
+    const char *bad[] = {"0", "-1", "-65536", "1", "65535"};
+    const char *smallest = "65536";
+#endif
+    const char *suffixes[] = {"", ".dir", ".index", ".hash", ".pag"};
     size_t i, nbad;
     bool opened;
     FILE *f;
 
     nbad = ARRAY_SIZE(bad);
-    plan(4 + nbad + 2);
+    plan(4 + nbad + 1 + 2);
 
     tmpdir = test_tmpdir();
     basprintf(&path, "%s/dbz-history", tmpdir);
@@ -102,10 +132,11 @@ main(void)
     opt.exists_incore = INCORE_NO;
     dbzsetoptions(opt);
 
-    /* A valid database with one entry. */
+    /* A valid database with one entry, pointing to its history line. */
     key = HashMessageID("<dbz-test@example.invalid>");
+    offset = write_history(path, key);
     ok(dbzfresh(path, dbzsize(100)), "dbzfresh");
-    is_int(DBZSTORE_OK, dbzstore(key, 42), "dbzstore");
+    is_int(DBZSTORE_OK, dbzstore(key, offset), "dbzstore");
     ok(dbzclose(), "dbzclose");
     original = ReadInFile(dirpath, NULL);
     if (original == NULL)
@@ -113,14 +144,15 @@ main(void)
 
     if (!dbzinit(path))
         sysbail("cannot open the valid database");
-    ok(dbzfetch(key, &value) && value == 42, "valid database can be read");
+    ok(dbzfetch(key, &value) && value == offset, "valid database can be read");
     dbzclose();
 
-    /* Table sizes that dbzfresh and dbzagain never write. */
     for (i = 0; i < nbad; i++) {
         set_table_size(path, bad[i]);
         ok(!try_open(path), "table size %s is refused", bad[i]);
     }
+    set_table_size(path, smallest);
+    ok(try_open(path), "table size %s is accepted", smallest);
 
     /* The database is usable again with its original .dir file. */
     f = fopen(dirpath, "w");
@@ -130,7 +162,7 @@ main(void)
     value = 0;
     opened = dbzinit(path);
     ok(opened, "restored database can be opened");
-    ok(opened && dbzfetch(key, &value) && value == 42, "and read");
+    ok(opened && dbzfetch(key, &value) && value == offset, "and read");
     if (opened)
         dbzclose();
 
