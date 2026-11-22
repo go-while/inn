@@ -134,10 +134,11 @@ sub report {
 }
 
 # Tell why a child process or a pipe failed, from the wait status $? and the
-# error $! taken right after close().
+# error $! taken right after close(); $? is -1 when the wait itself failed.
 sub why {
     my ($status, $err) = @_;
 
+    return "cannot wait for the process: $err" if ($status == -1);
     return 'killed by signal ' . ($status & 127) if ($status & 127);
     return 'exit status ' . ($status >> 8) if ($status);
     return "I/O error: $err";

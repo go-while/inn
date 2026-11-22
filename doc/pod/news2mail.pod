@@ -53,6 +53,26 @@ per envelope-from address, to the mailing-lists which use it, so that each
 list gets the article with its own envelope-from address.  The To header
 field body of each e-mail has the addresses of these mailing-lists.
 
+In F<newsfeeds>, the channel feed should look like:
+
+    news2mail!:!*:Ac,Tc,Wn*:<pathbin>/news2mail
+
+and for each mailing-list, you only have to add to F<newsfeeds> an entry list
+like:
+
+    list-big-red-ants/lists.ucsd.edu\
+        :!*,rec.pets.red-ants\
+        :Ap,Tm:news2mail!
+
+Please note the use of C<Ap> and the exclusion of the list owner domain
+to protect the list from feeding back new arrivals from the list.
+The site name used in the F<newsfeeds> entry for a mailing-list (above
+C<list-big-red-ants>) must be the same as the first field in an entry in
+F<news2mail.cf>.  For instance:
+
+    # newsfeeds-name   list-to-address      [list-sender-address]
+    list-big-red-ants  ants@lists.ucsd.edu  news+ants@news.server.org
+
 B<news2mail> retrieves an article with B<sm> once for all these e-mails.
 If it cannot (for instance because the article expired or was cancelled
 in the meantime), nothing is mailed for that article.
