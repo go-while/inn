@@ -200,7 +200,10 @@ FlushOverTmpFile(void)
             OVclose();
             _exit(1);
         }
-        if (!OVctl(OVCUTOFFLOW, (void *) &Cutofflow)) {
+        /* The cutoff is off when the overview is opened.  Only enable it:
+           disabling it makes ovsqlite check the low water marks of all
+           groups, which must be done once at the end, not for each batch. */
+        if (Cutofflow && !OVctl(OVCUTOFFLOW, (void *) &Cutofflow)) {
             warn("cannot obtain overview cutoff information");
             OVclose();
             _exit(1);
@@ -1007,7 +1010,8 @@ main(int argc, char **argv)
         if (!OVctl(OVSORT, (void *) &sorttype))
             die("cannot obtain overview sort information");
         if (!Fork) {
-            if (!OVctl(OVCUTOFFLOW, (void *) &Cutofflow))
+            /* As in FlushOverTmpFile, only enable the cutoff. */
+            if (Cutofflow && !OVctl(OVCUTOFFLOW, (void *) &Cutofflow))
                 die("cannot obtain overview cutoff information");
             OverAddAllNewsgroups();
         } else {
@@ -1081,6 +1085,19 @@ main(int argc, char **argv)
             FlushOverTmpFile();
             if (Fork)
                 wait(&status);
+        }
+        /* All articles are added.  Disable the low article cutoff, so that
+           an overview method can update the low water marks it kept as the
+           cutoff (ovsqlite does).  If that fails, the rebuild is not
+           complete: do not create the rebuilt flag file. */
+        if (Cutofflow && !WriteStdout) {
+            Cutofflow = false;
+            if (Fork && !OVopen(OV_WRITE))
+                sysdie("cannot open overview");
+            if (!OVctl(OVCUTOFFLOW, (void *) &Cutofflow))
+                die("cannot disable overview cutoff");
+            if (Fork)
+                OVclose();
         }
         if (!WriteStdout) {
             if ((F = fopen(RebuiltflagPath, "w")) == NULL)

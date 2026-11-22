@@ -19,6 +19,8 @@
 #include "inn/storage.h"
 #include "tap/basic.h"
 
+#include "../storage/ovsqlite/ovsqlite.h"
+
 /* The same fake token used by overview-t.c. */
 static const TOKEN faketoken = {1, 1, ""};
 
@@ -45,8 +47,112 @@ overview_data_parse(char *data, unsigned long *artnum)
     return start;
 }
 
+/* Check both the active-file cutoff used by makehistory -I and the normal
+ * first-article low water mark when cutoff is disabled. */
+static bool
+group_stats(char *group, int wantlow, int wanthigh, int wantcount)
+{
+    int low, high, count, flag;
+
+    return OVgroupstats(group, &low, &high, &count, &flag) && low == wantlow
+           && high == wanthigh && count == wantcount;
+}
+
+static bool
+add_article(const char *group, ARTNUM artnum)
+{
+    char data[] = "overview\r\n";
+
+    return ovsqlite_add(group, artnum, faketoken, data, strlen(data), 0, 0);
+}
+
+static int
+cutoff_test(void)
+{
+    char flag[] = NF_FLAG_OK_STRING;
+    char group[] = "cutoff.test";
+    char uncut[] = "cutoff.disabled";
+    char closed[] = "cutoff.closed";
+    bool cutoff = true;
+    TOKEN token;
+
+    test_init(45);
+    ok(1, OVopen(OV_READ | OV_WRITE));
+    ok(2, OVgroupadd(group, 10, 100, flag));
+    ok(3, OVctl(OVCUTOFFLOW, &cutoff));
+    ok(4, !add_article(group, 9));
+    ok(5, add_article(group, 30));
+    ok(6, group_stats(group, 10, 30, 1));
+    ok(7, add_article(group, 20));
+    ok(8, add_article(group, 10));
+    ok(9, !add_article(group, 9));
+    ok(10, !OVgetartinfo(group, 9, &token));
+    ok(11, OVgetartinfo(group, 20, &token));
+    ok(12, group_stats(group, 10, 30, 3));
+    ok(13, !add_article(group, 20));
+    ok(14, group_stats(group, 10, 30, 3));
+
+    /* Turning cutoff off permits older articles again. */
+    cutoff = false;
+    ok(15, OVctl(OVCUTOFFLOW, &cutoff));
+    ok(16, add_article(group, 9));
+    ok(17, group_stats(group, 9, 30, 4));
+    cutoff = true;
+    ok(18, OVctl(OVCUTOFFLOW, &cutoff));
+    ok(19, !add_article(group, 8));
+
+    /* Emptying a group advances its low mark.  The first subsequent add
+     * must preserve that cutoff too, not replace it with its own number. */
+    ok(20, ovsqlite_cancel(group, 9) && ovsqlite_cancel(group, 10)
+               && ovsqlite_cancel(group, 20) && ovsqlite_cancel(group, 30));
+    ok(21, group_stats(group, 30, 29, 0));
+    ok(22, add_article(group, 50));
+    ok(23, add_article(group, 40));
+    ok(24, !add_article(group, 29));
+    ok(25, group_stats(group, 30, 50, 2));
+
+    /* Turning cutoff off sets the low mark kept as the cutoff to the lowest
+     * article, as ovsqlite-util -A expects. */
+    cutoff = false;
+    ok(26, OVctl(OVCUTOFFLOW, &cutoff));
+    ok(27, group_stats(group, 40, 50, 2));
+
+    /* Without cutoff, the first article still sets the actual low mark. */
+    ok(28, OVgroupadd(uncut, 10, 100, flag));
+    ok(29, add_article(uncut, 30));
+    ok(30, group_stats(uncut, 30, 30, 1));
+    ok(31, add_article(uncut, 20));
+    ok(32, group_stats(uncut, 20, 30, 2));
+    ok(33, add_article(uncut, 9));
+    ok(34, group_stats(uncut, 9, 30, 3));
+
+    /* A disconnect keeps the low mark kept as the cutoff, since
+     * makehistory -F adds each batch of articles over a new connection. */
+    cutoff = true;
+    ok(35, OVctl(OVCUTOFFLOW, &cutoff));
+    ok(36, OVgroupadd(closed, 10, 100, flag));
+    ok(37, add_article(closed, 30));
+    ok(38, add_article(closed, 20));
+    ok(39, group_stats(closed, 10, 30, 2));
+    OVclose();
+    ok(40, OVopen(OV_READ | OV_WRITE));
+    ok(41, group_stats(closed, 10, 30, 2));
+
+    /* Cutoff is per connection, and defaults to disabled on reconnect. */
+    ok(42, add_article(uncut, 8));
+    ok(43, group_stats(uncut, 8, 30, 4));
+
+    /* Disabling cutoff on a new connection, as makehistory -F does at the
+     * end, also sets the low mark to the lowest article. */
+    cutoff = false;
+    ok(44, OVctl(OVCUTOFFLOW, &cutoff));
+    ok(45, group_stats(closed, 20, 30, 2));
+    OVclose();
+    return 0;
+}
+
 int
-main(void)
+main(int argc, char *argv[])
 {
     FILE *f;
     char buffer[4096];
@@ -59,6 +165,9 @@ main(void)
     int narticles = 0;
     int i;
     bool seen;
+
+    if (argc == 2 && strcmp(argv[1], "--cutoff") == 0)
+        return cutoff_test();
 
     test_init(3);
 

@@ -1022,12 +1022,22 @@ do_hello(client_t *client)
     failhandling;
 }
 
+/*
+ * While cutoff is enabled, adding the first article to a group keeps the low
+ * water mark from active as the cutoff (see update_groupinfo_add), so it can
+ * stay below the lowest article.  makehistory -I disables cutoff once all
+ * articles are added; then set such low water marks to the lowest article.
+ * A disconnect does not do it: makehistory -F adds each batch of articles
+ * over a new connection.  This checks every group, so makehistory disables
+ * cutoff only to finish -I, not when it opens a connection (cutoff is off
+ * then anyway).
+ */
 static void
 do_set_cutofflow(client_t *client)
 {
     buffer_t *reqbuf;
     uint8_t cutofflow;
-    failvar;
+    failvar_stmt;
 
     reqbuf = client->request;
     if (!unpack_now(reqbuf, &cutofflow, sizeof cutofflow))
@@ -1035,11 +1045,21 @@ do_set_cutofflow(client_t *client)
     if (!finish_request(client))
         fail(response_bad_request);
 
+    if (!cutofflow) {
+        begin_transaction();
+        stmt = sql_main.update_groupinfo_low_after_cutoff;
+        status = sqlite3_step(stmt);
+        if (status != SQLITE_DONE)
+            fail_stmt();
+        transaction_rowcount += sqlite3_changes(connection);
+        resetclear(stmt);
+        stmt = NULL;
+    }
     client->cutofflow = cutofflow;
     simple_response(client, response_ok);
     return;
 
-    failhandling;
+    failhandling_stmt;
 }
 
 static void
@@ -1450,6 +1470,7 @@ do_add_article(client_t *client)
     stmt = sql_main.update_groupinfo_add;
     sqlite3_bind_int64(stmt, 1, groupid);
     sqlite3_bind_int64(stmt, 2, artnum);
+    sqlite3_bind_int(stmt, 3, client->cutofflow);
     status = sqlite3_step(stmt);
     if (status != SQLITE_DONE)
         fail_stmt();
