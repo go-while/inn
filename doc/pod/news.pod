@@ -51,6 +51,12 @@ L<Upgrading from 2.6 to 2.7>.
 
 =item *
 
+The new I<compressformat> setting in F<inn.conf> selects the compressor and
+options for logs rotated by B<scanlogs>.  Existing archives continue to age
+under their original suffix when the method changes.
+
+=item *
+
 A new history storage method based on SQLite has been added, named
 C<hissqlite>, selectable instead of C<hisv6> via the I<hismethod>
 parameter in F<inn.conf> when INN is built with SQLite support.  The

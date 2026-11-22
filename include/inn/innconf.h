@@ -189,6 +189,7 @@ struct innconf {
         incominglogfrequency; /* Checkpoint log after this many articles */
     bool logartsize;          /* Log article sizes? */
     bool logcancelcomm;       /* Log ctlinnd cancel commands to syslog? */
+    char *compressformat;     /* Compressor and options for archived logs */
     unsigned long logcycles;  /* How many old logs scanlogs should keep */
     bool logipaddr;           /* Log by host IP address? */
     bool logsitename;         /* Log outgoing site names? */

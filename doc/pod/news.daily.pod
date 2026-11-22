@@ -182,7 +182,9 @@ is used.
 =item B<nologs>
 
 After expiration, B<scanlogs> is invoked to process the log files.  Using this
-keyword disables all log processing functions.
+keyword disables all log processing functions.  For rotated logs,
+B<scanlogs> uses I<compressformat> in F<inn.conf> or the default from
+B<--with-log-compress> at build time.
 
 =item B<nomail>
 
