@@ -1028,7 +1028,9 @@ do_hello(client_t *client)
  * stay below the lowest article.  makehistory -I disables cutoff once all
  * articles are added; then set such low water marks to the lowest article.
  * A disconnect does not do it: makehistory -F adds each batch of articles
- * over a new connection.
+ * over a new connection.  This checks every group, so makehistory disables
+ * cutoff only to finish -I, not when it opens a connection (cutoff is off
+ * then anyway).
  */
 static void
 do_set_cutofflow(client_t *client)

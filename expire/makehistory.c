@@ -200,7 +200,10 @@ FlushOverTmpFile(void)
             OVclose();
             _exit(1);
         }
-        if (!OVctl(OVCUTOFFLOW, (void *) &Cutofflow)) {
+        /* The cutoff is off when the overview is opened.  Only enable it:
+           disabling it makes ovsqlite check the low water marks of all
+           groups, which must be done once at the end, not for each batch. */
+        if (Cutofflow && !OVctl(OVCUTOFFLOW, (void *) &Cutofflow)) {
             warn("cannot obtain overview cutoff information");
             OVclose();
             _exit(1);
@@ -1007,7 +1010,8 @@ main(int argc, char **argv)
         if (!OVctl(OVSORT, (void *) &sorttype))
             die("cannot obtain overview sort information");
         if (!Fork) {
-            if (!OVctl(OVCUTOFFLOW, (void *) &Cutofflow))
+            /* As in FlushOverTmpFile, only enable the cutoff. */
+            if (Cutofflow && !OVctl(OVCUTOFFLOW, (void *) &Cutofflow))
                 die("cannot obtain overview cutoff information");
             OverAddAllNewsgroups();
         } else {
