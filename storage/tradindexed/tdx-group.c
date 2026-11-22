@@ -1588,8 +1588,8 @@ tdx_index_audit(bool fix)
         return;
     }
     if (expected != st.st_size) {
-        syswarn("tradindexed: %lu bytes of trailing trash in %s",
-                (unsigned long) (st.st_size - expected), index->path);
+        warn("tradindexed: %lu bytes of trailing trash in %s",
+             (unsigned long) (st.st_size - expected), index->path);
         if (fix)
             if (ftruncate(index->fd, expected) < 0)
                 syswarn("tradindexed: cannot truncate %s", index->path);
