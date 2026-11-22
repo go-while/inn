@@ -296,6 +296,11 @@ the line:
 
 is equivalent to the previous one.
 
+The value of a variable can use the variable itself, to extend its previous
+value:
+
+    $LOCALGROUPS=$LOCALGROUPS,example.*
+
 Once the variables it uses are replaced by their values, the value of a
 variable or an entry can be at most 1048576 bytes (S<1 MB>) long.
 A longer one is a syntax error: B<innd> logs it as C<bad_newsfeeds> and

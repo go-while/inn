@@ -738,6 +738,12 @@ sub newsfeeds {
     my %variables;
     my $defsub = '';
 
+    ##  The value of a variable, or the reference itself if it is unknown.
+    my $expand_variable = sub {
+        my ($name) = @_;
+        return exists($variables{$name}) ? $variables{$name} : "\$$name";
+    };
+
   INPUTNEWSFEEDS:
     while (<$IN>) {
         $line++;
@@ -759,18 +765,20 @@ sub newsfeeds {
         eprint "$file:$line: ends with whitespace\n"
           if /\s+$/;
 
-        ##  Substitute variables.
-        for my $key (keys %variables) {
-            s/\$$key\b/$variables{$key}/;
-        }
-
-        ##  Catch a variable setting.
+        ##  Catch a variable setting, like innd does before any substitution:
+        ##  the variables used in its value are replaced by their previous
+        ##  values, which makes $VAR=$VAR,other.* extend the variable.
         if (/^\$([A-Za-z0-9]+)=(.*)$/) {
+            my ($name, $value) = ($1, $2);
             eprint "$file:$line: variable name too long\n"
-              if length($1) > 31;
-            $variables{$1} = $2;
+              if length($name) > 31;
+            $value =~ s/\$([A-Za-z0-9]+)/$expand_variable->($1)/ge;
+            $variables{$name} = $value;
             next INPUTNEWSFEEDS;
         }
+
+        ##  Substitute variables.
+        s/\$([A-Za-z0-9]+)/$expand_variable->($1)/ge;
 
         unless (($site, $pats, $flags, $param)
             = /^([^:]+):([^:]*):([^:]*):(.*)$/)
