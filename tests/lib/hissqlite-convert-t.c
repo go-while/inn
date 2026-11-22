@@ -12,8 +12,9 @@
 **  time to the same destination, exactly one publishes a complete database.
 **  A test hook of the binary (INN_TESTSUITE and HISSQLITE_CONVERT_TEST) makes
 **  a destination appear just before the publication, publishes it the way a
-**  retransmitted NFS link would, or holds the conversion so that SIGTERM can
-**  be checked to remove the temporary directory.
+**  retransmitted NFS link would, makes it a symbolic link to the new
+**  database, or holds the conversion so that SIGTERM can be checked to remove
+**  the temporary directory.
 **
 **  This drives the real binary (via system()) rather than the library, so it
 **  needs inn.conf: a minimal one is written to the temp dir and pointed at
@@ -164,7 +165,7 @@ main(void)
     if (access(convert, X_OK) != 0)
         skip_all("hissqlite-convert not built");
 
-    test_init(19);
+    test_init(21);
 
     strlcpy(tmpdir, "hissqlite-conv-XXXXXX", sizeof(tmpdir));
     if (mkdtemp(tmpdir) == NULL)
@@ -410,6 +411,20 @@ main(void)
                    && access(dst6, F_OK) != 0);
         if (count_entries(tmpdir, "hisconv.", NULL) != 0)
             diag("temporary directory left after SIGTERM");
+    }
+
+    /* A symbolic link to the new database at the destination is not taken
+       for our own hard link: the conversion fails and leaves it alone. */
+    if (setenv("HISSQLITE_CONVERT_TEST", "symlink", 1) != 0)
+        sysbail("can't set HISSQLITE_CONVERT_TEST");
+    {
+        char dst7[128], dst7db[160];
+
+        snprintf(dst7, sizeof(dst7), "%s/dst7", tmpdir);
+        snprintf(dst7db, sizeof(dst7db), "%s/dst7.sqlite", tmpdir);
+        ok(20, run_convert(src, dst7) != 0);
+        ok(21, lstat(dst7db, &sb) == 0 && S_ISLNK(sb.st_mode)
+                   && count_entries(tmpdir, "hisconv.", NULL) == 0);
     }
     setenv("HISSQLITE_CONVERT_TEST", "", 1);
 

@@ -105,7 +105,10 @@ signal_cleanup(int sig)
 **  Create a directory of our own in the directory of dstpath, named
 **  hisconv.PID.N (short, whatever the length of the name of dstpath), and set
 **  tempdir, tempdb and tempfiles.  mkdir fails if the directory exists, so
-**  another conversion, running or failed, never shares it.
+**  another conversion, running or failed, never shares it.  The paths are
+**  prepared first, and the signals the handler catches are blocked from the
+**  creation of the directory until it is marked active, so that a signal
+**  cannot leave it behind.
 */
 static void
 make_temp(const char *dstpath)
@@ -115,6 +118,8 @@ make_temp(const char *dstpath)
     char *dir;
     unsigned int n;
     size_t i;
+    sigset_t block, saved;
+    int status, oerrno;
 
     xsignal(SIGHUP, signal_cleanup);
     xsignal(SIGINT, signal_cleanup);
@@ -126,21 +131,35 @@ make_temp(const char *dstpath)
         dir = xstrdup("/");
     else
         dir = xstrndup(dstpath, slash - dstpath);
+    sigemptyset(&block);
+    sigaddset(&block, SIGHUP);
+    sigaddset(&block, SIGINT);
+    sigaddset(&block, SIGTERM);
     for (n = 0;; n++) {
         snprintf(name, sizeof(name), "hisconv.%lu.%u",
                  (unsigned long) getpid(), n);
         tempdir = concatpath(dir, name);
-        if (mkdir(tempdir, 0700) == 0)
+        tempdb = concatpath(tempdir, "history.sqlite");
+        for (i = 0; i < ARRAY_SIZE(tempfiles); i++)
+            tempfiles[i] = concat(tempdb, sqlite_suffixes[i], (char *) NULL);
+        sigprocmask(SIG_BLOCK, &block, &saved);
+        status = mkdir(tempdir, 0700);
+        oerrno = errno;
+        if (status == 0)
+            temp_active = 1;
+        sigprocmask(SIG_SETMASK, &saved, NULL);
+        if (status == 0)
             break;
-        if (errno != EEXIST || n >= 100)
+        if (oerrno != EEXIST || n >= 100) {
+            errno = oerrno;
             sysdie("cannot create temporary directory %s", tempdir);
+        }
         free(tempdir);
+        free(tempdb);
+        for (i = 0; i < ARRAY_SIZE(tempfiles); i++)
+            free(tempfiles[i]);
     }
     free(dir);
-    tempdb = concatpath(tempdir, "history.sqlite");
-    for (i = 0; i < ARRAY_SIZE(tempfiles); i++)
-        tempfiles[i] = concat(tempdb, sqlite_suffixes[i], (char *) NULL);
-    temp_active = 1;
     message_fatal_cleanup = fatal_cleanup;
 }
 
@@ -149,8 +168,8 @@ make_temp(const char *dstpath)
 **  HISSQLITE_CONVERT_TEST, act just before the publication as if something
 **  else had meanwhile.  "file" creates the destination (another conversion,
 **  or innd), "link" publishes the database already (as a link request
-**  retransmitted over NFS would have), "wait" sleeps to let a test send a
-**  signal.
+**  retransmitted over NFS would have), "symlink" makes the destination a
+**  symbolic link to the database, "wait" sleeps to let a test send a signal.
 */
 static void
 test_hook(const char *finaldb)
@@ -168,6 +187,9 @@ test_hook(const char *finaldb)
     } else if (strcmp(what, "link") == 0) {
         if (link(tempdb, finaldb) != 0)
             syswarn("test hook: cannot link %s", finaldb);
+    } else if (strcmp(what, "symlink") == 0) {
+        if (symlink(tempdb, finaldb) != 0)
+            syswarn("test hook: cannot create symbolic link %s", finaldb);
     } else if (strcmp(what, "wait") == 0) {
         sleep(60);
     }
@@ -339,7 +361,8 @@ main(int argc, char *argv[])
        if the name exists, so the file system of the destination must support
        hard links.  Over NFS, a retransmitted link request can fail with
        EEXIST although the first one succeeded: the destination is then our
-       database, as the same inode tells. */
+       database, as the same inode tells.  lstat, so that a symbolic link to
+       our database is not taken for it. */
     test_hook(finaldb);
     if (link(tempdb, finaldb) != 0) {
         struct stat tsb;
@@ -351,8 +374,9 @@ main(int argc, char *argv[])
                    " must support hard links)",
                    tempdb, finaldb);
         }
-        if (stat(tempdb, &tsb) != 0 || stat(finaldb, &sb) != 0
-            || tsb.st_dev != sb.st_dev || tsb.st_ino != sb.st_ino)
+        if (stat(tempdb, &tsb) != 0 || lstat(finaldb, &sb) != 0
+            || !S_ISREG(sb.st_mode) || tsb.st_dev != sb.st_dev
+            || tsb.st_ino != sb.st_ino)
             die("destination %s was created during the conversion; refusing"
                 " to overwrite",
                 finaldb);
