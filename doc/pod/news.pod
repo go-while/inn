@@ -133,6 +133,16 @@ files behind after a failed creation, and the buffindexed overview method
 validates its F<group.index> file and no longer frees memory twice when
 mapping overview data fails.  Many thanks to Kevin Bowling for the patches.
 
+=item *
+
+B<expire> no longer removes the storage token of an article from the
+history database when it cannot check whether the article still exists for
+another reason than its absence, for instance a permission problem or an
+I/O error on the spool.  Such an article could no longer be retrieved by its
+Message-ID, even after the spool was readable again.  The history entry is
+now kept and checked again during the next run, and B<expire> reports how
+many articles it could not check.
+
 =back
 
 =head1 Changes in 2.7.5 (not yet released)

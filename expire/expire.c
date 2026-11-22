@@ -53,6 +53,7 @@ static long EXPunlinked;
 static long EXPtombstoned;
 static long EXPallgone;
 static long EXPstillhere;
+static long EXPunchecked;
 static struct history *History;
 static char *NHistory;
 
@@ -584,7 +585,22 @@ EXPdoline(void *cookie, time_t arrived, time_t posted, time_t expires,
         } else if ((article = SMretrieve(*token, RETR_STAT))
                    == (ARTHANDLE *) NULL) {
             HasSelfexpire = true;
-            Selfexpired = true;
+            /* Only a confirmed absence (or a token of a storage method no
+               longer configured) means the article is gone.  Any other
+               error (a permission problem, an I/O error, an unreachable
+               NFS server) says nothing about the article: keep its token
+               so that the next run checks it again, instead of losing the
+               only way to find a stored article by its Message-ID. */
+            if (SMerrno == SMERR_NOENT || SMerrno == SMERR_UNINIT
+                || token->type == TOKEN_EMPTY) {
+                Selfexpired = true;
+            } else {
+                Selfexpired = false;
+                if (EXPunchecked++ == 0)
+                    warn("cannot check whether %s still exists, keeping it:"
+                         " %s",
+                         TokenToText(*token), SMerrorstr);
+            }
         } else {
             /* The article is still alive, free it. */
             SMfreearticle(article);
@@ -668,6 +684,8 @@ CleanupAndExit(bool Server, bool Paused, int x)
             printf("Articles dropped        %8ld\n", EXPunlinked);
         if (innconf->expiretombstone && innconf->groupbaseexpiry)
             printf("Tombstone hits          %8ld\n", EXPtombstoned);
+        if (EXPunchecked > 0)
+            printf("Articles not checked    %8ld\n", EXPunchecked);
     }
 
     /* Append statistics to a summary file */
@@ -979,6 +997,10 @@ main(int ac, char *av[])
 
         if (tombstone != NULL)
             hash_free(tombstone);
+        if (EXPunchecked > 0)
+            warn("kept %ld articles whose existence could not be checked;"
+                 " their history entries are checked again next run",
+                 EXPunchecked);
 
         /* On a successful real run, unlink both consumed snapshots
            and seed header-only successors.  Dry-run / tracing /
