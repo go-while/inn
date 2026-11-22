@@ -810,6 +810,18 @@ main(int ac, char *av[])
         syslog(LOG_NOTICE, "SERVER renumbering");
         if (!ICDrenumberactive())
             die("SERVER cant renumber");
+
+        /* The renumbering that makehistory asked for when it rebuilt the
+         * overview is done:  forget its marker.  rc.news leaves it in place
+         * so that it is not lost when innd fails to start.  Without overview,
+         * nothing has been renumbered, and the marker is still needed once
+         * overview is enabled again. */
+        if (innconf->enableoverview) {
+            path = concatpath(innconf->pathrun, INN_PATH_REBUILDOVERVIEW);
+            if (unlink(path) < 0 && errno != ENOENT)
+                syswarn("SERVER cant unlink %s", path);
+            free(path);
+        }
     }
 
     syslog(LOG_NOTICE, "SERVER starting");
