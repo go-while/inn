@@ -101,6 +101,14 @@ The newsmaster's e-mail address mentioned in the help message returned
 by B<nnrpd> now uses I<fromhost> (set in F<inn.conf> or overridden in
 F<readers.conf>) as the default domain name instead of I<domain>.
 
+=item *
+
+Fixed B<archive> removing its input file, and so forgetting the articles that
+it could not write to the archive, for instance when the file system was full.
+The tokens of these articles are now kept in the file, which is read again by
+the next run, and B<archive> exits with a non-zero status.  The input file is
+also left unchanged when its replacement cannot be written completely.
+
 =back
 
 =item *

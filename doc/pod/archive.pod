@@ -95,15 +95,23 @@ suppress this redirection, use the B<-r> flag.
 
 =head1 RETURN VALUE
 
-If the input is exhausted, B<archive> will exit with a zero status.  If an
-I/O error occurs, it will try to spool its input, copying it to a file.
-If there was no input filename, the standard input will be copied to
-I<pathoutgoing>/archive and the program will exit.  If an input filename
+If the input is exhausted and all the articles have been archived,
+B<archive> will exit with a zero status.  If an I/O error occurs when reading
+the input, it will try to spool its input, copying it to a file.  The same
+file receives the token of each article which could not be written to all its
+destination files in the archive (for instance because the archive file system
+is full), and B<archive> then exits with a non-zero status.
+If there was no input filename, the spool file is I<pathoutgoing>/archive and
+the program will exit.  If an input filename
 was given, a temporary file named I<input>.bch (if I<input> is an absolute
 pathname) or I<pathoutgoing>/I<input>.bch (if the filename does not begin
 with a slash) is created.  Once the input is copied, B<archive> will try
-to rename this temporary file to be the name of the input file, and then
-exit.
+to rename this temporary file to be the name of the input file, if it was
+written completely, and then exit.  The articles which were not archived are
+therefore tried again with the next run on the same file.  All the
+destination files of such an article are written again; with B<-c>, an article
+is then appended a second time to the destination files that had received it
+the first time.
 
 =head1 EXAMPLES
 
