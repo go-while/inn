@@ -14,6 +14,8 @@
 use strict;
 use warnings;
 
+use File::Basename qw(basename dirname);
+use File::Temp qw(tempfile);
 use Getopt::Long;
 use Storable;
 
@@ -44,23 +46,69 @@ if (!$buffered) {
 }
 
 my @queue;
+
+# Move a store which cannot be read back aside, without replacing an earlier
+# one moved aside:  the first free name among file.bad, file.bad.1, etc.
+# link() does not replace an existing file.  Returns the new name, or undef
+# if the file could not be moved (it is then left in place).
+sub keep_aside {
+    my ($file) = @_;
+
+    for my $n (0 .. 99) {
+        my $bad = $n ? "$file.bad.$n" : "$file.bad";
+        next if -e $bad;
+        if (link($file, $bad)) {
+            return $bad if unlink($file);
+            unlink($bad);
+            return;
+        }
+        return if !$!{EEXIST};
+    }
+    return;
+}
+
+# Save the queue to the store, through a new file created in the same
+# directory and renamed, so that an interrupted save leaves no truncated
+# store and no other file is overwritten.  Returns true on success.
+sub save_queue {
+    my ($fh, $tmp);
+
+    my $saved = eval {
+        ($fh, $tmp)
+          = tempfile(basename($store) . '.XXXXXX', DIR => dirname($store));
+        chmod(0666 & ~umask(), $tmp);
+        Storable::store_fd(\@queue, $fh) or die "cannot write $tmp\n";
+        close($fh) or die "cannot write $tmp: $!\n";
+        rename($tmp, $store) or die "cannot rename $tmp to $store: $!\n";
+        1;
+    };
+    return 1 if $saved;
+    warn "$0: cannot save the queue to $store: $@";
+    unlink($tmp) if defined $tmp;
+    return 0;
+}
+
+my $restored = 0;
 if ($store && -e $store) {
     my $saved = eval { retrieve($store) };
     if (ref($saved) eq 'ARRAY') {
+        # The store is kept until the next save replaces it, or until its
+        # lines have been written out, so that they are not lost if delayer
+        # dies in between (they may then be sent twice).
         @queue = @{$saved};
-        unlink($store)
-          or warn "$0: cannot remove $store: $!\n";
+        $restored = 1;
     } else {
         # Do not remove a store which cannot be read back: it may be the only
         # copy of the queued lines.  Keep it aside so that the next save does
         # not overwrite it either.
         my $error = $@ || "not a saved queue\n";
-        if (rename($store, "$store.bad")) {
-            warn "$0: cannot restore the queue from $store, kept as"
-              . " $store.bad: $error";
+        my $bad = keep_aside($store);
+        if (defined($bad)) {
+            warn "$0: cannot restore the queue from $store, kept as $bad:"
+              . " $error";
         } else {
             warn "$0: cannot restore the queue from $store: $error"
-              . "$0: cannot rename it to $store.bad ($!), not using it\n";
+              . "$0: cannot move it aside, not using it\n";
             undef $store;
         }
     }
@@ -78,24 +126,28 @@ while (1) {
     if (vec($rout, fileno(STDIN), 1)) {
         my $line = <STDIN>;
         if (!defined $line) {    # exit NOW!
+            my $fallback = 0;
             if ($store) {
-                # Write a new file and rename it, so that an interrupted
-                # save does not leave a truncated store behind.
-                if (eval { store(\@queue, "$store.new") }
-                    && rename("$store.new", $store))
-                {
-                    exit;
-                }
-                warn "$0: cannot save the queue to $store: "
-                  . ($@ || "$!\n")
-                  . "$0: writing out the queued lines now\n";
-                unlink("$store.new");
+                exit if save_queue();
+                warn "$0: writing out the queued lines now\n";
+                $fallback = 1;
+                # Report a failed write instead of dying of SIGPIPE.
+                $SIG{PIPE} = 'IGNORE';
             }
+            my $written = 1;
             foreach (@queue) {
                 s/^[^:]+://g;
-                print OUT;
+                print(OUT $_) or $written = 0;
             }
-            close(OUT);
+            close(OUT) or $written = 0;
+            if ($fallback) {
+                if (!$written) {
+                    warn "$0: cannot write out the queued lines: "
+                      . ($! ? "$!" : "exit status $?") . "\n";
+                    exit 1;
+                }
+                unlink($store) if $restored;
+            }
             sleep(1);
             exit;
         }
@@ -259,11 +311,16 @@ the configured delay has not been reached yet.
 When this flag is used, these lines will be written to the given file instead,
 to be used upon next startup.  Using an absolute path name is recommended.
 
-If the lines cannot be written to that file (for instance because the disk
-is full), they are written out as without this flag, and an error is
-reported on standard error.  If the file cannot be read back upon startup, it
-is renamed with a F<.bad> suffix and an error is reported, so that the lines
-it holds are not lost.
+The file is written under a temporary name in the same directory and then
+renamed, and the file read upon startup is only replaced by the next save,
+so that an interruption does not lose the lines (they may then be sent
+twice).  If the lines cannot be written to that file (for instance because
+the disk is full), they are written out as without this flag, and an error is
+reported on standard error; if writing them out fails too, an error is
+reported and B<delayer> exits with status 1.  If the file cannot be read back
+upon startup, it is renamed with a F<.bad> suffix (or F<.bad.1>, F<.bad.2>,
+etc. if that name is already taken) and an error is reported, so that the
+lines it holds are not lost.
 
 =item B<--> I<some-other-program> [I<args> ...]
 

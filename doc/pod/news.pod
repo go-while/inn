@@ -135,12 +135,14 @@ mapping overview data fails.  Many thanks to Kevin Bowling for the patches.
 
 =item *
 
-B<delayer> run with B<--store> no longer loses the lines it has queued when
-it cannot save them (for instance because the disk is full): they are then
-written out, as without B<--store>, and an error is reported.  A file it
-cannot read back upon startup is no longer removed but renamed with a
-F<.bad> suffix, and the file is now written under a temporary name first so
-that an interrupted save does not leave a truncated file.
+B<delayer> run with B<--store> no longer silently loses the lines it has
+queued when it cannot save them (for instance because the disk is full):
+they are then written out, as without B<--store>, and an error is reported;
+if that fails too, an error is reported and B<delayer> exits with status 1.
+A file it cannot read back upon startup is no longer removed but renamed with
+a F<.bad> suffix, without replacing an earlier one.  The file is now written
+under a temporary name first, so that an interrupted save does not leave a
+truncated file, and the file read upon startup is kept until the next save.
 
 =back
 
