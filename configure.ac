@@ -249,12 +249,11 @@ inn_enable_tagged_hash=no
 AC_ARG_ENABLE([tagged-hash],
     [AS_HELP_STRING([--enable-tagged-hash],
         [Use tagged hash table for hisv6 history])],
-    [if test "x$enableval" = xyes ; then
-        DO_DBZ_TAGGED_HASH=DO
-        inn_enable_tagged_hash=yes
-        AC_DEFINE([DO_TAGGED_HASH], [1],
-            [Define to use tagged hash for the hisv6 history file.])
-    fi])
+    [AS_IF([test "x$enableval" = xyes],
+        [DO_DBZ_TAGGED_HASH=DO
+         inn_enable_tagged_hash=yes
+         AC_DEFINE([DO_TAGGED_HASH], [1],
+             [Define to use tagged hash for the hisv6 history file.])])])
 AC_SUBST([DO_DBZ_TAGGED_HASH])
 
 dnl Whether to enable the keyword generation code in innd.  Use of this code
@@ -276,13 +275,9 @@ inn_enable_largefiles=no
 AC_ARG_ENABLE([largefiles],
     [AS_HELP_STRING([--enable-largefiles],
         [Support for files larger than 2GB @<:@default=no@:>@])],
-    if test x"$enableval" = xyes ; then
-        inn_enable_largefiles=yes
-    fi)
-if test x"$inn_enable_tagged_hash" = xyes \
-   && test x"$inn_enable_largefiles" = xyes ; then
-    AC_MSG_ERROR([--enable-tagged-hash conflicts with --enable-largefiles.])
-fi
+    [AS_IF([test x"$enableval" = xyes], [inn_enable_largefiles=yes])])
+AS_IF([test x"$inn_enable_tagged_hash" = xyes && test x"$inn_enable_largefiles" = xyes],
+    [AC_MSG_ERROR([--enable-tagged-hash conflicts with --enable-largefiles.])])
 
 dnl Checks for a recent enough Perl interpreter.
 dnl Embedded Perl requires 5.004.  Use of the three-arg open and the our
@@ -384,47 +379,30 @@ AC_PROG_YACC
 
 dnl On Mac OS X Server, -traditional-cpp is needed for gcc for compiling as
 dnl well as preprocessing according to Miro Jurisic <meeroh@meeroh.org>.
-case "$CPP" in
-*-traditional-cpp*)
-    CFLAGS="-traditional-cpp ${CFLAGS}"
-    CC_WARNINGS="-traditional-cpp ${CC_WARNINGS}"
-    ;;
-esac
+AS_CASE([$CPP], [*-traditional-cpp*],
+    [CFLAGS="-traditional-cpp ${CFLAGS}"
+     CC_WARNINGS="-traditional-cpp ${CC_WARNINGS}"])
 
-case "$host" in
-
-dnl When building on Linux, we need to compile with _GNU_SOURCE to get the
-dnl right definitions of pread and pwrite and to get some other functions
-dnl (like asprintf) that we use.
-*linux*)
-    AC_DEFINE([_GNU_SOURCE], [1],
-        [Define if compiling on Linux to get prototypes for some functions.])
-    ;;
-
-dnl Detect BSD/OS for later use in nnrpd code.
-*-bsdi*)
-    AC_DEFINE([INN_BSDI_HOST], [1],
-        [Define if compiling on BSD/OS systems.])
-    ;;
-
-dnl HP-UX's native compiler needs a special flag to turn on ANSI, and needs
-dnl -g on link as well as compile for debugging to work.
-*hpux*)
-    if test x"$GCC" != xyes ; then
-        CFLAGS="${CFLAGS} -Ae"
-        CC_WARNINGS="${CC_WARNINGS} -Ae"
-        case "$CFLAGS" in
-        *-g*) LDFLAGS="$LDFLAGS -g" ;;
-        esac
-    fi
-    ;;
-
-dnl Mac OS X needed "-multiply_defined suppress" before this linker flag became
-dnl obsolete (darwin13 is Mavericks, OS X 10.9).
-*-darwin[[0-9]].*|*-darwin1[[0-2]].*)
-    LDFLAGS="$LDFLAGS -multiply_defined suppress"
-    ;;
-esac
+AS_CASE([$host],
+    dnl On Linux, _GNU_SOURCE supplies declarations for pread, pwrite and
+    dnl other functions such as asprintf.
+    [*linux*],
+    [AC_DEFINE([_GNU_SOURCE], [1],
+        [Define if compiling on Linux to get prototypes for some functions.])],
+    dnl Detect BSD/OS for later use in nnrpd code.
+    [*-bsdi*],
+    [AC_DEFINE([INN_BSDI_HOST], [1],
+        [Define if compiling on BSD/OS systems.])],
+    dnl HP-UX's native compiler needs ANSI mode and -g when linking a
+    dnl debug build.
+    [*hpux*],
+    [AS_IF([test x"$GCC" != xyes],
+        [CFLAGS="${CFLAGS} -Ae"
+         CC_WARNINGS="${CC_WARNINGS} -Ae"
+         AS_CASE([$CFLAGS], [*-g*], [LDFLAGS="$LDFLAGS -g"])])],
+    dnl macOS used this linker flag before Mavericks (Darwin 13).
+    [*-darwin@<:@0-9@:>@.*|*-darwin1@<:@0-2@:>@.*],
+    [LDFLAGS="$LDFLAGS -multiply_defined suppress"])
 
 dnl Whether to add hardening flags to the build.  Ideally, this should just
 dnl always be turned on wherever possible, but depending on the compiler and
@@ -470,9 +448,8 @@ AC_ARG_VAR([PGP], [Location of PGP verification program])
 AC_PATH_PROGS([GPGV], [gpgv1 gpgv gpgv2])
 AC_PATH_PROGS([GPG], [gpg1 gpg gpg2])
 AC_PATH_PROGS([PGP], [pgpv pgp pgpgpg])
-if test -z "$PGP" && test -z "$GPGV" && test -z "$GPG" ; then
-    DO_PGPVERIFY=false
-fi
+AS_IF([test -z "$PGP" && test -z "$GPGV" && test -z "$GPG"],
+    [DO_PGPVERIFY=false])
 AC_SUBST([DO_PGPVERIFY])
 
 GPG_HAS_ALLOW_WEAK_DIGEST_ALGOS_FLAG=0
@@ -532,10 +509,9 @@ dnl if one is found do we check for the library.
 inn_check_pam=1
 AC_CHECK_HEADERS([security/pam_appl.h], [],
     [AC_CHECK_HEADERS([pam/pam_appl.h], [], [inn_check_pam=0])])
-if test x"$inn_check_pam" = x1; then
-    INN_SEARCH_AUX_LIBS([pam_start], [pam], [PAM_LIBS],
-        [AC_DEFINE([HAVE_PAM], [1], [Define if you have PAM.])])
-fi
+AS_IF([test x"$inn_check_pam" = x1],
+    [INN_SEARCH_AUX_LIBS([pam_start], [pam], [PAM_LIBS],
+        [AC_DEFINE([HAVE_PAM], [1], [Define if you have PAM.])])])
 INN_HEADER_PAM_CONST
 
 dnl If keyword generation support was requested, check for the appropriate
@@ -586,10 +562,9 @@ AS_IF([test x"$inn_use_SQLITE3" = xtrue],
 
 dnl If configuring with large file support, determine the right flags to
 dnl use based on the platform.
-if test x"$inn_enable_largefiles" = xyes ; then
-    AC_SYS_LARGEFILE
-    AC_DEFINE([DO_LARGEFILES], [1], [Define to use large files.])
-fi
+AS_IF([test x"$inn_enable_largefiles" = xyes],
+    [AC_SYS_LARGEFILE
+     AC_DEFINE([DO_LARGEFILES], [1], [Define to use large files.])])
 
 dnl Special checks for header files.
 AC_HEADER_STDBOOL
@@ -724,14 +699,12 @@ dnl Probe for fseeko and ftello, which take off_t instead of int.
 dnl The logic in portable/system.h is based on the presence of fseeko,
 dnl and then for large file support, so keep that order here too.
 AC_FUNC_FSEEKO
-if test x"$inn_enable_largefiles" = xyes ; then
-    AC_CHECK_DECLS([fseeko, ftello])
-    if test x"$ac_cv_sys_largefile_source" = xunknown ; then
-        INN_TYPE_FPOS_T_LARGE
-        AC_LIBOBJ([fseeko])
-        AC_LIBOBJ([ftello])
-    fi
-fi
+AS_IF([test x"$inn_enable_largefiles" = xyes],
+    [AC_CHECK_DECLS([fseeko, ftello])
+     AS_IF([test x"$ac_cv_sys_largefile_source" = xunknown],
+         [INN_TYPE_FPOS_T_LARGE
+          AC_LIBOBJ([fseeko])
+          AC_LIBOBJ([ftello])])])
 
 dnl Probe for mmap properties.
 INN_FUNC_MMAP(
@@ -964,18 +937,15 @@ EOM
 
 dnl Write a warning for missing Perl modules at the end of the output.
 dnl $inn_perl_mod_warn already has a leading space.
-if test x"$inn_perl_mod_warn" != x ; then
-    echo "Missing Perl module(s): $inn_perl_mod_warn."
-    echo "You should install them for these programs to work fine."
-fi
+AS_IF([test x"$inn_perl_mod_warn" != x],
+    [echo "Missing Perl module(s): $inn_perl_mod_warn."
+     echo "You should install them for these programs to work fine."])
 
 dnl Finally, double-check the configured temporary directory.  Some people
 dnl point this at the system temporary directories or at other world-writeable
 dnl directories, which can be a local security hole.
-if $PERL -e "exit((stat('$PATH_TMP'))[[2]] & 2)" > /dev/null ; then
-    :
-else
-    cat <<EOM
+AS_IF([$PERL -e "exit((stat('$PATH_TMP'))[[2]] & 2)" > /dev/null], [],
+    [cat <<EOM
 
 WARNING WARNING WARNING WARNING WARNING WARNING WARNING WARNING WARNING WARNING
 
@@ -994,4 +964,4 @@ WARNING WARNING WARNING WARNING WARNING WARNING WARNING WARNING WARNING WARNING
   /usr or /.
 
 EOM
-fi
+])
