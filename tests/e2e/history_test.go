@@ -4,7 +4,9 @@ package e2e
 
 import (
 	"crypto/md5"
+	"errors"
 	"fmt"
+	"os/exec"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -105,5 +107,75 @@ func TestMakedbzMalformedHistory(t *testing.T) {
 	// The too-long line is skipped whole, not indexed.
 	if out, err := runFor(s, 20*time.Second, "grephistory", "-f", base, long); err == nil {
 		t.Errorf("grephistory finds %s of the skipped long line:\n%s", long, out)
+	}
+}
+
+// TestHistoryDbzBadTableSize: a .dir file of the dbz index whose table size cannot come from
+// INN (0, negative, or below the 65536 entries dbz always creates) is refused when the
+// history is opened: grephistory exits with an error naming the table size, and nnrpd
+// answers ARTICLE by Message-ID with 400 instead of crashing. dbz used to accept such a size
+// and, with the tables read from disk as for these programs, a size of 0 was a divisor in
+// the first lookup, so the program died of SIGFPE.
+func TestHistoryDbzBadTableSize(t *testing.T) {
+	s := NewSite(t, SiteOptions{})
+	ids := s.Inject(t, "e2e.test", 1)
+
+	// A copy of the history with a small dbz index (the site's has 10 million entries).
+	copyPath := filepath.Join(s.Dir, "db", "hist-size")
+	s.writeFile(t, "db/hist-size", s.ReadFile(t, "db/history"))
+	s.Run(t, "makedbz", "-f", copyPath, "-s", "100", "-o")
+	header, rest, _ := strings.Cut(s.ReadFile(t, "db/hist-size.dir"), "\n")
+	f := strings.Fields(header)
+	if len(f) < 4 || f[0] != "dbz" || f[1] != "6" {
+		t.Fatalf("db/hist-size.dir starts with %q, not a dbz 6 header", header)
+	}
+	withSize := func(size string) string {
+		g := slices.Clone(f)
+		g[2] = size
+		return strings.Join(g, " ") + "\n" + rest
+	}
+
+	// grephistory on the copy, with each bad size, then with the real one.
+	for _, size := range []string{"0", "-1", "1", "65535", f[2]} {
+		t.Run("grephistory size "+size, func(t *testing.T) {
+			s.writeFile(t, "db/hist-size.dir", withSize(size))
+			out, err := s.TryRun("grephistory", "-f", copyPath, ids[0])
+			t.Logf("grephistory with table size %s: %v\n%s", size, err, out)
+			var ee *exec.ExitError
+			if errors.As(err, &ee) && !ee.Exited() {
+				t.Fatalf("grephistory was killed by a signal: %v", err)
+			}
+			if size == f[2] {
+				if err != nil || !strings.HasPrefix(out, "@") {
+					t.Errorf("grephistory with the real table size: %v, %q", err, out)
+				}
+				return
+			}
+			if err == nil {
+				t.Errorf("grephistory exited 0 with table size %s", size)
+			}
+			if want := "bad table size (" + size + ")"; !strings.Contains(out, want) {
+				t.Errorf("grephistory does not say %q", want)
+			}
+		})
+	}
+
+	// nnrpd reads the site's history from disk when looking up a Message-ID.
+	dir := s.ReadFile(t, "db/history.dir")
+	sh, srest, _ := strings.Cut(dir, "\n")
+	sf := strings.Fields(sh)
+	if len(sf) < 4 {
+		t.Fatalf("db/history.dir starts with %q", sh)
+	}
+	sf[2] = "0"
+	s.writeFile(t, "db/history.dir", strings.Join(sf, " ")+"\n"+srest)
+	defer s.writeFile(t, "db/history.dir", dir)
+	c := s.Reader(t)
+	code, line, err := c.TryCmd("ARTICLE %s", ids[0])
+	if err != nil {
+		t.Fatalf("ARTICLE %s with table size 0: no reply (nnrpd crashed?): %v", ids[0], err)
+	}
+	if code != 400 {
+		t.Errorf("ARTICLE %s with table size 0: %q, want 400", ids[0], line)
 	}
 }
