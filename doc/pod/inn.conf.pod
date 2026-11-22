@@ -480,9 +480,9 @@ When a peer offers an article, B<innd> defers competing offers on other
 channels for this many seconds (436 for IHAVE or 431 for CHECK).  If
 I<resendid> is false in F<incoming.conf> for the peer making the competing
 offer, B<innd> refuses that offer instead.  While an article transfer is in
-progress, B<innd> can extend the interval based on transfer times on the
-original channel.  The default value is C<5> and probably doesn't need to
-be changed.
+progress, B<innd> can extend the interval by up to 300 seconds based on
+transfer times on the original channel.  The default value is C<5> and
+probably doesn't need to be changed.
 
 =item I<wipexpire>
 
@@ -580,11 +580,17 @@ default is true.
 Controls the Bloom filter used by B<expireover> to accelerate overview
 expiration.  The value is the reciprocal of the desired false positive
 rate: for example, C<10000> means a 1-in-10,000 (0.01%) false positive
-rate.  Values between supported settings are rounded up, and values above
-C<10000000> use that maximum.  At the default of C<10000>, the filter
-uses approximately 20 bits per estimated history entry.  The estimate
-is based on the size of the C<hisv6> history file or the space used in
-the C<hissqlite> database.
+rate.  Higher settings use more memory and yield fewer false positives.
+The supported settings are 10, 20, 50, 100, 200, 500, 1000, 2000, 5000,
+10000, 20000, 50000, 100000, 1000000 and 10000000.  Other positive
+values use the next higher setting, or the maximum if they exceed it.
+
+At the default of C<10000>, the filter normally uses 20 bits per
+estimated history entry (about S<48 MiB> for 20 million estimated
+entries or S<2.3 GiB> for one billion).  The minimum is 64 bits, and
+32-bit platforms cap the size at about S<256 MiB>.  The C<hisv6>
+estimate deliberately overcounts entries based on the history file
+size.  The C<hissqlite> estimate uses the space occupied in the database.
 
 Setting this to C<0> disables the Bloom filter entirely, falling back
 to per-article history lookups (the pre-existing behavior).  This is
@@ -1834,15 +1840,18 @@ you notice that some connection requests get dropped.
 =item I<nicekids>
 
 The default nice(2) increment for child processes spawned by innd(8).
+In daemon mode, nnrpd(8) also applies it in each connection child.
 This is usually used to give child processes a lower priority (higher nice
 value) so that innd(8) can get the lion's share of the CPU when it needs
-it.  The default value is C<4>.
+it.  A value of C<0> leaves the inherited priority unchanged.  The
+default value is C<4>.
 
 =item I<nicenewnews>
 
-The nice(2) increment that nnrpd(8) applies the first time it searches
-newsgroups for a NEWNEWS command.  This increment is cumulative with
-I<nicennrpd>.  The default value is C<0>.
+The nice(2) increment that nnrpd(8) applies once, before the first
+eligible NEWNEWS search.  It is cumulative with I<nicennrpd> and
+I<nicekids> when those increments apply.  The default value is C<0>,
+which leaves the priority unchanged.
 
 =item I<nicennrpd>
 
@@ -1850,8 +1859,10 @@ At startup, nnrpd(8) increases its inherited nice value by this amount.
 A positive value gives other news processes a higher priority and can
 help overchan(8) keep up with incoming news (if that's
 the object, be sure overchan(8) isn't also set to a lower priority via
-I<nicekids>).  This increment is cumulative with I<nicekids> for processes
-spawned by innd(8).  The default value is C<0>.
+I<nicekids>).  This increment is cumulative with I<nicekids> both when
+innd(8) starts the reader and when a daemon-mode reader forks a
+connection child.  The default value is C<0>, which leaves the startup
+priority unchanged.
 
 =item I<pauseretrytime>
 

@@ -298,12 +298,12 @@ whitespace.  The valid flags are:
 =item B<E<lt>> I<size>
 
 An article will only be sent to this site if it is at most I<size> bytes
-long.  The default is no limit.
+long.  A size of C<0> disables this test.  The default is no limit.
 
 =item B<E<gt>> I<size>
 
 An article will only be sent to this site if it is at least I<size>
-bytes long.  The default is no limit.
+bytes long.  A size of C<0> disables this test.  The default is no limit.
 
 =item B<A> I<checks>
 
