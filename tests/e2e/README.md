@@ -57,6 +57,8 @@ needs the Go standard library:
 | `TestInnfeedStreaming` | innd, innfeed | new articles reach the peer through innfeed |
 | `TestInnfeedIHAVEFallback` | innd, innfeed | innfeed falls back to IHAVE |
 | `TestInnfeedDebugSnapshotFiles` | innd, innfeed, inncheck | innfeed.conf's debug-file turns on debugging and SIGINT writes the snapshot to snapshot-file (issue #315) |
+| `TestStatusHead` | innd, ctlinnd | innd's HTML status report starts its `<head>` with `pathetc/inn_status.head` when it is readable and at most 64 KiB, before the built-in refresh and title; with no file, an unreadable one or a larger one only the built-in header, and an oversized file is warned about once in syslog (#41) |
+| `TestInnfeedStatusHead` | innd, innfeed | innfeed's HTML status file (`gen-html`) starts its `<head>` with the same file, and skips one larger than 64 KiB (#41) |
 | `TestGetlist` | getlist | LIST ACTIVE and LIST NEWSGROUPS of a remote server, with patterns |
 | `TestNews2mailSenders` | innd, news2mail | a crosspost to groups gatewayed to several mailing-lists is mailed once per envelope-from address of `news2mail.cf`, to the lists using it (#116, #188) |
 | `TestNews2mailNoQueue` | innd, news2mail | `news2mail -n` does not give the MTA `-odq` (only queue the mail), `news2mail` alone does (#85) |
