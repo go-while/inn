@@ -12,6 +12,7 @@
 #include <ctype.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <sys/stat.h>
 #include <time.h>
 
 #include "conffile.h"
@@ -825,6 +826,65 @@ SMcancel(TOKEN token)
 
 
 /*
+**  Open the live cancel tombstone log at path for appending and take a
+**  shared, non-blocking lock on it.  Returns the descriptor, or -1 after
+**  a warning.
+**
+**  Race window: between our open() and our lock(), expire may
+**  rename(cancels.tombstone, cancels.tombstone.processing) and release
+**  its exclusive lock, leaving us with a descriptor of the renamed
+**  inode on which the lock succeeds.  An entry appended there after
+**  expire has read the snapshot would be unlinked with it when expire
+**  finishes.  So, once the lock is held, check that path still names
+**  the inode we locked; expire cannot rename it while we hold the lock,
+**  since it takes an exclusive lock first.  If it does not, or if the
+**  lock is contested (expire's rename window, EAGAIN/EACCES), close and
+**  reopen the path, which then resolves to the live file (or nothing,
+**  in which case O_CREAT makes a new one).  A 1ms sleep is more than
+**  enough for expire to complete its rename and release.
+*/
+static int
+tombstone_open_locked(const char *path)
+{
+    struct timespec ts = {0, 1000000L}; /* 1ms */
+    struct stat fsb, psb;
+    int attempt, fd;
+
+    for (attempt = 0; attempt < 3; attempt++) {
+        if (attempt > 0)
+            nanosleep(&ts, NULL);
+        /* O_RDWR (not O_WRONLY) so we can take F_RDLCK below; POSIX
+         * mandates lock-mode-matches-fd-mode. */
+        fd = open(path, O_RDWR | O_CREAT | O_APPEND, 0664);
+        if (fd < 0) {
+            syswarn("can't open %s for tombstone append", path);
+            return -1;
+        }
+        /* Shared, non-blocking.  Multiple appenders coexist; only
+         * blocked by expire's exclusive consumer lock during its brief
+         * rename. */
+        if (!inn_lock_file(fd, INN_LOCK_READ, false)) {
+            if (errno != EAGAIN && errno != EACCES) {
+                syswarn("can't lock %s; skipping tombstone entry", path);
+                close(fd);
+                return -1;
+            }
+            close(fd);
+            continue;
+        }
+        if (fstat(fd, &fsb) == 0 && stat(path, &psb) == 0
+            && fsb.st_dev == psb.st_dev && fsb.st_ino == psb.st_ino)
+            return fd;
+        /* Renamed (or removed) before we got the lock.  close releases
+         * the fcntl POSIX lock. */
+        close(fd);
+    }
+    warn("can't lock %s after retries; skipping tombstone entry", path);
+    return -1;
+}
+
+
+/*
 **  Append a token to the out-of-band cancel tombstone log.  Best-effort:
 **  failures are logged but do not affect the caller.  Safe for concurrent
 **  use across processes via inn_lock_file (fcntl POSIX locks; NFS-correct).
@@ -878,57 +938,10 @@ SMcanceltombstone(TOKEN token)
         return true;
 
     path = concatpath(innconf->pathdb, "cancels.tombstone");
-    /* O_RDWR (not O_WRONLY) so we can take F_RDLCK below; POSIX
-     * mandates lock-mode-matches-fd-mode. */
-    fd = open(path, O_RDWR | O_CREAT | O_APPEND, 0664);
+    fd = tombstone_open_locked(path);
     if (fd < 0) {
-        syswarn("can't open %s for tombstone append", path);
         free(path);
         return false;
-    }
-    /* Shared, non-blocking.  Multiple appenders coexist; only blocked
-     * by expire's exclusive consumer lock during its brief rename.
-     *
-     * Race window: between our open() and our lock(), expire may
-     * rename(cancels.tombstone, cancels.tombstone.processing),
-     * leaving us with a fd pointing at the renamed (doomed) inode.
-     * If we acquired the lock on that fd and wrote, our entry would
-     * be consumed only by expire's already-loaded snapshot -- and
-     * our writes appended after the rename are not in that snapshot,
-     * so they would be unlinked when expire finishes.
-     *
-     * Resolution: on EAGAIN/EACCES (lock held by expire's rename
-     * window), close and reopen the path.  After expire releases
-     * its exclusive lock, the path resolves to a fresh inode (or
-     * nothing, in which case O_CREAT makes a new one).  Either way,
-     * the second open lands on the live file the next consumer
-     * will see.  A 1ms sleep is more than enough for expire to
-     * complete its rename and release. */
-    if (!inn_lock_file(fd, INN_LOCK_READ, false)) {
-        if (errno == EAGAIN || errno == EACCES) {
-            struct timespec ts = {0, 1000000L}; /* 1ms */
-            close(fd);
-            nanosleep(&ts, NULL);
-            fd = open(path, O_RDWR | O_CREAT | O_APPEND, 0664);
-            if (fd < 0) {
-                syswarn("can't reopen %s for tombstone append", path);
-                free(path);
-                return false;
-            }
-            if (!inn_lock_file(fd, INN_LOCK_READ, false)) {
-                syswarn("can't lock %s after retry; skipping"
-                        " tombstone entry",
-                        path);
-                close(fd);
-                free(path);
-                return false;
-            }
-        } else {
-            syswarn("can't lock %s; skipping tombstone entry", path);
-            close(fd);
-            free(path);
-            return false;
-        }
     }
     fp = fdopen(fd, "a");
     if (fp == NULL) {
