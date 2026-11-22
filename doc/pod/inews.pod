@@ -40,10 +40,25 @@ You may for instance want to add a special C<path-identity> value related to
 the host running B<inews>, which will appear as C<path-identity!not-for-mail>
 in the Path header field.
 
-If posting fails, a copy of the failed post will be saved in a file named
-F<dead.article> in the home directory of the user running B<inews>.
-B<inews> exits with a non-zero status if posting failed or with a zero
-status if posting was successful.
+If B<inews> cannot set up the connection to the server (the server
+cannot be reached, no server is configured, or the server rejects the
+connection in its greeting, for instance with a C<400> reply), it
+appends the prepared article to F<dead.article> in the home directory
+of the user running B<inews>.  Each saved article starts with a
+C<#! rnews I<bytes>> line giving the byte count of the headers,
+separating blank line, and body that follow.  A file containing only
+these entries can be submitted as a batch with rnews(1).  Move any
+existing unframed F<dead.article> aside before appending in the new
+format.
+
+B<inews> exits with status zero after posting the article, and also
+after saving it to F<dead.article> because the connection could not be
+set up; it then warns that the article will be spooled.  A zero exit
+status therefore does not by itself mean that the article was posted.
+B<inews> exits with a non-zero status if saving the article fails, or
+if anything fails once the connection is set up, for instance when the
+server refuses authentication, the POST command or the article.  In
+that case, the article is not saved.
 
 =head1 OPTIONS
 
