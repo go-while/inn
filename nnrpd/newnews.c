@@ -73,19 +73,22 @@ GetGroups(char *p)
     int i;
     char *q;
     static char *Xrefbuf = NULL;
-    char *Xref = p;
+    char *Xref;
 
     if (size == 0) {
         size = GROUP_LIST_DELTA;
         list = xmalloc((size + 1) * sizeof(char *));
     }
-    Xref = p;
-    for (Xref++; *Xref == ' '; Xref++)
+    /* p is the Xref field body, which starts with the server name: skip it,
+     * whatever its length, and the whitespace after it. */
+    for (Xref = p; ISWHITE(*Xref); Xref++)
         ;
-    if ((Xref = strchr(Xref, ' ')) == NULL)
+    while (*Xref != '\0' && !ISWHITE(*Xref))
+        Xref++;
+    if (*Xref == '\0')
         return NULL;
-    for (Xref++; *Xref == ' '; Xref++)
-        ;
+    while (ISWHITE(*Xref))
+        Xref++;
     if (!Xrefbuf)
         Xrefbuf = xmalloc(BIG_BUFFER);
     strlcpy(Xrefbuf, Xref, BIG_BUFFER);
