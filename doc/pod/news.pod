@@ -137,7 +137,9 @@ mapping overview data fails.  Many thanks to Kevin Bowling for the patches.
 
 B<simpleftp> now accepts IPv6 addresses enclosed in square brackets in FTP
 URLs, optionally followed by a port, and no longer dies when an FTP URL
-follows an HTTP or HTTPS URL for the same host.
+follows an HTTP or HTTPS URL for the same host.  It also reuses an FTP
+session only for a URL with the same server, port and login, and no longer
+after a failed transfer.
 
 =back
 
