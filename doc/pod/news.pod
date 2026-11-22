@@ -133,6 +133,16 @@ files behind after a failed creation, and the buffindexed overview method
 validates its F<group.index> file and no longer frees memory twice when
 mapping overview data fails.  Many thanks to Kevin Bowling for the patches.
 
+=item *
+
+C<rc.news stop> no longer reports a successful shutdown when B<innd> is still
+running after the 60 seconds it waits for it to exit, for instance because it
+takes a long time to flush the history and the F<active> file.  It used to go
+on with stopping the overview processes (B<ovdb_server>, B<ovdb_monitor>,
+B<ovsqlite-server>) and removing the PID files while B<innd> was still using
+them.  It now exits with a non-zero status and leaves them in place; the same
+goes for an overview process which does not exit in time.
+
 =back
 
 =head1 Changes in 2.7.5 (not yet released)

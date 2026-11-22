@@ -74,6 +74,13 @@ B<rc.news> initiates INN startup.
 =item C<stop>
 
 If the first argument is C<stop>, B<rc.news> initiates INN shutdown.
+It waits up to 60 seconds for B<innd> to exit, and then the same time for
+each of the overview processes it stops.  When B<innd> is still running
+after that delay, B<rc.news> reports it, exits with a non-zero status and
+leaves everything else alone (the PID file of B<innd> and the processes it
+needs, such as B<ovdb_server> or B<ovsqlite-server>); it can be run again
+once B<innd> has exited.  When an overview process is still running, its PID
+file is kept and the exit status is non-zero too.
 
 =back
 
