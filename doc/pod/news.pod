@@ -219,7 +219,8 @@ C<makehistory -O -I>.  Inserting the first article no longer raises the low
 water mark used as the cutoff, so lower-numbered articles encountered later
 in the spool scan are retained if they are at or above the original cutoff.
 When the rebuild ends, the low water mark is set to the lowest article
-stored, as B<ovsqlite-util> expects.
+stored, as B<ovsqlite-util> expects.  If that fails, B<makehistory> exits
+with an error and does not mark the overview as rebuilt.
 
 =back
 
