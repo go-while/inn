@@ -71,6 +71,7 @@ DOEXPIRE=true
 DOEXPLOG=true
 DOEXPIREOVER=false
 DOLOGS=true
+scanstatus=0
 DOMAIL=true
 DOPROCBATCH=true
 DORENUMBER=true
@@ -308,7 +309,7 @@ ${DOLOGS} && {
     if ${DOMAIL}; then
         echo ''
     fi
-    scanlogs ${SCANARG}
+    scanlogs ${SCANARG} || scanstatus=$?
 }
 
 ##  Group-based expiry (delete expired overview first).
@@ -599,4 +600,4 @@ if ${DAILY}; then
     date >${PATHDB}/.news.daily
 fi
 ${RNEWS} -U
-exit 0
+exit "${scanstatus}"

@@ -112,6 +112,7 @@ for I; do
     esac
 done
 
+result=0
 ##  Keep the compressor and its arguments in "$@" during rotation.  Runtime
 ##  arguments are whitespace-separated words, with no shell or glob expansion.
 if ${ROTATE}; then
@@ -127,17 +128,19 @@ if ${ROTATE}; then
         cat)      COMPRESS_EXT='' ;;
         *)
             echo "$0: unknown compressformat: ${COMPRESSFORMAT}" >&2
-            exit 1
+            set --
+            result=1
             ;;
         esac
+        if [ "$#" -gt 0 ] && ! command -v "$1" >/dev/null 2>&1; then
+            echo "$0: log compressor unavailable: $1" >&2
+            set --
+            result=1
+        fi
     else
         set -- ${LOG_COMPRESS}
     fi
     set +f
-    if ! command -v "$1" >/dev/null 2>&1; then
-        echo "$0: log compressor unavailable: $1" >&2
-        exit 1
-    fi
 fi
 
 ##  Make sure every log exists.
@@ -152,8 +155,7 @@ if ${ROTATE}; then
         echo "$0: Locked by $(cat ${LOCK})"
         exit 1
     }
-    trap 'rm -f "${LOCK}"' 0
-    trap 'exit 1' 1 2 3 15
+    trap "rm -f ${LOCK}; exit 0" 1 2 3 15
 
     HERE=$(pwd)
     cd ${MOST_LOGS}
@@ -169,6 +171,7 @@ if ${ROTATE}; then
     if [ "$OUTPUT" != "Ok" -a "$OUTPUT" != "In debug mode" ]; then
         echo "$OUTPUT"
         echo 'Cannot flush logs.'
+        rm -f "${LOCK}"
         exit 1
     fi
 
@@ -351,10 +354,9 @@ if [ -s ${OLD_SYSLOG} -o -s ${OLD_LOG} ]; then
 fi
 rm -f ${OLD_LOG} ${OLD_SYSLOG} ${OLD_PERLNOCEM} ${INNREPORT}
 
-##  Compress and rotate the logs.
-result=0
-if ${ROTATE}; then
-    cd ${OLD}
+##  Compress and rotate the logs while preserving the source on failure.
+rotate_archives() {
+    cd "${OLD}" || return 1
     if [ X${LOGCYCLES} = X ]; then
         LOGCYCLES=3
     fi
@@ -365,14 +367,15 @@ if ${ROTATE}; then
 
         ##  On compressor failure keep this generation in plain text.
         EXT=${COMPRESS_EXT}
-        if "$@" <"${BASE}" >"${BASE}.tmp"; then
-            mv -f "${BASE}.tmp" "${BASE}.0${EXT}" || exit 1
+        if [ "$#" -gt 0 ] && "$@" <"${BASE}" >"${BASE}.0${EXT}"; then
             rm -f "${BASE}"
         else
-            echo "$0: compression failed for ${BASE}, keeping plain log" >&2
-            rm -f "${BASE}.tmp"
+            if [ "$#" -gt 0 ]; then
+                echo "$0: compression failed for ${BASE}, keeping plain log" >&2
+                rm -f "${BASE}.0${EXT}"
+            fi
             EXT=''
-            mv -f "${BASE}" "${BASE}.0" || exit 1
+            mv -f "${BASE}" "${BASE}.0" || return 1
             result=1
         fi
         chmod 0440 "${BASE}.0${EXT}"
@@ -388,12 +391,18 @@ if ${ROTATE}; then
             age=$(expr "${age}" - 1)
             for suffix in '' .gz .bz2 .Z .xz "${Z}"; do
                 if [ -f "${BASE}.${age}${suffix}" ]; then
-                    mv -f "${BASE}.${age}${suffix}" "${BASE}.${next}${suffix}" || exit 1
+                    mv -f "${BASE}.${age}${suffix}" "${BASE}.${next}${suffix}" || return 1
                 fi
             done
         done
     done
+    return "${result}"
+}
 
+if ${ROTATE}; then
+    rotate_archives "$@"
+    result=$?
+    rm -f "${LOCK}"
 fi
 
 ##  All done.

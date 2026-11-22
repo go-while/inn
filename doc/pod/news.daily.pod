@@ -37,7 +37,8 @@ F<inn.conf>);
 
 =item *
 
-processing log files and rotating the archived log files with B<scanlogs>;
+processing and rotating logs with B<scanlogs>, using I<compressformat>
+from F<inn.conf> or the compressor selected at build time;
 
 =item *
 
@@ -61,7 +62,8 @@ removing any old socket files found in the I<pathrun> directory;
 
 =item *
 
-collecting all the output and mailing it.
+collecting all the output and mailing it.  If B<scanlogs> fails, the report
+is still mailed and B<news.daily> returns its nonzero status.
 
 =back
 
@@ -182,9 +184,7 @@ is used.
 =item B<nologs>
 
 After expiration, B<scanlogs> is invoked to process the log files.  Using this
-keyword disables all log processing functions.  For rotated logs,
-B<scanlogs> uses I<compressformat> in F<inn.conf> or the default from
-B<--with-log-compress> at build time.
+keyword disables all log processing functions.
 
 =item B<nomail>
 

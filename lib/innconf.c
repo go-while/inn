@@ -248,12 +248,12 @@ static const struct config config_table[] = {
     {K(innwatchspoolnodes),         UNUMBER(200)      },
     {K(innwatchspoolspace),         UNUMBER(25000)    },
 
-    /* The following settings are specific to scanlogs.
-     * Keep a low value by default as it has a privacy impact; three days
+    /* The following settings are specific to scanlogs. */
+    {K(compressformat),             STRING(NULL)      },
+    /* Keep a low value by default as it has a privacy impact; three days
      * should be enough to diagnose the most common cases of malfunction
      * and abuse.  Where more is needed, it is easy for the news admin
      * to increase it. */
-    {K(compressformat),             STRING(NULL)      },
     {K(logcycles),                  UNUMBER(3)        },
 };
 
