@@ -341,15 +341,27 @@ Note that OVER should be used instead of XOVER.
 
 =item 4.
 
-A new command, XPAT I<header> I<message-ID>|I<range> I<pattern>
-[I<pattern> ...], is provided.  The first argument is the case-insensitive
-name of the header field to be searched.  The second argument is either an
-article range or a single message-ID, as specified in S<RFC 2980>.  The third
-argument is a I<uwildmat>-style pattern; if there are additional arguments,
-they are joined together separated by a single space to form the complete
-pattern.  This command is similar to the XHDR command.  It returns a C<221>
-response code, followed by the text response of all article numbers that
-match the pattern.
+XPAT I<header> I<message-ID>|I<range> I<pattern> searches a header field
+or overview metadata.  The header name is case-insensitive.  A range
+requires a selected newsgroup.  Use a Message-ID to search a single
+article without selecting a group.  B<nnrpd> advertises XPAT when the
+session has read access.
+
+Everything after the range or Message-ID is one pattern.  B<nnrpd> splits
+the arguments on whitespace and rejoins the pattern words with one space,
+so XPAT cannot express a literal run of spaces in this way.  The pattern
+matches the whole field value using the B<uwildmat_simple> function (see libinn_uwildmat(3)).  Use C<*> around
+a substring to search for it anywhere in the field.  Commas and
+exclamation marks are literal, including at the start of the pattern.
+
+A successful reply starts with C<221> and ends with a dot line.  Each
+matching row contains the article number (or the requested Message-ID)
+and the matching field value separated by a space.  Missing fields and
+nonmatching articles produce no row.  For a range, B<nnrpd> normally uses
+overview for fields it contains and retrieves the articles for other
+fields.  In particular, C<Bytes> and C<Lines> request article headers,
+whereas C<:bytes> and C<:lines> request metadata from overview and should
+be used with a range.
 
 =item 5.
 
