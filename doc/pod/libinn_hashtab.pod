@@ -95,8 +95,9 @@ there is no such item.
 
 B<hash_insert> adds I<datum> with key I<key> to I<hash>.  It returns
 true on success, and false if an item with that key is already in
-the table.  In that case, the table is not changed and I<datum> is not
-freed.  I<datum> must not be C<NULL>.
+the table.  The existing entry is preserved, and the caller retains
+ownership of I<datum>.  The insertion attempt can still update statistics
+or resize the table.  I<datum> must not be C<NULL>.
 
 B<hash_replace> replaces the data item with key I<key> by I<datum>,
 after calling the delete function on the old item.  It returns true on
