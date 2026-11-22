@@ -36,6 +36,10 @@ static int BATCHcount;
 static int MaxBatches;
 static int BATCHstatus;
 static off_t BatchStart = -1;
+
+/* The input cannot be positioned (a pipe), so there is no offset to go back
+ * to. */
+#define NOSEEK ((off_t) -2)
 static size_t BytesInBatch = 60 * 1024;
 static size_t BytesWritten;
 static size_t MaxArts;
@@ -78,10 +82,19 @@ BATCHstart(void)
 static int
 BATCHclose(FILE *F)
 {
+    bool failed;
+    int status;
+
     BATCHopen = false;
+
+    /* A write error is not forgotten by a later successful flush or by a
+     * processor which exits with a zero status. */
+    failed = ferror(F);
     if (F == stdout)
-        return fflush(stdout) == EOF ? 1 : 0;
-    return pclose(F);
+        status = fflush(stdout) == EOF ? 1 : 0;
+    else
+        status = pclose(F);
+    return (status == 0 && failed) ? 1 : status;
 }
 
 
@@ -132,7 +145,12 @@ RequeueAndExit(off_t Cookie, char *line, long BytesInArt)
 
     /* If we can back up to where the batch started, do so. */
     i = 0;
-    if (Cookie != -1 && fseeko(stdin, Cookie, SEEK_SET) == -1) {
+    if (Cookie == NOSEEK) {
+        warn("%s cannot seek in the input, the articles it gave already"
+             " cannot be requeued",
+             Host);
+        i = 1;
+    } else if (Cookie != -1 && fseeko(stdin, Cookie, SEEK_SET) == -1) {
         syswarn("%s cannot seek", Host);
         i = 1;
     }
@@ -175,7 +193,7 @@ RequeueAndExit(off_t Cookie, char *line, long BytesInArt)
     }
 
     free(spool);
-    exit(i);
+    exit(i != 0 || BATCHstatus != 0 ? 1 : 0);
     /* NOTREACHED */
 }
 
@@ -302,7 +320,11 @@ main(int ac, char *av[])
         /* Record line length in case we do an ftello.  Not portable to
          * systems with non-Unix file formats. */
         length = strlen(line);
-        Cookie = ftello(stdin) - length;
+        Cookie = ftello(stdin);
+        if (Cookie >= 0)
+            Cookie -= length;
+        else
+            Cookie = NOSEEK;
 
         /* Get lines like "name size".  Note that we ignore size but accept
          * it for backward compatibility. */
