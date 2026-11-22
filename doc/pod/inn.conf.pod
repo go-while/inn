@@ -628,11 +628,13 @@ lock, unlinks the snapshot after a successful consume, then recreates
 F<cancels.tombstone> as a header-only file under an exclusive lock
 so B<nnrpd>'s per-connection fast path stays active through quiet
 inter-cancel periods.  When the snapshot of an interrupted run is still
-present, B<expire> processes it and reads F<cancels.tombstone> without
-renaming it, so that the snapshot is kept until a run succeeds; the live
-file is then consumed by the next run.  An appender that raced a cancel into a new live
-file between the rename and the recreate has its content preserved
-verbatim below the restored header.  Append atomicity relies on
+present (or its presence cannot be checked), B<expire> processes it and
+reads F<cancels.tombstone> without renaming it, so that the snapshot is
+kept until a run succeeds; the live file is then consumed by the next run.
+A snapshot or log that could not be read completely is not removed after
+the run either.  An appender that raced a cancel into a new live file
+between the rename and the recreate has its content preserved verbatim
+below the restored header.  Append atomicity relies on
 POSIX guaranteeing that each C<write(2)> to a regular file opened
 with C<O_APPEND> is atomic with respect to other writers; this holds
 for any size of single C<write> on local filesystems.  Cross-client

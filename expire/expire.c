@@ -431,7 +431,11 @@ EXPloadtombstone(bool consuming, char **out_expireover_path,
     unsigned long n_leftover = 0;
     bool expireover_present = false;
     bool leftover_present = false;
+    bool leftover_unknown = false;
     bool cancels_present = false;
+    bool leftover_error = false;
+    bool snapshot_error = false;
+    bool expireover_error = false;
 
     /* Default outputs to NULL; only set on the success-return path
        below.  This avoids double-frees if a future maintainer adds an
@@ -454,6 +458,12 @@ EXPloadtombstone(bool consuming, char **out_expireover_path,
         expireover_present = true;
     if (stat(leftover, &sb) == 0)
         leftover_present = true;
+    else if (errno != ENOENT) {
+        /* Cannot tell whether a leftover snapshot exists: renaming the
+           live file over it could destroy it, so do not rotate. */
+        syswarn("can't stat %s", leftover);
+        leftover_unknown = true;
+    }
     if (stat(cancels_path, &sb) == 0)
         cancels_present = true;
 
@@ -463,7 +473,7 @@ EXPloadtombstone(bool consuming, char **out_expireover_path,
 
     /* Recover a leftover .processing from a previous run that crashed
        between rename and unlink. */
-    n_leftover = tombstone_read(h, leftover, NULL);
+    n_leftover = tombstone_read(h, leftover, &leftover_error);
 
     /* On a real run, atomically snapshot the live cancels.tombstone,
        then read it, unless a leftover snapshot is present: rename(2)
@@ -473,16 +483,25 @@ EXPloadtombstone(bool consuming, char **out_expireover_path,
        just read the live file directly: no consume happens, so there
        is no need to detach it (and detach-then-restore has a TOCTOU
        race with concurrent appenders). */
-    if (consuming && !leftover_present) {
+    if (consuming && !leftover_present && !leftover_unknown) {
         cancels_snapshot = tombstone_rename_for_processing(cancels_path);
         if (cancels_snapshot != NULL)
-            n_cancels = tombstone_read(h, cancels_snapshot, NULL);
+            n_cancels = tombstone_read(h, cancels_snapshot, &snapshot_error);
+        if (snapshot_error) {
+            /* Not read completely: keep it.  It is the leftover of the
+               next run, which reads it again. */
+            warn("%s not read completely; it is kept for the next run",
+                 cancels_snapshot);
+            free(cancels_snapshot);
+            cancels_snapshot = NULL;
+        }
     } else {
         n_cancels = tombstone_read(h, cancels_path, NULL);
     }
 
-    /* Read the expireover-side log. */
-    n_expireover = tombstone_read(h, expireover_path, NULL);
+    /* Read the expireover-side log.  If it is not read completely, it
+       is not handed back for removal after the run either. */
+    n_expireover = tombstone_read(h, expireover_path, &expireover_error);
 
     if (EXPverbose)
         printf("Loaded %lu + %lu + %lu tombstone entries (%lu unique)\n",
@@ -495,8 +514,13 @@ EXPloadtombstone(bool consuming, char **out_expireover_path,
        leaves the leftover where it is for the next consuming run to
        pick up. */
     if (consuming && leftover_present) {
-        cancels_snapshot = leftover;
-        leftover = NULL;
+        if (leftover_error)
+            warn("%s not read completely; it is kept for the next run",
+                 leftover);
+        else {
+            cancels_snapshot = leftover;
+            leftover = NULL;
+        }
     }
     free(leftover);
     leftover = NULL;
@@ -520,6 +544,12 @@ EXPloadtombstone(bool consuming, char **out_expireover_path,
     /* Single success-return: hand both paths to the caller for
        cleanup after a successful run. */
     free(cancels_path);
+    if (expireover_error) {
+        warn("%s not read completely; it is kept for the next run",
+             expireover_path);
+        free(expireover_path);
+        expireover_path = NULL;
+    }
     *out_expireover_path = expireover_path;
     *out_cancels_snapshot = cancels_snapshot;
     return h;

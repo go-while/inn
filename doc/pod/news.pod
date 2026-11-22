@@ -141,7 +141,8 @@ renames F<cancels.tombstone> over it and then removes the result before the
 new history is in place.  If that run was interrupted as well, the
 cancellations recorded in both files were lost, and their history entries
 were kept.  The leftover snapshot is now kept until a run succeeds, and the
-live file is consumed by the following run.
+live file is consumed by the following run.  A tombstone file that could
+not be read completely is no longer removed after a successful run.
 
 =back
 
