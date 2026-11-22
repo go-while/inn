@@ -254,14 +254,23 @@ func TestPeerMaxConnectionsSample(t *testing.T) {
 	if paused != 0 {
 		t.Errorf("ctlinnd name '': %d of %d NNTP channels paused, want none", paused, len(lines))
 	}
+	// A syslog daemon writing to a file may lag behind innd: wait for the message.
 	var found []string
-	for _, l := range s.Syslog(t) {
-		if strings.Contains(l, "too many") || strings.Contains(l, "connected") || strings.Contains(l, "closed") {
-			found = append(found, l)
+	deadline := time.Now().Add(10 * time.Second)
+	for {
+		found = found[:0]
+		for _, l := range s.Syslog(t) {
+			if strings.Contains(l, "too many") || strings.Contains(l, "connected") || strings.Contains(l, "closed") {
+				found = append(found, l)
+			}
 		}
+		if strings.Contains(strings.Join(found, "\n"), "too many connections from ME") || time.Now().After(deadline) {
+			break
+		}
+		time.Sleep(200 * time.Millisecond)
 	}
 	t.Logf("innd syslog:\n%s", strings.Join(found, "\n"))
 	if !strings.Contains(strings.Join(found, "\n"), "too many connections from ME") {
-		t.Errorf("innd did not log \"too many connections from ME\"")
+		t.Errorf("innd did not log \"too many connections from ME\" within 10 seconds")
 	}
 }
