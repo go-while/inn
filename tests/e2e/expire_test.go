@@ -393,8 +393,10 @@ func TestNewsDailyExpdirInstallFailure(t *testing.T) {
 // unpause innd (expire unpauses it when it finishes, so news.daily has to pause it again for
 // the installation; see HIS-7).
 func TestNewsDailyExpdirInstall(t *testing.T) {
-	// "expire-new" contains "-n": news.daily must not take it for expire's -n flag.
-	for _, name := range []string{"expdir", "expire-new"} {
+	// "x-n" contains "-n": news.daily must not take it for expire's -n flag.  The names
+	// are short because innd refuses a reason longer than 80 characters, and the reason
+	// news.daily gives expire includes the expdir path.
+	for _, name := range []string{"x", "x-n"} {
 		t.Run(name, func(t *testing.T) { testNewsDailyExpdirInstall(t, name) })
 	}
 }
