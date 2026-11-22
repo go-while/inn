@@ -122,7 +122,12 @@ my @pack_length_bias = (
 # Enabling RaiseError permits not checking every return error codes.
 my $dbh = DBI->connect(
     $datasource, '', '',
-    { PrintError => 0, RaiseError => 1, AutoCommit => 0 },
+    {
+        PrintError        => 0,
+        RaiseError        => 1,
+        AutoCommit        => 0,
+        sqlite_open_flags => DBD::SQLite::OPEN_READWRITE(),
+    },
 );
 
 # To process multiple SQL statements in a do() handle.

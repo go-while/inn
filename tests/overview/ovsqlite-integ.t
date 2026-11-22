@@ -110,6 +110,16 @@ EOF
 INNCONF="$tmpdir/inn.conf"
 export INNCONF
 
+# A status query is valid before the first startup.  It must fail without
+# creating an empty file that would prevent the server from initializing it.
+if perl -MDBI -MDBD::SQLite -MCompress::Zlib -e 1 >/dev/null 2>&1; then
+    if perl "$util_source" -s -p "$tmpdir" >"$tmpdir/status.log" 2>&1; then
+        echo "not ok 1 # statistics succeeded before database creation"
+        rm -rf "$tmpdir"
+        exit 1
+    fi
+fi
+
 # Test 1: start ovsqlite-server in debug/foreground mode.
 $server -d >"$tmpdir/server.log" 2>&1 &
 server_pid=$!
