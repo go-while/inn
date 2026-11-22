@@ -335,11 +335,20 @@ and S<RFC 6048> (NNTP LIST additions) with the following differences:
 
 =item 1.
 
-A batch transfer command, XBATCH I<byte-count>, is provided.  This command
-will read I<byte-count> bytes and store them for later processing by
-rnews(1) (which must be run separately, probably from cron).  See
-innxbatch(8) and B<sendxbatches> for more details on this
-extension.
+XBATCH I<byte-count> transfers an rnews batch.  B<innd> advertises XBATCH to
+authenticated peers for which the I<xbatch> setting in F<incoming.conf> is
+enabled.  The count is a positive decimal number of octets.  If
+I<maxartsize> is nonzero, it also limits the size of a batch.
+
+After a C<339> reply, send exactly I<byte-count> octets.  The payload can
+contain binary data and has no dot-stuffing, terminating dot line, or
+additional CRLF after the last octet.  A C<239> reply means the batch was
+spooled in I<pathincoming> for a separate run of rnews(1).  It does not
+indicate that any article in the batch was accepted.  A C<436> reply
+indicates a spooling error.  B<innd> rejects an invalid size with C<501>
+and denies an unauthorized transfer with C<502>.
+
+See rnews(1) for batch formats and innxbatch(8) for the sending tools.
 
 =item 2.
 
