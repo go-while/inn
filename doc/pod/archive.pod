@@ -96,22 +96,37 @@ suppress this redirection, use the B<-r> flag.
 =head1 RETURN VALUE
 
 If the input is exhausted and all the articles have been archived,
-B<archive> will exit with a zero status.  If an I/O error occurs when reading
-the input, it will try to spool its input, copying it to a file.  The same
-file receives the token of each article which could not be written to all its
-destination files in the archive (for instance because the archive file system
-is full), and B<archive> then exits with a non-zero status.
-If there was no input filename, the spool file is I<pathoutgoing>/archive and
-the program will exit.  If an input filename
-was given, a temporary file named I<input>.bch (if I<input> is an absolute
-pathname) or I<pathoutgoing>/I<input>.bch (if the filename does not begin
-with a slash) is created.  Once the input is copied, B<archive> will try
-to rename this temporary file to be the name of the input file, if it was
-written completely, and then exit.  The articles which were not archived are
-therefore tried again with the next run on the same file.  All the
-destination files of such an article are written again; with B<-c>, an article
-is then appended a second time to the destination files that had received it
-the first time.
+B<archive> will exit with a zero status.
+
+If an article could not be written to all its destination files in the
+archive (for instance because the archive file system is full), its token is
+kept to be tried again, and B<archive> exits with a non-zero status.  If there
+was no input filename, the tokens are appended to I<pathoutgoing>/archive; the
+administrator has to feed this file back to B<archive> (as its input file),
+for instance from B<cron>.  If an input filename was given, a temporary file
+named I<input>.bch (if I<input> is an absolute pathname) or
+I<pathoutgoing>/I<input>.bch (if the filename does not begin with a slash) is
+created, which receives these tokens; once the input is read, B<archive> will
+try to rename this temporary file to be the name of the input file, if it was
+written completely, and then exit, so that the next run on the same file tries
+again only the articles which were not archived.  A failure which repeats at
+each run, for instance a destination which can never be written, keeps its
+tokens in the file and needs the attention of the administrator.
+
+All the destination files of such an article are written again by the retry.
+Copies written without B<-c> are replaced (a link to a previous copy of the
+article is kept).  With B<-c>, the article is appended a second time to the
+destination files that had received it the first time, a write which failed
+can have left an incomplete article at the end of a file, which the retry does
+not repair, and a line for the article is added again to the index given with
+B<-i>.
+
+If an I/O error occurs when reading the input, B<archive> cannot tell which
+tokens were not read.  If there was an input filename, the file is left as it
+is, and B<archive> exits with a non-zero status: the articles already archived
+are archived again by the next run.  If the input was the standard input,
+B<archive> copies the rest of the standard input to I<pathoutgoing>/archive,
+which can miss the tokens that were already read from the input.
 
 =head1 EXAMPLES
 

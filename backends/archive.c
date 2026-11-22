@@ -18,6 +18,10 @@
 #include "inn/vector.h"
 #include "inn/wire.h"
 
+#ifndef PATH_MAX
+#    define PATH_MAX 4096
+#endif
+
 
 /* Holds various configuration options and command-line parameters. */
 struct config {
@@ -91,23 +95,93 @@ mkpath(const char *file)
 **  to concatenate the message to the end of an existing file if any.
 */
 static bool
+same_content(const char *file, const char *text, size_t length)
+{
+    FILE *in;
+    char buf[BUFSIZ];
+    size_t n, done = 0;
+    bool same = true;
+
+    in = fopen(file, "r");
+    if (in == NULL)
+        return false;
+    while (same && (n = fread(buf, 1, sizeof(buf), in)) > 0) {
+        if (done + n > length || memcmp(buf, text + done, n) != 0)
+            same = false;
+        done += n;
+    }
+    if (ferror(in) || done != length)
+        same = false;
+    fclose(in);
+    return same;
+}
+
+
+static bool
 write_article(ARTHANDLE *article, const char *file, bool concatenate)
 {
     FILE *out;
     char *text = NULL;
+    char *tmpname = NULL;
+    const char *dest;
     size_t length = 0;
+    int fd;
 
-    /* Open the output file. */
-    out = fopen(file, concatenate ? "a" : "w");
-    if (out == NULL && errno == ENOENT) {
-        if (!mkpath(file)) {
-            syswarn("cannot mkdir for %s", file);
-            return false;
+    /* A copy which exists already with the right content, from a previous run
+     * which failed for another group, is left as it is (it can be linked to
+     * the other copies). */
+    if (!concatenate) {
+        text = wire_to_native(article->data, article->len, &length);
+        if (same_content(file, text, length)) {
+            free(text);
+            return true;
         }
-        out = fopen(file, concatenate ? "a" : "w");
+        free(text);
+        text = NULL;
+    }
+
+    /* Open the output file.  A copy which is not appended to is written to a
+     * new file next to it, which replaces it at the end: an existing copy
+     * can be a hard link to another copy of the article, and a failed retry
+     * must not damage them. */
+    if (concatenate) {
+        dest = file;
+        out = fopen(file, "a");
+        if (out == NULL && errno == ENOENT) {
+            if (!mkpath(file)) {
+                syswarn("cannot mkdir for %s", file);
+                return false;
+            }
+            out = fopen(file, "a");
+        }
+    } else {
+        xasprintf(&tmpname, "%s.XXXXXX", file);
+        dest = tmpname;
+        fd = mkstemp(tmpname);
+        if (fd < 0 && errno == ENOENT) {
+            if (!mkpath(file)) {
+                syswarn("cannot mkdir for %s", file);
+                free(tmpname);
+                return false;
+            }
+            /* mkstemp() can have replaced the X's even though it failed. */
+            strcpy(tmpname + strlen(tmpname) - 6, "XXXXXX");
+            fd = mkstemp(tmpname);
+        }
+        out = NULL;
+        if (fd >= 0) {
+            /* mkstemp() makes a private file. */
+            fchmod(fd, 0666 & ~NEWSUMASK);
+            out = fdopen(fd, "w");
+            if (out == NULL) {
+                close(fd);
+                unlink(tmpname);
+            }
+        }
     }
     if (out == NULL) {
-        syswarn("cannot open %s for writing", file);
+        syswarn("cannot open %s for writing", dest);
+        free(tmpname);
         return false;
     }
 
@@ -116,10 +190,11 @@ write_article(ARTHANDLE *article, const char *file, bool concatenate)
     if (concatenate)
         fprintf(out, "-----------\n");
     if (fwrite(text, length, 1, out) != 1) {
-        syswarn("cannot write to %s", file);
+        syswarn("cannot write to %s", dest);
         fclose(out);
         if (!concatenate)
-            unlink(file);
+            unlink(tmpname);
+        free(tmpname);
         free(text);
         return false;
     }
@@ -127,18 +202,27 @@ write_article(ARTHANDLE *article, const char *file, bool concatenate)
 
     /* Flush and close the output. */
     if (ferror(out) || fflush(out) == EOF) {
-        syswarn("cannot flush %s", file);
+        syswarn("cannot flush %s", dest);
         fclose(out);
         if (!concatenate)
-            unlink(file);
+            unlink(tmpname);
+        free(tmpname);
         return false;
     }
     if (fclose(out) == EOF) {
-        syswarn("cannot close %s", file);
+        syswarn("cannot close %s", dest);
         if (!concatenate)
-            unlink(file);
+            unlink(tmpname);
+        free(tmpname);
         return false;
     }
+    if (!concatenate && rename(tmpname, file) < 0) {
+        syswarn("cannot rename %s to %s", tmpname, file);
+        unlink(tmpname);
+        free(tmpname);
+        return false;
+    }
+    free(tmpname);
     return true;
 }
 
@@ -150,6 +234,25 @@ write_article(ARTHANDLE *article, const char *file, bool concatenate)
 static bool
 link_article(const char *oldpath, const char *newpath, ARTHANDLE *art)
 {
+    struct stat oldst, newst;
+    char target[PATH_MAX];
+    ssize_t n;
+
+    /* A previous run which failed for another group may have made this link
+     * already: leave it. */
+    if (stat(oldpath, &oldst) == 0 && lstat(newpath, &newst) == 0) {
+        if (S_ISLNK(newst.st_mode)) {
+            n = readlink(newpath, target, sizeof(target) - 1);
+            if (n > 0) {
+                target[n] = '\0';
+                if (strcmp(target, oldpath) == 0)
+                    return true;
+            }
+        } else if (oldst.st_dev == newst.st_dev
+                   && oldst.st_ino == newst.st_ino) {
+            return true;
+        }
+    }
     if (link(oldpath, newpath) < 0) {
         if (!mkpath(newpath)) {
             syswarn("cannot mkdir for %s", newpath);
@@ -496,6 +599,19 @@ main(int argc, char *argv[])
         exit(0);
     }
 
+    /* If we could not read all the named input, leave it as it is: QIO has
+     * read an unknown part of it, so that there is no way to tell what was
+     * not read.  The tokens already archived are archived again by the next
+     * run. */
+    if (QIOerror(qp) && argv[0] != NULL) {
+        warn("cannot read %s completely, keeping it unchanged", argv[0]);
+        if (spool != NULL) {
+            fclose(spool);
+            unlink(file);
+        }
+        exit(1);
+    }
+
     /* Otherwise, make an appropriate spool file, which holds the tokens
      * which could not be archived already if there are any. */
     if (spool == NULL)
@@ -514,6 +630,10 @@ main(int argc, char *argv[])
                 status = 1;
                 break;
             }
+        if (ferror(stdin)) {
+            syswarn("cannot read the rest of the input");
+            status = 1;
+        }
     }
     if (fclose(spool) == EOF) {
         syswarn("cannot close spool");
