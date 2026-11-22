@@ -280,7 +280,19 @@ stale data, should peer IP addresses change.
 =item I<gen-html>
 
 This key requires a boolean value and defaults to false.  It specifies
-whether the I<status-file> should be HTML-ified.
+whether the I<status-file> should be HTML-ified.  When enabled, the
+contents of an optional F<inn_status.head> file in I<pathetc> are included
+verbatim at the start of the C<< <head> >> element, before the built-in
+metadata (the refresh interval and the title), which is always written.
+A file larger than 64 KB (65536 bytes), one that cannot be read, or one
+that is not a regular file (a FIFO or a directory, for example) is
+skipped with a warning, logged once until the file can be read again or
+is removed.
+
+Only this key controls whether B<innfeed> writes HTML; the I<htmlstatus>
+parameter in F<inn.conf> applies to B<innd>'s status report only.
+B<innd> reads the same F<inn_status.head> file for its HTML status
+report; see I<htmlstatus> in inn.conf(5).
 
 =item I<status-file>
 

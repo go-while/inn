@@ -14,6 +14,9 @@
 
 #define MIN_REFRESH 60 /* 1 min */
 
+/* Largest pathetc/inn_status.head copied into the HTML report. */
+#define STATUS_HEAD_MAX (64 * 1024)
+
 typedef struct _STATUS {
     char name[SMBUF];
     /* ip_addr may contain a concatenation of several
@@ -79,6 +82,62 @@ STATUSinit(void)
     strlcpy(start_time, ctime(&now), sizeof(start_time));
 }
 
+/*
+**  Copy the optional pathetc/inn_status.head file into the HTML report.  A
+**  missing file is skipped silently.  A file that cannot be read, is not a
+**  regular file or is larger than STATUS_HEAD_MAX bytes is skipped with a
+**  warning, logged once until the file is read again or disappears.
+*/
+static void
+STATUSwritehead(FILE *F)
+{
+    static bool warned = false;
+    struct stat st;
+    char *path, *header;
+    int fd;
+
+    path = concatpath(innconf->pathetc, "inn_status.head");
+    /* O_NONBLOCK: opening a FIFO without a writer must not block. */
+    fd = open(path, O_RDONLY | O_NONBLOCK);
+    if (fd < 0) {
+        if (errno == ENOENT)
+            warned = false;
+        else if (!warned) {
+            syswarn("SERVER cant open %s", path);
+            warned = true;
+        }
+        free(path);
+        return;
+    }
+    if (fstat(fd, &st) < 0) {
+        if (!warned)
+            syswarn("SERVER cant stat %s", path);
+        warned = true;
+    } else if (!S_ISREG(st.st_mode)) {
+        if (!warned)
+            warn("SERVER %s is not a regular file, ignored", path);
+        warned = true;
+    } else if (st.st_size > STATUS_HEAD_MAX) {
+        if (!warned)
+            warn("SERVER %s is larger than %d bytes, ignored", path,
+                 STATUS_HEAD_MAX);
+        warned = true;
+    } else {
+        header = xmalloc((size_t) st.st_size + 1);
+        if (xread(fd, header, st.st_size) < 0) {
+            if (!warned)
+                syswarn("SERVER cant read %s", path);
+            warned = true;
+        } else {
+            fwrite(header, 1, (size_t) st.st_size, F);
+            warned = false;
+        }
+        free(header);
+    }
+    close(fd);
+    free(path);
+}
+
 static char *
 PrettySize(unsigned long long size, char *str, size_t len)
 {
@@ -130,6 +189,7 @@ STATUSsummary(void)
     /* HTML header. */
     if (innconf->htmlstatus) {
         fprintf(F, "<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n");
+        STATUSwritehead(F);
         fprintf(F, "<meta http-equiv=\"refresh\" content=\"%lu\">\n",
                 innconf->status < MIN_REFRESH ? MIN_REFRESH : innconf->status);
         fprintf(F, "<title>%s: incoming feeds</title>\n", innconf->pathhost);
