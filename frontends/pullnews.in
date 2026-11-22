@@ -424,6 +424,11 @@ if ($rnews) {
     if ($no_op) {
         print "Would write to rnews file $rnews\n";
     } else {
+        # Do not truncate a batch which was not handled: after a failed run,
+        # the config file counts its articles as done.
+        die "rnews-format output $rnews already exists and is not empty;"
+          . " feed it to rnews and remove it first\n"
+          if -f $rnews and -s $rnews;
         open(RNEWS, ">$rnews")
           || die "can't open rnews-format output: $rnews: $!\n";
     }
@@ -818,7 +823,7 @@ sub saveConfig {
     # Write a new file, and replace the old one only when it is complete:
     # it holds the credentials and the progress of every server.
     my $target = $groupFile;
-    $target = realpath($groupFile) // $groupFile if -l $groupFile;
+    $target = realpath($groupFile) || $groupFile if -l $groupFile;
     my $tmpFile = "$target.new.$$";
     my ($mode, $uid, $gid) = (stat($target))[2, 4, 5];
 
@@ -853,10 +858,22 @@ sub saveConfig {
         die "can't write $tmpFile: $err\n";
     }
 
-    # Keep the permissions and the owner of the old file.
+    # Give the new file the owner and the permissions of the old one (the
+    # owner first, as it can clear bits of the mode), and make sure that it
+    # worked: it must not be a file that the next user cannot read or write.
     if (defined $mode) {
+        chown($uid, $gid, $tmpFile);    # may be refused: checked below
         chmod($mode & 07777, $tmpFile);
-        chown($uid, $gid, $tmpFile);
+        my ($newmode, $newuid, $newgid) = (stat($tmpFile))[2, 4, 5];
+        if (   not defined $newmode
+            or ($newmode & 07777) != ($mode & 07777)
+            or $newuid != $uid
+            or $newgid != $gid)
+        {
+            unlink $tmpFile;
+            die "can't give the owner and permissions of $target to "
+              . "$tmpFile\n";
+        }
     }
     if (not rename($tmpFile, $target)) {
         my $err = $!;

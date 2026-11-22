@@ -242,10 +242,13 @@ rnews(1) for more information about the batch file format.
 
 The config file is saved only after the articles that it counts as done have
 been written to I<file>.  If I<file> cannot be written or closed (for instance
-when the disk is full), B<pullnews> exits with an error and the config file
-keeps the progress of its last checkpoint: the articles after it will be
-downloaded again.  I<file> may then end with an incomplete article, which
-B<rnews> will refuse.
+when the disk is full), B<pullnews> exits with an error, and the config file
+keeps the progress of its last checkpoint.  I<file> may then end with an
+incomplete article, which B<rnews> will refuse, and it holds the articles
+which the config file counts as done, so that B<pullnews> refuses to start
+when I<file> already exists and is not empty.  Feed I<file> to B<rnews> (after
+removing its incomplete last article), and remove it, before running
+B<pullnews> again with the same name; else, use another name.
 
 =item B<-R>
 
