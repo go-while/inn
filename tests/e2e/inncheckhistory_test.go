@@ -13,7 +13,8 @@ import (
 // history method inn.conf sets. It used to check the history text file whenever one
 // existed, so that after a conversion with hissqlite-convert, which leaves the old hisv6
 // files in place, it checked them instead of history.sqlite; and with hisv6, a leftover
-// history.sqlite hid a missing history file.
+// history.sqlite hid a missing history file. A configured database that is not a regular file
+// is reported as such.
 func TestInncheckPermHistoryMethod(t *testing.T) {
 	t.Run("hissqlite with the old history file", func(t *testing.T) {
 		s := NewSite(t, SiteOptions{InnConf: map[string]string{"hismethod": "hissqlite"}})
@@ -32,6 +33,24 @@ func TestInncheckPermHistoryMethod(t *testing.T) {
 		}
 		if strings.Contains(out, old+":0:") {
 			t.Errorf("inncheck --perm checked %s, the history file of hisv6:\n%s", old, out)
+		}
+	})
+
+	t.Run("hissqlite with a directory as history.sqlite", func(t *testing.T) {
+		s := NewSite(t, SiteOptions{InnConf: map[string]string{"hismethod": "hissqlite"}})
+		s.Stop(t)
+		db := filepath.Join(s.Dir, "db", "history.sqlite")
+		for _, f := range []string{db, db + "-wal", db + "-shm"} {
+			if err := os.Remove(f); err != nil && !os.IsNotExist(err) {
+				t.Fatal(err)
+			}
+		}
+		if err := os.Mkdir(db, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		out, _ := s.TryRun("inncheck", "--perm")
+		if !strings.Contains(out, db+":0: not a regular file") {
+			t.Errorf("inncheck --perm did not report that %s is not a regular file:\n%s", db, out)
 		}
 	})
 
