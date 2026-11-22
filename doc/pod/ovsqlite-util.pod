@@ -83,7 +83,9 @@ Audit the entire overview database for problems, fixing them as they're
 detected where possible.  This runs the same checks as the B<-A> flag,
 and fixes the problems found.  Using this option takes care of pausing and
 resuming INN so that the overview data are not changed by another process
-during the operations.
+during the operations.  A group can retain the high water mark of an
+article that has expired or been cancelled.  Repairing its count or low
+water mark preserves that high water mark.
 
 To see what would be changed by B<-F>, run B<ovsqlite-util> with B<-A> first.
 
