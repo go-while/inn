@@ -21,6 +21,8 @@ use strict;
 use warnings;
 
 use Fcntl qw(:flock);
+use IO::Handle;
+use POSIX ();
 
 my $tapeDir = $INN::Config::pathspool . "/innfeed";
 my $destDir = $INN::Config::pathtmp;
@@ -88,27 +90,25 @@ my $missing = 0;
 # removed, as they may hold the entries of earlier runs.  They are still
 # locked, so no other procbatch has written to them meanwhile.  The error is
 # $! unless given.
+#
+# No handle of an output file is closed here: where Perl emulates flock with
+# fcntl or lockf, closing any descriptor of a file releases the lock of the
+# process on it.  procbatch exits with POSIX::_exit instead, so that output
+# still buffered in the write handles is discarded, not written after the
+# truncation, and the locks go away with the process.
 sub output_failed {
     my ($host, $action, $error) = @_;
     $error = "$!" unless defined($error);
 
     foreach my $peer (keys %hosts) {
-        my $file = "$destDir/$peer.tmp";
-
-        # The handle may already be closed, or fail to flush again.
-        {
-            no warnings;
-            close $hosts{$peer};
-        }
         next unless defined($sizes{$peer});
+        my $file = "$destDir/$peer.tmp";
         truncate($locks{$peer}, $sizes{$peer})
           or warn "$0: cannot truncate $file to $sizes{$peer} bytes: $!\n";
     }
-    foreach my $peer (keys %locks) {
-        no warnings;
-        close $locks{$peer};
-    }
-    die "$0: cannot $action $destDir/$host.tmp: $error\n";
+    warn "$0: cannot $action $destDir/$host.tmp: $error\n";
+    STDOUT->flush();
+    POSIX::_exit(1);
 }
 
 # Open the output file of a peer for appending and lock it, through a
@@ -210,26 +210,39 @@ while (<$INPUT>) {
 }
 close $INPUT;
 
-# All the output files must be complete before any of them is moved and
+# All the output files must be complete before any of them is used and
 # before the input file is removed.  A write error (for instance because
 # the file system is full) may only show up when the buffered output is
-# flushed, so stop there and keep the input file.
+# flushed, so stop there and keep the input file.  The handles stay open
+# (see output_failed for why).
 foreach my $host (keys %hosts) {
-    close $hosts{$host} or output_failed($host, "write to");
+    $hosts{$host}->flush() or output_failed($host, "write to");
 }
 
 # With -m, add the entries of each output file to the backlog file of the
 # peer and remove the output file, while it is still locked.
-foreach my $host (keys %hosts) {
-    my $outputFile = "$destDir/$host.tmp";
-    my $tapeFile = "$tapeDir/$host";
-    if ($opt{'m'}) {
+if ($opt{'m'}) {
+    foreach my $host (keys %hosts) {
+        my $outputFile = "$destDir/$host.tmp";
+        my $tapeFile = "$tapeDir/$host";
         my $cmd = "$INN::Config::sort -u $outputFile >> $tapeFile";
         system $cmd;
         die "$0: $cmd: failed\n" unless ($? == 0);
         unlink $outputFile or die "$0: cannot remove $outputFile: $!\n";
+        close $hosts{$host};
+        close $locks{$host};
     }
-    close $locks{$host};
+} else {
+    # Closing may still report a write error (for instance on NFS): then cut
+    # all the files back.  The locks are released once all the files are
+    # closed (where flock is emulated with fcntl or lockf, the first close
+    # already releases them, which only matters for such an error).
+    foreach my $host (keys %hosts) {
+        close $hosts{$host} or output_failed($host, "write to");
+    }
+    foreach my $host (keys %locks) {
+        close $locks{$host};
+    }
 }
 
 unlink $inputFile if $opt{'u'};
