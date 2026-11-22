@@ -164,6 +164,61 @@ func TestPeerMaxConnectionsHoldTime(t *testing.T) {
 	expect(t, ps[1], 238, "CHECK %s", msgID(t))
 }
 
+// TestPeerMaxConnectionsHoldTimeExpiry: with max-connections 2 and hold-time 3, two
+// connections are held, the second one 2.2 seconds after the first; the first is closed
+// after the hold time, then one of the two accepted connections closes: the second held
+// connection must be served, before its own hold time ends.
+func TestPeerMaxConnectionsHoldTimeExpiry(t *testing.T) {
+	const holdTime = 3
+	s := NewSite(t, SiteOptions{Incoming: maxCnxIncoming(2, holdTime)})
+	ps := openPeers(t, s, 2)
+	held := func(what string) *client.Conn {
+		p := s.Peer(t)
+		if code, _ := client.ParseCode(p.Greeting); code != 200 {
+			t.Fatalf("%s connection: greeting %q, want 200 (held, not refused)", what, p.Greeting)
+		}
+		send(t, p, "MODE STREAM\r\n")
+		return p
+	}
+	p3 := held("third")
+	time.Sleep(2200 * time.Millisecond)
+	p4 := held("fourth")
+
+	start := time.Now()
+	done := make(chan error, 1)
+	p3.Deadline = 30 * time.Second
+	go func() {
+		_, err := p3.ReadLine()
+		done <- err
+	}()
+	// Keep the second connection busy so that innd walks its channels and checks the
+	// hold time.
+	var err error
+	for wait := true; wait; {
+		select {
+		case err = <-done:
+			wait = false
+		case <-time.After(300 * time.Millisecond):
+			if time.Since(start) > 20*time.Second {
+				t.Fatalf("third connection still open %v after a hold-time of %ds", time.Since(start), holdTime)
+			}
+			expect(t, ps[1], 238, "CHECK %s", msgID(t))
+		}
+	}
+	t.Logf("third connection closed: %v", err)
+	if err == nil {
+		t.Fatal("third connection of a peer with max-connections 2 was served")
+	}
+	if err := p4.ExpectNoPending(10 * time.Millisecond); err != nil {
+		t.Fatalf("fourth connection served while still over the limit: %v", err)
+	}
+	expect(t, ps[0], 205, "QUIT")
+	ps[0].Close()
+	p4.Deadline = 10 * time.Second
+	status(t, p4, 203, "MODE STREAM on the fourth connection after the first one closed")
+	expect(t, p4, 238, "CHECK %s", msgID(t))
+}
+
 // TestPeerMaxConnectionsSample runs innd with the sample incoming.conf that "make install"
 // puts in place, which sets max-connections to 8 for every peer and lists 127.0.0.1 as the
 // peer ME: the ninth connection from 127.0.0.1 gets 400 and is closed, and innd logs "too

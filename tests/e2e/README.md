@@ -34,6 +34,7 @@ needs the Go standard library:
 | `TestPeerSocketBuffers` | innd | innd's end of a peer connection keeps the kernel's socket buffers by default and gets `peerrcvbufsize` and `peersndbufsize` when set (#65; reads them with `ss -tm`, Linux only) |
 | `TestPeerMaxConnections` | innd, ctlinnd | with `max-connections: 2` in incoming.conf, the third connection of a peer gets 400 and is closed, `ctlinnd name` shows no accepted connection as paused, and a slot freed by the peer can be used again |
 | `TestPeerMaxConnectionsHoldTime` | innd, ctlinnd | with `max-connections: 2` and `hold-time: 3`, the third connection is greeted but not served and shown as paused, is served when another one closes, and a connection still over the limit is closed after the hold time |
+| `TestPeerMaxConnectionsHoldTimeExpiry` | innd | with `max-connections: 2` and `hold-time: 3`, two connections are held; after the first is closed at the end of its hold time and an accepted one closes, the second is served |
 | `TestPeerMaxConnectionsSample` | innd, ctlinnd | with the sample incoming.conf (`max-connections: 8`), the ninth connection from 127.0.0.1 (peer ME) gets 400 and innd logs "too many connections from ME" |
 | `TestSIGTERMWhileIdle` | innd | an idle innd exits on SIGTERM |
 | `TestSIGTERMWhileBusy` | innd, Perl filter | a SIGTERM received while innd is busy in a slow `filter_art` takes effect once the filter returns, not at the next connection |
