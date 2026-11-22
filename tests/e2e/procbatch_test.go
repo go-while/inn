@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	testkit "github.com/go-while/nntp-testkit"
 )
@@ -114,7 +115,9 @@ func runUnderSizeLimit(s *Site, blocks int, name string, args ...string) (string
 // cuts an entry in the middle and peer1.tmp already holds entries of an earlier run,
 // procbatch cuts peer1.tmp back to those entries, so that the next run does not append to
 // a partial line. When another process holds a lock on peer1.tmp, procbatch fails the same
-// way without touching it, so that a rollback cannot cut the entries of another run.
+// way without touching it, so that a rollback cannot cut the entries of another run. While
+// procbatch -m appends peer1.tmp to the backlog file (a FIFO here, so that it waits there),
+// another run cannot add entries to peer1.tmp that -m would then remove unread.
 func TestProcbatchWriteError(t *testing.T) {
 	s := NewSite(t, SiteOptions{})
 
@@ -303,6 +306,99 @@ func TestProcbatchWriteError(t *testing.T) {
 		if err != nil || string(got) != earlier+output.String() {
 			t.Errorf("procbatch after the lock was released: %v, peer1.tmp %d bytes, want %d\n%s",
 				err, len(got), len(earlier)+output.Len(), out)
+		}
+	})
+
+	t.Run("append during -m", func(t *testing.T) {
+		// The output directory is also the backlog directory, so -m moves nothing, and the
+		// backlog file is a FIFO: the first run waits there until the test reads it.
+		dir := t.TempDir()
+		fifo := filepath.Join(dir, "peer1")
+		if out, err := exec.Command("mkfifo", fifo).CombinedOutput(); err != nil {
+			t.Skipf("mkfifo: %v %s", err, out)
+		}
+		in1 := filepath.Join(dir, "innfeed-dropped.A000004")
+		if err := os.WriteFile(in1, []byte(input.String()), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		var in2, out2 strings.Builder
+		for i := range 10 {
+			line := fmt.Sprintf("e2e/test/%05d <second-%025d@e2e.invalid>", i+1, i+1)
+			in2.WriteString(line + " peer1\n")
+			out2.WriteString(line + "\n")
+		}
+		in2Path := filepath.Join(dir, "innfeed-dropped.A000005")
+		if err := os.WriteFile(in2Path, []byte(in2.String()), 0o644); err != nil {
+			t.Fatal(err)
+		}
+
+		ctx, cancel := context.WithTimeout(context.Background(), testkit.Deadline())
+		defer cancel()
+		first := exec.CommandContext(ctx, filepath.Join(s.Prefix, "bin", "procbatch"),
+			"-m", "-u", "-d", dir, "-t", dir, in1)
+		first.Dir = s.Dir
+		first.Env = append(os.Environ(), s.Env...)
+		var firstOut bytes.Buffer
+		first.Stdout, first.Stderr = &firstOut, &firstOut
+		if err := first.Start(); err != nil {
+			t.Fatal(err)
+		}
+
+		// Wait until the first run has written peer1.tmp, then a little more for it to
+		// reach the backlog file (and, before the fix, for cat to read peer1.tmp).
+		tmp := filepath.Join(dir, "peer1.tmp")
+		for limit := time.Now().Add(20 * time.Second); ; time.Sleep(50 * time.Millisecond) {
+			if fi, err := os.Stat(tmp); err == nil && fi.Size() == int64(output.Len()) {
+				break
+			}
+			if time.Now().After(limit) {
+				t.Fatalf("the first run did not write peer1.tmp:\n%s", firstOut.String())
+			}
+		}
+		time.Sleep(time.Second)
+
+		out, err := s.run("procbatch", "-u", "-d", dir, in2Path)
+		t.Logf("second procbatch while the first one is in -m: %v\n%s", err, out)
+		_, statErr := os.Stat(in2Path)
+		secondKept := statErr == nil
+
+		// Read the backlog FIFO: the first run can finish.
+		backlog := make(chan []byte, 1)
+		go func() {
+			f, err := os.Open(fifo) // waits for the writer
+			if err != nil {
+				backlog <- nil
+				return
+			}
+			defer f.Close()
+			b, _ := io.ReadAll(f)
+			backlog <- b
+		}()
+		var got []byte
+		select {
+		case got = <-backlog:
+		case <-time.After(20 * time.Second):
+			t.Fatalf("the first run never wrote to the backlog file:\n%s", firstOut.String())
+		}
+		err1 := first.Wait()
+		t.Logf("first procbatch -m -u: %v\n%s", err1, firstOut.String())
+		if err1 != nil || string(got) != output.String() {
+			t.Errorf("first run: %v, backlog %d bytes, want %d", err1, len(got), output.Len())
+		}
+
+		// The entries of the second run must not be lost: either it failed and kept its
+		// input, or they are in peer1.tmp.
+		rest, _ := os.ReadFile(tmp)
+		if !secondKept && !strings.Contains(string(rest), out2.String()) {
+			t.Errorf("the second run removed its input, but its entries are neither in peer1.tmp (%d bytes) nor in the backlog",
+				len(rest))
+		}
+		if secondKept {
+			out, err = s.run("procbatch", "-u", "-d", dir, in2Path)
+			rest, _ = os.ReadFile(tmp)
+			if err != nil || string(rest) != out2.String() {
+				t.Errorf("second run after the first one: %v, peer1.tmp %q\n%s", err, tail(string(rest), 200), out)
+			}
 		}
 	})
 }
