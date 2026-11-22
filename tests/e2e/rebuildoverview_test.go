@@ -57,3 +57,21 @@ func TestRebuildOverviewMarkerKeptWhenInndFails(t *testing.T) {
 		t.Errorf("the marker is gone after a failed start of innd: %v", err)
 	}
 }
+
+// TestRebuildOverviewMarkerKeptWithoutOverview: with enableoverview set to false nothing is
+// renumbered, so innd leaves the marker for the next start with overview.
+func TestRebuildOverviewMarkerKeptWithoutOverview(t *testing.T) {
+	run := t.TempDir()
+	marker := filepath.Join(run, ".rebuildoverview")
+	if err := os.WriteFile(marker, nil, 0o664); err != nil {
+		t.Fatal(err)
+	}
+	s := NewSite(t, SiteOptions{
+		InnConf: map[string]string{"pathrun": run, "enableoverview": "false"},
+		Args:    []string{"-r"},
+	})
+	s.Reader(t) // innd has started, and has gone through the renumbering
+	if _, err := os.Stat(marker); err != nil {
+		t.Errorf("the marker is gone although overview is disabled: %v", err)
+	}
+}
