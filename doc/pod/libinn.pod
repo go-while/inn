@@ -105,8 +105,8 @@ I<libinn> is a library of utility routines for manipulating Usenet articles
 and related data.  The whole documentation of I<libinn> routines is split
 into several specific man pages besides this one: libinn_clientlib(3),
 libinn_confparse(3), libinn_dbz(3), libinn_innconf(3), libinn_inndcomm(3),
-libinn_list(3), libinn_network_innbind(3), libinn_qio(3), libinn_tst(3) and
-libinn_uwildmat(3).
+libinn_list(3), libinn_network_innbind(3), libinn_qio(3),
+libinn_secrets(3), libinn_tst(3) and libinn_uwildmat(3).
 
 =head2 MACROS
 
@@ -456,7 +456,7 @@ POD by Julien Élie.
 
 active(5), inn.conf(5), libinn_clientlib(3), libinn_confparse(3),
 libinn_dbz(3), libinn_innconf(3), libinn_inndcomm(3), libinn_list(3),
-libinn_network_innbind(3), libinn_qio(3), libinn_tst(3),
+libinn_network_innbind(3), libinn_qio(3), libinn_secrets(3), libinn_tst(3),
 libinn_uwildmat(3), moderators(5), passwd.nntp(5).
 
 =cut

@@ -101,6 +101,11 @@ The newsmaster's e-mail address mentioned in the help message returned
 by B<nnrpd> now uses I<fromhost> (set in F<inn.conf> or overridden in
 F<readers.conf>) as the default domain name instead of I<domain>.
 
+=item *
+
+Added library man pages for the shared configuration parser, the inn.conf
+and inn-secrets.conf interfaces, and the innbind socket helpers.
+
 =back
 
 =item *
