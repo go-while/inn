@@ -51,6 +51,11 @@ L<Upgrading from 2.6 to 2.7>.
 
 =item *
 
+The configure checks for automatic keyword generation now use Autoconf
+conditionals.  The B<--enable-keywords> build option is documented in INSTALL.
+
+=item *
+
 A new history storage method based on SQLite has been added, named
 C<hissqlite>, selectable instead of C<hisv6> via the I<hismethod>
 parameter in F<inn.conf> when INN is built with SQLite support.  The

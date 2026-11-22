@@ -263,9 +263,7 @@ inn_enable_keywords=0
 AC_ARG_ENABLE([keywords],
     [AS_HELP_STRING([--enable-keywords],
         [Automatic innd keyword generation support])],
-    if test x"$enableval" = xyes ; then
-        inn_enable_keywords=1
-    fi)
+    [AS_IF([test x"$enableval" = xyes], [inn_enable_keywords=1])])
 AC_DEFINE_UNQUOTED([DO_KEYWORDS], [$inn_enable_keywords],
     [Define to 1 to compile in support for keyword generation code.])
 
@@ -542,10 +540,9 @@ INN_HEADER_PAM_CONST
 
 dnl If keyword generation support was requested, check for the appropriate
 dnl libraries.
-if test x"$inn_enable_keywords" = x1 ; then
-    INN_SEARCH_AUX_LIBS([regexec], [regex], [REGEX_LIBS], [],
-        [AC_MSG_ERROR([no usable regular expression library found])])
-fi
+AS_IF([test x"$inn_enable_keywords" = x1],
+    [INN_SEARCH_AUX_LIBS([regexec], [regex], [REGEX_LIBS], [],
+        [AC_MSG_ERROR([no usable regular expression library found])])])
 
 dnl Handle optional libraries and probing for their locations and component
 dnl libraries if needed.

@@ -361,6 +361,12 @@ platforms with proper shared library dependencies.  This is not enabled
 by default, and is of interest primarily to people building packages
 for distributions.
 
+=item B<--enable-keywords>
+
+Compile support for automatic keyword generation in B<innd>.  This requires a
+regular expression library and is disabled by default.  See I<keywords> in
+inn.conf(5) for the corresponding run-time option.
+
 =item B<--enable-largefiles>
 
 Enables large file support, arranging for 64-bit file offsets.  This flag
