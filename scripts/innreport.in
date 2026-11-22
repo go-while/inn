@@ -818,7 +818,11 @@ sub Rotate {
 # Convert a date to number of seconds since epoch.
 # Return undef in case the date is invalid.
 #
-# Leap years are handled correctly, daylight saving is not.
+# Time::Local::timelocal() converts the date as local time with the local
+# daylight-saving rules.  A wall-clock time in the repeated hour when daylight
+# saving ends is ambiguous.  A +0000 log line was parsed as if it had the
+# startup offset (see $local_timezone).  A February 29 outside a leap year
+# is invalid and leaves the date undefined.
 # Usage: $num = &ConvDate ($date, $wrap_around);
 # Date format is "2012 Aug 22 01:49:40".
 # The second argument is whether wrapping should be taken into account

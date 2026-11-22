@@ -160,6 +160,44 @@ appropriately; otherwise it will not be computed right.
 
 =back
 
+=head1 BUGS
+
+B<innreport> interprets the date of a log line as a wall-clock time in the
+local time zone, using the daylight-saving rules of that time zone (through
+the Perl function C<Time::Local::timelocal()>).  It initially assumes the
+current year and adjusts earlier dates when it detects a New Year rollover.
+
+=over 4
+
+=item *
+
+The UTC offset of an ISO 8601 timestamp is not used.  A timestamp with a
+non-zero offset, like C<2023-07-23T04:15:01+02:00>, is read as a local
+time exactly as it is written, whatever the offset is.
+
+=item *
+
+For an offset of C<+0000>, B<innreport> instead parses the timestamp as
+if it had the local UTC offset in effect when the report starts.  For
+example, with a startup offset of C<+0200>, a line at 12:00 UTC is
+reported at 10:00 even though local time is 14:00.  The same offset is
+used throughout the report, including across daylight-saving changes.
+
+=item *
+
+A wall-clock time in the period which is repeated when daylight saving
+ends (usually one hour) is ambiguous.  Both occurrences of that period are
+counted in the same hours of the report, and the elapsed time that
+B<innreport> computes between the first and the last log line can be off
+by up to the length of the repeated period.
+
+=item *
+
+A line dated February 29 is not recognized when B<innreport> runs in a year
+that is not a leap year.
+
+=back
+
 =head1 HISTORY
 
 Written by Fabien Tassin <fta@sofaraway.org> for InterNetNews.  Rewritten into
