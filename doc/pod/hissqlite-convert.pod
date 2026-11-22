@@ -19,10 +19,16 @@ recovered.  Unlike a from-spool rebuild with B<makehistory>, this preserves
 both the exact arrival, posting, and expiration timestamps and the
 I<remembered> (token-less) entries, which a rebuild cannot reconstruct.
 
-The new database is built in a temporary file and atomically renamed into
-place only on full success, so an interrupted or failed run never leaves a
-usable-but-incomplete destination.  B<hissqlite-convert> refuses to run if
-the destination already exists.
+The new database is built in a temporary directory of its own beside the
+destination, named after I<dstpath> with a F<.new.> suffix followed by the
+process ID and a number, and moved into place only on full success, so an
+interrupted or failed run never leaves a usable-but-incomplete destination.
+B<hissqlite-convert> refuses to run if the destination already exists, and
+does not replace a destination created while it runs (for instance by
+another conversion), so two conversions to the same destination cannot
+publish each other's unfinished database.  A failed run removes its
+temporary directory; a run killed by a signal leaves it behind, and it can
+then be removed.
 
 B<innd> must not be writing the source history while it is being converted.
 After a successful conversion, set I<hismethod> to C<hissqlite> in F<inn.conf>

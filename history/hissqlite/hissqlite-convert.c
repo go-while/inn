@@ -36,6 +36,7 @@ main(void)
 
 #else
 
+#    include <errno.h>
 #    include <sqlite3.h>
 #    include <sys/stat.h>
 
@@ -48,6 +49,69 @@ struct convstate {
     unsigned long count; /* rows successfully inserted */
     unsigned long dups;  /* duplicate-hash rows skipped (anomalous) */
 };
+
+/* The private directory the database is built in, and the database in it,
+   removed by remove_temp. */
+static char *tempdir = NULL;
+static char *tempdb = NULL;
+
+/*
+**  Remove the temporary database, the files SQLite may have left beside it,
+**  and its directory.
+*/
+static void
+remove_temp(void)
+{
+    static const char *const suffixes[] = {"", "-journal", "-wal", "-shm"};
+    char *path;
+    size_t i;
+
+    if (tempdir == NULL)
+        return;
+    for (i = 0; i < ARRAY_SIZE(suffixes); i++) {
+        path = concat(tempdb, suffixes[i], (char *) NULL);
+        unlink(path);
+        free(path);
+    }
+    rmdir(tempdir);
+    free(tempdir);
+    free(tempdb);
+    tempdir = NULL;
+    tempdb = NULL;
+}
+
+/* Called by die and sysdie: a failed run leaves nothing behind. */
+static int
+fatal_cleanup(void)
+{
+    remove_temp();
+    return 1;
+}
+
+/*
+**  Create a directory of our own beside dstpath, named dstpath.new.PID.N, and
+**  set tempdir and tempdb.  mkdir fails if the directory exists, so another
+**  conversion, running or failed, never shares it.
+*/
+static void
+make_temp(const char *dstpath)
+{
+    char suffix[64];
+    unsigned int n;
+
+    for (n = 0;; n++) {
+        snprintf(suffix, sizeof(suffix), ".new.%lu.%u",
+                 (unsigned long) getpid(), n);
+        tempdir = concat(dstpath, suffix, (char *) NULL);
+        if (mkdir(tempdir, 0700) == 0)
+            break;
+        if (errno != EEXIST || n >= 100)
+            sysdie("cannot create temporary directory %s", tempdir);
+        free(tempdir);
+    }
+    tempdb = concatpath(tempdir, "history.sqlite");
+    message_fatal_cleanup = fatal_cleanup;
+}
 
 static void
 checked(sqlite3 *db, int status, const char *what)
@@ -116,7 +180,7 @@ main(int argc, char *argv[])
 {
     const char *srcmethod = "hisv6";
     const char *srcpath, *dstpath;
-    char *finaldb, *tempbase, *tempdb;
+    char *finaldb, *tempbase;
     struct history *src, *tmp;
     struct convstate st;
     struct stat sb;
@@ -149,13 +213,14 @@ main(int argc, char *argv[])
     if (stat(finaldb, &sb) == 0)
         die("destination %s already exists; refusing to overwrite", finaldb);
 
-    /* Build into a temp file and rename it into place only on full success, so
-       a crash or error never leaves a usable-but-incomplete destination (this
-       is also what makes journal_mode=off below safe).  Clear any stale temp
-       from a previous failed run. */
-    tempbase = concat(dstpath, ".new", (char *) NULL);
-    tempdb = concat(tempbase, ".sqlite", (char *) NULL);
-    unlink(tempdb);
+    /* Build in a directory of our own beside the destination and publish the
+       database only on full success, so a crash or error never leaves a
+       usable-but-incomplete destination (this is also what makes
+       journal_mode=off below safe).  A private directory, rather than a fixed
+       temporary name, keeps two conversions to the same destination from
+       removing or publishing each other's unfinished database. */
+    make_temp(dstpath);
+    tempbase = concatpath(tempdir, "history");
 
     /* Create the temp DB with the canonical hissqlite schema, then reopen the
        raw SQLite file for a fast by-hash bulk load. */
@@ -208,16 +273,30 @@ main(int argc, char *argv[])
     if (sqlite3_close(st.db) != SQLITE_OK)
         die("cannot close %s", tempdb);
 
-    /* Atomically publish the completed database. */
-    if (rename(tempdb, finaldb) != 0)
-        sysdie("cannot rename %s to %s", tempdb, finaldb);
+    /* Publish the completed database under its final name without replacing
+       a destination created since the check above (by another conversion, or
+       by an innd already started with hismethod set to hissqlite): link fails
+       if the name exists.  On a file system without hard links, fall back to a
+       rename after a last check. */
+    if (link(tempdb, finaldb) != 0) {
+        if (errno == EEXIST)
+            die("destination %s was created during the conversion; refusing"
+                " to overwrite",
+                finaldb);
+        if (stat(finaldb, &sb) == 0)
+            die("destination %s was created during the conversion; refusing"
+                " to overwrite",
+                finaldb);
+        if (rename(tempdb, finaldb) != 0)
+            sysdie("cannot rename %s to %s", tempdb, finaldb);
+    }
+    remove_temp();
 
     if (st.dups > 0)
         warn("%lu duplicate hashes in the source were skipped", st.dups);
     notice("converted %lu entries into %s", st.count, finaldb);
     free(finaldb);
     free(tempbase);
-    free(tempdb);
     return 0;
 }
 
