@@ -95,7 +95,8 @@ interfering with this one.
 =item *
 
 A F<foo.input> file which has old article information B<innfeed> is reading
-for re-processing.
+for re-processing.  It is removed when its end has been reached, not after a
+read error: it is then kept and read again at the next rotation.
 
 =item *
 
