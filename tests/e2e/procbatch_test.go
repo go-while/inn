@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -112,7 +113,8 @@ func runUnderSizeLimit(s *Site, blocks int, name string, args ...string) (string
 // other entries. Without the limit, all the entries reach the backlog file. When the limit
 // cuts an entry in the middle and peer1.tmp already holds entries of an earlier run,
 // procbatch cuts peer1.tmp back to those entries, so that the next run does not append to
-// a partial line.
+// a partial line. When another process holds a lock on peer1.tmp, procbatch fails the same
+// way without touching it, so that a rollback cannot cut the entries of another run.
 func TestProcbatchWriteError(t *testing.T) {
 	s := NewSite(t, SiteOptions{})
 
@@ -243,6 +245,64 @@ func TestProcbatchWriteError(t *testing.T) {
 		if string(got) != want.String() {
 			t.Errorf("peer1.tmp after the second run has %d bytes, want %d (earlier entries and all new ones)",
 				len(got), want.Len())
+		}
+	})
+
+	t.Run("locked by another process", func(t *testing.T) {
+		work := t.TempDir()
+		outDir := filepath.Join(work, "out")
+		if err := os.Mkdir(outDir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		earlier := "e2e/old/1 <old1@e2e.invalid>\n"
+		tmp := filepath.Join(outDir, "peer1.tmp")
+		if err := os.WriteFile(tmp, []byte(earlier), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		in := filepath.Join(work, "innfeed-dropped.A000003")
+		if err := os.WriteFile(in, []byte(input.String()), 0o644); err != nil {
+			t.Fatal(err)
+		}
+
+		// Another process holds a lock on peer1.tmp, taken with Perl's flock as procbatch does.
+		ctx, cancel := context.WithTimeout(context.Background(), testkit.Deadline())
+		defer cancel()
+		locker := exec.CommandContext(ctx, "perl", "-MFcntl=:flock", "-e",
+			`open(F, ">>", $ARGV[0]) or die "open: $!\n"; flock(F, LOCK_EX) or die "flock: $!\n"; `+
+				`$| = 1; print "locked\n"; sleep 60;`, tmp)
+		stdout, err := locker.StdoutPipe()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := locker.Start(); err != nil {
+			t.Fatal(err)
+		}
+		defer func() { locker.Process.Kill(); locker.Wait() }()
+		line := make([]byte, 7)
+		if _, err := io.ReadFull(stdout, line); err != nil || string(line) != "locked\n" {
+			t.Fatalf("locker: %q, %v", line, err)
+		}
+
+		args := []string{"-u", "-d", outDir, in}
+		out, err := s.run("procbatch", args...)
+		t.Logf("procbatch %s with peer1.tmp locked: %v\n%s", strings.Join(args, " "), err, out)
+		_, statErr := os.Stat(in)
+		got, _ := os.ReadFile(tmp)
+		if err == nil || statErr != nil {
+			t.Errorf("procbatch did not fail (%v) or removed its input (%v) with peer1.tmp locked", err, statErr)
+		}
+		if string(got) != earlier {
+			t.Errorf("procbatch changed the locked peer1.tmp: %d bytes, want %d", len(got), len(earlier))
+		}
+
+		// Once the lock is released, the run succeeds.
+		locker.Process.Kill()
+		locker.Wait()
+		out, err = s.run("procbatch", args...)
+		got, _ = os.ReadFile(tmp)
+		if err != nil || string(got) != earlier+output.String() {
+			t.Errorf("procbatch after the lock was released: %v, peer1.tmp %d bytes, want %d\n%s",
+				err, len(got), len(earlier)+output.Len(), out)
 		}
 	})
 }
