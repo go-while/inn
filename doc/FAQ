@@ -1655,9 +1655,9 @@ also be listed in incoming.conf on the master (and the master in
 passwd.nntp on the slave if it asks for authentication).
 
 You may also set pathhost on the slave to the same value as on the
-master.  The Path header field of articles coming from the master then
-already starts with that name, so the slave does not add its own name:
-articles look exactly the same on both servers.
+master.  If an incoming Path already starts with that name, sharing
+pathhost avoids an extra hop when the slave has no pathcluster and does
+not need to add a pathalias.  Those settings can still change Path.
 
 Both servers must carry the same newsgroups: an article is not filed in
 a newsgroup that does not exist on the slave.  Either let both servers
