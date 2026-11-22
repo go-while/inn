@@ -20,6 +20,8 @@
 use strict;
 use warnings;
 
+use Fcntl qw(:flock);
+
 my $tapeDir = $INN::Config::pathspool . "/innfeed";
 my $destDir = $INN::Config::pathtmp;
 my $spoolArts = $INN::Config::patharticles;
@@ -76,14 +78,15 @@ sub HELP_MESSAGE {
     exit(0);
 }
 
-my (%opt, %hosts, %sizes);
+my (%opt, %hosts, %locks, %sizes);
 my $missing = 0;
 
 # Give up after an error on the output file of a peer: cut every output file
-# opened so far back to the size it had before, so that no entry of this run
-# and no partial line (after a short write) is left in them, and exit with an
-# error.  The input file is kept.  The output files are not removed, as they
-# may hold the entries of earlier runs.
+# opened so far back to the size it had when it was locked, so that no entry
+# of this run and no partial line (after a short write) is left in them, and
+# exit with an error.  The input file is kept.  The output files are not
+# removed, as they may hold the entries of earlier runs.  They are still
+# locked, so no other procbatch has written to them meanwhile.
 sub output_failed {
     my ($host, $action) = @_;
     my $error = "$!";
@@ -96,8 +99,13 @@ sub output_failed {
             no warnings;
             close $hosts{$peer};
         }
-        truncate($file, $sizes{$peer})
+        next unless defined($sizes{$peer});
+        truncate($locks{$peer}, $sizes{$peer})
           or warn "$0: cannot truncate $file to $sizes{$peer} bytes: $!\n";
+    }
+    foreach my $peer (keys %locks) {
+        no warnings;
+        close $locks{$peer};
     }
     die "$0: cannot $action $destDir/$host.tmp: $error\n";
 }
@@ -156,11 +164,22 @@ while (<$INPUT>) {
         if (!$hosts{$host}) {
             my $outputFile = "$destDir/$host.tmp";
             print "Starting $host\n" if ($opt{'v'});
-            $sizes{$host} = -s $outputFile || 0;
             if (!open($hosts{$host}, '>>', $outputFile)) {
                 delete $hosts{$host};
                 output_failed($host, "open");
             }
+
+            # Lock the file through a duplicate of its descriptor until it is
+            # complete or cut back, so that another procbatch writing to it
+            # at the same time cannot mix its entries with these ones, nor
+            # lose them in a rollback.  Do not wait for the lock: two runs
+            # locking several files in another order would wait for each
+            # other forever.
+            if (!open($locks{$host}, '>>&', $hosts{$host})
+                || !flock($locks{$host}, LOCK_EX | LOCK_NB)) {
+                output_failed($host, "lock");
+            }
+            $sizes{$host} = (-s $locks{$host}) || 0;
         }
         print { $hosts{$host} } "$F[0] $F[1]\n"
           or output_failed($host, "write to");
@@ -174,6 +193,9 @@ close $INPUT;
 # flushed, so stop there and keep the input file.
 foreach my $host (keys %hosts) {
     close $hosts{$host} or output_failed($host, "write to");
+}
+foreach my $host (keys %locks) {
+    close $locks{$host};
 }
 
 foreach my $host (keys %hosts) {
