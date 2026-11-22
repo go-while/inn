@@ -1015,6 +1015,7 @@ tests/lib/md5-t.c                     Tests for lib/md5.c
 tests/lib/messageid-t.c               Tests for lib/messageid.c
 tests/lib/messages-t.c                Tests for lib/messages.c
 tests/lib/mkstemp-t.c                 Tests for lib/mkstemp.c
+tests/lib/mmap-t.c                    Tests for lib/mmap.c
 tests/lib/network                     Test suite for network (Directory)
 tests/lib/network/addr-ipv4-t.c       Tests for lib/network.c (IPv4-oriented)
 tests/lib/network/addr-ipv6-t.c       Tests for lib/network.c (IPv6-oriented)
@@ -1026,10 +1027,13 @@ tests/lib/qio-t.c                     Tests for lib/qio.c
 tests/lib/readin-t.c                  Tests for lib/readin.c
 tests/lib/reallocarray-t.c            Tests for lib/reallocarray.c
 tests/lib/reservedfd-t.c              Tests for reserved file descriptors
+tests/lib/sequence-t.c                Tests for lib/sequence.c
 tests/lib/setenv-t.c                  Tests for lib/setenv.c
 tests/lib/snprintf-t.c                Tests for lib/snprintf.c
+tests/lib/sqlite-helper-t.c           Tests for lib/sqlite-helper.c
 tests/lib/strlcat-t.c                 Tests for lib/strlcat.c
 tests/lib/strlcpy-t.c                 Tests for lib/strlcpy.c
+tests/lib/timer-t.c                   Tests for lib/timer.c
 tests/lib/tst-t.c                     Tests for lib/tst.c
 tests/lib/uwildmat-t.c                Tests for lib/uwildmat.c
 tests/lib/vector-t.c                  Tests for lib/vector.c
@@ -1059,6 +1063,7 @@ tests/storage/caf-t.c                 Tests for CAF file validation and cleaning
 tests/storage/cancel-tombstone-t.c    Tests for SMcanceltombstone
 tests/storage/makehistory.t           Tests for expire/makehistory
 tests/storage/sm.t                    Tests for frontends/sm
+tests/storage/tombstone-t.c           Tests for tombstone read errors, rename and header bytes
 tests/tap                             Helper scripts for TAP (Directory)
 tests/tap/basic.c                     Helper C library for writing tests
 tests/tap/basic.h                     Header file for basic testing routines
