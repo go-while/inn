@@ -26,11 +26,16 @@ B<controlbatch> first makes sure that no other copy of itself is already
 running, using a lock file named F<LOCK.controlbatch> in I<pathrun> (as
 set in F<inn.conf>); if one is found, it silently exits.  It then merges
 any leftover I<batchfile>C<.work> file (left behind by an interrupted
-previous run) into I<batchfile>C<.doit>.  If I<batchfile> itself is not
+previous run, or by one which could not flush the site) into
+I<batchfile>C<.doit>, after having flushed the site again so that B<innd>
+no longer writes to it.  If the flush fails, I<batchfile>C<.work> is kept
+for the next run.  If I<batchfile> itself is not
 empty, it is renamed to I<batchfile>C<.work>, and B<ctlinnd> is used to
 flush the site named I<feedsite> so that B<innd> stops writing to it
 while it is being processed; the flushed batch is then appended to
-I<batchfile>C<.doit> as well.  Finally, if I<batchfile>C<.doit> is not
+I<batchfile>C<.doit> as well.  I<batchfile>C<.work> is removed only once
+it has been completely appended, so that no control article is lost when,
+for instance, the disk is full.  Finally, if I<batchfile>C<.doit> is not
 empty, it is fed to B<controlchan>, whose output is appended to
 F<controlbatch.log> in I<pathlog> (as set in F<inn.conf>).
 

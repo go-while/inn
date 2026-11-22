@@ -75,16 +75,45 @@ cd "${BATCH}" || {
     exit 1
 }
 
+# Add the batch file set aside as batchfile.work to the file of the control
+# articles to process, batchfile.doit.  The first one is only removed once
+# the second one has been completely written, so that no control article is
+# lost when, for instance, the disk is full.  The new content of the second
+# file is first written to a temporary file in order not to leave a partial
+# copy of batchfile.work in it, which would be added again on the next run.
+addwork() {
+    rm -f "${batchfile}.new"
+    if [ -s "${batchfile}.doit" ]; then
+        cat "${batchfile}.doit" "${batchfile}.work" >"${batchfile}.new"
+    else
+        cat "${batchfile}.work" >"${batchfile}.new"
+    fi \
+        && mv -f "${batchfile}.new" "${batchfile}.doit" \
+        && rm -f "${batchfile}.work" \
+        && return 0
+    rm -f "${batchfile}.new"
+    echo "${0}: cannot add ${BATCH}/${batchfile}.work to" \
+        "${BATCH}/${batchfile}.doit" >&2
+    return 1
+}
+
+# A batch file left as batchfile.work was set aside by a previous run which
+# could not flush the file feed:  innd may still append control articles to
+# it.  It is only taken into account when innd has switched to a new file,
+# which is the case when the flush is successful now.  Otherwise, it is left
+# in place, as well as the batch file, for the next run.
+work=true
 if [ -s "${batchfile}.work" ]; then
-    cat "${batchfile}.work" >>"${batchfile}.doit"
-    rm -f "${batchfile}.work"
+    work=false
+    if "${PATHBIN}/ctlinnd" -s -t30 flush "${feedsite}"; then
+        addwork && work=true
+    fi
 fi
 
-if [ -s "${batchfile}" ]; then
+if ${work} && [ -s "${batchfile}" ]; then
     mv "${batchfile}" "${batchfile}.work"
     if "${PATHBIN}/ctlinnd" -s -t30 flush "${feedsite}"; then
-        cat "${batchfile}.work" >>"${batchfile}.doit"
-        rm -f "${batchfile}.work"
+        addwork
     fi
 fi
 
