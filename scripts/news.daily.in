@@ -506,7 +506,9 @@ if ${DOEXPIRE}; then
         else
             HISEXTS="dir index hash"
         fi
-        if ! cp /dev/null "${HISTORY}"; then
+        ##  "true >" rather than "cp /dev/null": BusyBox cp replaces a file
+        ##  it cannot open for writing instead of failing.
+        if ! true >"${HISTORY}"; then
             (
                 echo "$0: Cannot empty ${HISTORY} to install the new history"
                 echo "files of ${EXPDIR}; nothing was moved and the server is"
