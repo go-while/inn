@@ -46,7 +46,7 @@ export INNCONF
 mkdir -p spool
 
 # Print out the number of tests
-echo 5
+echo 10
 
 # First, store the articles.
 $sm -s <articles/1 >spool/tokens
@@ -107,4 +107,60 @@ sed -e 's/^[^ ]* [^ ]* //' -e 's/Xref: [^ ]*/Xref:/' spool/overview \
 compare spool/stripped overview/1-4stripped
 
 # Done.  Clean up.
+rm -rf spool
+
+# Check class selection from Expires, both on receipt and during a rebuild.
+mkdir -p spool/policy
+cat etc/inn.conf >spool/policy/inn.conf
+echo 'pathetc: spool/policy' >>spool/policy/inn.conf
+INNCONF=spool/policy/inn.conf
+cat >spool/policy/storage.conf <<'EOF'
+method tradspool {
+    newsgroups: *
+    class: 1
+    expires: 1d,3d
+}
+method tradspool {
+    newsgroups: *
+    class: 2
+    expires: 0s,1d
+}
+method tradspool {
+    newsgroups: *
+    class: 3
+    expires: 3d
+}
+EOF
+
+# The second byte of a token is the storage class.
+checkclass() {
+    case "$1" in
+        @??"$2"*@) printcount "ok" ;;
+        *) printcount "not ok" ; echo "# expected class $2, got $1" ;;
+    esac
+}
+
+expires_article() {
+    LC_ALL=C perl -MPOSIX=strftime -e '
+        print "Expires: ", strftime("%a, %d %b %Y %H:%M:%S +0000",
+                                    gmtime(time + shift)), "\n";
+    ' -- "$1"
+    cat articles/1
+}
+
+checkclass "$($sm -s <articles/1)" 02
+rm -f spool/example/test/1
+checkclass "$(expires_article 432000 | $sm -s)" 03
+rm -f spool/example/test/1
+checkclass "$(expires_article 172800 | $sm -s)" 01
+rm -f spool/example/test/1
+
+# Model a spool file received four days ago that expired two days ago.
+# Its original two-day lifetime still selects class 1 during makehistory.
+checkclass "$(expires_article -172800 | $sm -s)" 02
+perl -e '$t = time - 345600; utime($t, $t, @ARGV) == 1 or die $!' \
+    spool/example/test/1
+rebuilt=$($makehistory -x -O -S | sed -n 's/ .*//p')
+checkclass "$rebuilt" 01
+
 rm -rf spool

@@ -1290,8 +1290,6 @@ tradspool_next(ARTHANDLE *article, const RETRTYPE amount)
             art->expires = parsedate_rfc5322_lax(x);
             if (art->expires == (time_t) -1)
                 art->expires = 0;
-            else
-                art->expires -= time(NULL);
             free(x);
         }
         /* for backward compatibility; assumes no Xref unless crossposted

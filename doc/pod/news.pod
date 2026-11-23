@@ -133,6 +133,19 @@ files behind after a failed creation, and the buffindexed overview method
 validates its F<group.index> file and no longer frees memory twice when
 mapping overview data fails.  Many thanks to Kevin Bowling for the patches.
 
+=item *
+
+For new articles, storage class selection measures the time from receipt to
+the date in the Expires header field.  An C<expires> rule in F<storage.conf>
+with only a positive minimum used to catch nearly every article with that
+header.  It now selects only articles meeting the minimum, and rules with
+a maximum can match articles within their range.
+
+A later tradspool rebuild also applies these rules to articles already on
+disk.  It uses each file's modification time as the arrival time, so a
+restore that changes file timestamps can change the storage class and the
+F<expire.ctl> policy that applies.
+
 =back
 
 =head1 Changes in 2.7.5 (not yet released)

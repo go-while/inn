@@ -681,6 +681,7 @@ STORAGE_SUB *
 SMgetsub(const ARTHANDLE article)
 {
     STORAGE_SUB *sub;
+    double lifetime = 0;
 
     if (article.len == 0) {
         SMseterror(SMERR_BADHANDLE, NULL);
@@ -692,12 +693,18 @@ SMgetsub(const ARTHANDLE article)
         return NULL;
     }
 
+    /* Expires is a timestamp, while storage.conf specifies durations from
+     * arrival.  The arrival time is known when reconstructing spool tokens. */
+    if (article.expires != 0)
+        lifetime = difftime(article.expires,
+                            article.arrived != 0 ? article.arrived : time(NULL));
+
     for (sub = subscriptions; sub != NULL; sub = sub->next) {
         if (!(method_data[typetoindex[sub->type]].initialized == INIT_FAIL)
             && (article.len >= sub->minsize)
             && (!sub->maxsize || (article.len <= sub->maxsize))
-            && (!sub->minexpire || article.expires >= sub->minexpire)
-            && (!sub->maxexpire || (article.expires <= sub->maxexpire))
+            && (!sub->minexpire || lifetime >= sub->minexpire)
+            && (!sub->maxexpire || lifetime <= sub->maxexpire)
             && (!filteredKeyUsed || article.filtered == sub->filtered)
             && (sub->path_pattern == NULL
                 || MatchPath(article.path, article.pathlen, sub->path_pattern))
