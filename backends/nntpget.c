@@ -494,7 +494,8 @@ main(int ac, char *av[])
             i = atoi(buff);
             if (i == NNTP_OK_IHAVE)
                 continue;
-            if (i == NNTP_FAIL_IHAVE_DEFER || i / 100 == 4) {
+            if (i == NNTP_FAIL_IHAVE_DEFER
+                || (i / 100 == 4 && i != NNTP_FAIL_IHAVE_REJECT)) {
                 syswarn("%s to %s", buff, mesgid);
                 printf("%s\n", mesgid);
                 Failed = true;
@@ -562,10 +563,14 @@ main(int ac, char *av[])
                 sysdie("cannot update the time of %s", Update);
             }
         }
-        /* Keep the permissions of the old file; the owner cannot always
-         * be kept. */
-        if (chmod(tmpname, UpdateMode) < 0)
-            syswarn("cannot set the permissions of %s", Update);
+        /* Keep the permissions of the old file, or the old file itself; the
+         * owner cannot always be kept. */
+        if (chmod(tmpname, UpdateMode) < 0) {
+            unlink(tmpname);
+            sysdie("cannot set the permissions of the new %s, keeping the old"
+                   " one",
+                   Update);
+        }
         if (rename(tmpname, real) < 0) {
             unlink(tmpname);
             sysdie("cannot update %s", Update);
