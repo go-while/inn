@@ -55,7 +55,7 @@ B<tinyleaf> now accepts B<-s> to set the maximum article size in bytes and
 B<-t> to set the read timeout in seconds.  Even with default options, a
 full input buffer now gets a 400 reply and disconnects.  Previously an
 oversized article was silently dropped and the peers lost synchronization,
-while an overlong command stalled the session.  More than two positional
+while an overlong command looped indefinitely.  More than two positional
 arguments are now rejected.
 
 =item *

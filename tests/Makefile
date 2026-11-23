@@ -41,9 +41,9 @@ TESTS	= authprogs/ident.t expire/tombstone.t expire/tombstone-hisexpire.t \
 
 ##  Extra stuff that needs to be built before tests can be run.
 
-EXTRA	= runtests clients/server-list docs/pod.t innd/tinyleaf-status lib/xmalloc nnrpd/auth-test \
-	  overview/ovsqlite-read.t overview/ovsqlite-write.t \
-	  perl/minimum-version.t
+EXTRA	= runtests clients/server-list docs/pod.t innd/tinyleaf-status \
+	  lib/xmalloc nnrpd/auth-test overview/ovsqlite-read.t \
+	  overview/ovsqlite-write.t perl/minimum-version.t
 
 BENCHMARKS = lib/history-bench
 
