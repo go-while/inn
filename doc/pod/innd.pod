@@ -335,11 +335,24 @@ and S<RFC 6048> (NNTP LIST additions) with the following differences:
 
 =item 1.
 
-A batch transfer command, XBATCH I<byte-count>, is provided.  This command
-will read I<byte-count> bytes and store them for later processing by
-rnews(1) (which must be run separately, probably from cron).  See
-innxbatch(8) and B<sendxbatches> for more details on this
-extension.
+XBATCH I<byte-count> transfers an rnews batch.  B<innd> advertises XBATCH to
+authenticated peers for which the I<xbatch> setting in F<incoming.conf> is
+enabled.  Send the byte count in decimal.  B<innd> converts the size
+argument using C<atoi> and replies with C<501> if the resulting count is
+zero or negative, or exceeds a nonzero I<maxartsize>.
+
+After a C<339> reply, send exactly I<byte-count> octets.  The payload can
+contain binary data and has no dot-stuffing, terminating dot line, or
+additional CRLF after the last octet.  A C<239> reply means the batch was
+spooled in I<pathincoming> for a separate run of rnews(1).  It does not
+indicate that any article in the batch was accepted.  Spooling errors
+are reported with C<436> replies.
+
+A peer that can authenticate but has not yet done so receives C<480>.
+A peer that cannot authenticate, or an authenticated peer without
+XBATCH permission, receives C<502>.
+
+See rnews(1) for batch formats and innxbatch(8) for the sending tools.
 
 =item 2.
 
@@ -351,7 +364,13 @@ to B<nnrpd>.
 
 =item 3.
 
-B<innd> allows a wider syntax for wildmats.
+Wildmats used by B<innd>, for example in LIST ACTIVE, accept character
+sets in square brackets in addition to the syntax in S<RFC 3977>.
+C<news.[abc]> matches C<news.a>, C<news.b>, and C<news.c>.
+C<news.[a-c]> matches the same names, and C<news.[^a-c]> matches a
+single character other than C<a>, C<b>, or C<c> after C<news.>.
+A backslash outside a set makes the following character literal.
+See libinn_uwildmat(3) for the full syntax.
 
 =item 4.
 
