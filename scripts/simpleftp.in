@@ -118,33 +118,44 @@ for (@ARGV) {
         my $key = join("\0", $host, $port, $user, $pass);
 
         ftp_close() if defined $session && $session ne $key;
-        if (not defined $session) {
-            $ftp = Net::FTP->new(
-                Host    => $host,
-                Port    => $port,
-                Timeout => $timeout,
-                Passive => $passive,
-                Debug   => $debug,
-            ) or next;
+        my $done = 0;
+        for my $attempt (1 .. 2) {
+            my $reused = defined $session;
 
-            $ftp_session = 1;
+            if (not $reused) {
+                $ftp = Net::FTP->new(
+                    Host    => $host,
+                    Port    => $port,
+                    Timeout => $timeout,
+                    Passive => $passive,
+                    Debug   => $debug,
+                ) or last;
 
-            if (not $ftp->login($user, $pass)) {
-                ftp_close();
-                next;
+                $ftp_session = 1;
+
+                if (not $ftp->login($user, $pass)) {
+                    ftp_close();
+                    last;
+                }
+                $session = $key;
             }
-            $session = $key;
-        }
 
-        # Do not reuse a session after a failed transfer:  the connection may
-        # no longer be usable.
-        if (   not $ftp->binary
-            or not $ftp->cwd($path)
-            or not $ftp->get($localfile))
-        {
+            if (    $ftp->binary
+                and $ftp->cwd($path)
+                and $ftp->get($localfile))
+            {
+                $done = 1;
+                last;
+            }
+
+            # Do not reuse a session after a failed transfer:  the connection
+            # may no longer be usable.  A reused session may just have timed
+            # out (for instance during a long HTTP download):  try once more
+            # with a new one.
             ftp_close();
-            next;
+            last if not $reused;
         }
+        next if not $done;
     } elsif ($protocol =~ /^https?$/) {
         my $http = HTTP::Tiny->new(
             timeout => $timeout,

@@ -73,13 +73,23 @@ sub logcall {
     print {$fh} "@_\n";
     close($fh);
 }
+# A download of a URL with "slow" in it makes the existing sessions time out.
+our $generation = 0;
 sub new {
     my ($class, %args) = @_;
     logcall("ftp new $args{Host} $args{Port}");
-    return bless({}, $class);
+    return bless({ generation => $generation }, $class);
 }
 sub login  { logcall("ftp login $_[1]"); return 1 }
-sub binary { logcall("ftp binary");      return 1 }
+sub binary {
+    my ($self) = @_;
+    if ($self->{generation} != $generation) {
+        logcall("ftp binary timed out");
+        return 0;
+    }
+    logcall("ftp binary");
+    return 1;
+}
 sub cwd    { logcall("ftp cwd $_[1]");   return 1 }
 sub get    { logcall("ftp get $_[1]");   return $_[1] !~ /fail/ }
 sub quit   { logcall("ftp quit");        return 1 }
@@ -94,6 +104,8 @@ sub new     { return bless({}, shift) }
 sub can_ssl { return 1 }
 sub mirror {
     my ($self, $url, $file) = @_;
+    no warnings 'once';
+    $Net::FTP::generation++ if $url =~ /slow/;
     open(my $fh, '>>', $ENV{FAKE_LOG}) or die "$ENV{FAKE_LOG}: $!";
     print {$fh} "http mirror $url $file\n";
     close($fh);
@@ -103,7 +115,7 @@ sub mirror {
 PERL
 
 # Print out the number of tests.
-echo 23
+echo 26
 
 # FTP from a host just used for an HTTP download: a new FTP session is needed.
 run http://files.example/pub/a.txt ftp://files.example/pub/b.txt
@@ -127,6 +139,14 @@ logged "ftp new files.example 21" 1
 run ftp://files.example/pub/a.txt http://other.example/pub/b.txt
 exited 0
 logged "ftp quit" 1
+
+# FTP, then a slow HTTP download from another host during which the FTP
+# session times out, then FTP again: the transfer is retried on a new session.
+run ftp://files.example/pub/a.txt http://other.example/pub/slow.txt \
+    ftp://files.example/pub/c.txt
+exited 0
+logged "ftp new files.example 21" 2
+logged "ftp get c.txt" 1
 
 # Another port or another login on the same host: a new session.
 run ftp://files.example/pub/a.txt ftp://files.example:2121/pub/b.txt
