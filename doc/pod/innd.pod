@@ -337,16 +337,20 @@ and S<RFC 6048> (NNTP LIST additions) with the following differences:
 
 XBATCH I<byte-count> transfers an rnews batch.  B<innd> advertises XBATCH to
 authenticated peers for which the I<xbatch> setting in F<incoming.conf> is
-enabled.  The count is a positive decimal number of octets.  If
-I<maxartsize> is nonzero, it also limits the size of a batch.
+enabled.  Send the byte count in decimal.  B<innd> converts the size
+argument using C<atoi> and replies with C<501> if the resulting count is
+zero or negative, or exceeds a nonzero I<maxartsize>.
 
 After a C<339> reply, send exactly I<byte-count> octets.  The payload can
 contain binary data and has no dot-stuffing, terminating dot line, or
 additional CRLF after the last octet.  A C<239> reply means the batch was
 spooled in I<pathincoming> for a separate run of rnews(1).  It does not
-indicate that any article in the batch was accepted.  A C<436> reply
-indicates a spooling error.  B<innd> rejects an invalid size with C<501>
-and denies an unauthorized transfer with C<502>.
+indicate that any article in the batch was accepted.  Spooling errors
+are reported with C<436> replies.
+
+A peer that can authenticate but has not yet done so receives C<480>.
+A peer that cannot authenticate, or an authenticated peer without
+XBATCH permission, receives C<502>.
 
 See rnews(1) for batch formats and innxbatch(8) for the sending tools.
 

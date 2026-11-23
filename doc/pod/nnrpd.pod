@@ -350,9 +350,10 @@ session has read access.
 Everything after the range or Message-ID is one pattern.  B<nnrpd> splits
 the arguments on whitespace and rejoins the pattern words with one space,
 so XPAT cannot express a literal run of spaces in this way.  The pattern
-matches the whole field value using the B<uwildmat_simple> function (see libinn_uwildmat(3)).  Use C<*> around
-a substring to search for it anywhere in the field.  Commas and
-exclamation marks are literal, including at the start of the pattern.
+matches the whole field value using B<uwildmat_simple> (see
+libinn_uwildmat(3)).  Use C<*> around a substring to search for it anywhere
+in the field.  Commas and exclamation marks are literal, including at the
+start of the pattern.
 
 A successful reply starts with C<221> and ends with a dot line.  Each
 matching row contains the article number (or the requested Message-ID)
