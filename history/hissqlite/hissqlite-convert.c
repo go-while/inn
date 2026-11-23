@@ -24,6 +24,7 @@
 #include "inn/innconf.h"
 #include "inn/libinn.h"
 #include "inn/messages.h"
+#include "inn/paths.h"
 #include "inn/storage.h"
 
 #ifndef HAVE_SQLITE3
@@ -36,6 +37,9 @@ main(void)
 
 #else
 
+#    include <errno.h>
+#    include <fcntl.h>
+#    include <signal.h>
 #    include <sqlite3.h>
 #    include <sys/stat.h>
 
@@ -48,6 +52,148 @@ struct convstate {
     unsigned long count; /* rows successfully inserted */
     unsigned long dups;  /* duplicate-hash rows skipped (anomalous) */
 };
+
+/* The files SQLite may create for a database, as suffixes of its name. */
+static const char *const sqlite_suffixes[] = {"", "-journal", "-wal", "-shm"};
+
+/* The private directory the database is built in, the database in it, and
+   the paths of the database and of the files SQLite may create beside it.
+   They stay allocated until exit, so that the signal handler can use them;
+   temp_active tells whether the directory is still there. */
+static char *tempdir = NULL;
+static char *tempdb = NULL;
+static char *tempfiles[ARRAY_SIZE(sqlite_suffixes)];
+static volatile sig_atomic_t temp_active = 0;
+
+/*
+**  Remove the temporary database, the files SQLite may have left beside it,
+**  and its directory.  Only unlink and rmdir are called, which are
+**  async-signal-safe, so that the signal handler can call it too.
+*/
+static void
+remove_temp(void)
+{
+    size_t i;
+
+    if (!temp_active)
+        return;
+    for (i = 0; i < ARRAY_SIZE(tempfiles); i++)
+        unlink(tempfiles[i]);
+    rmdir(tempdir);
+    temp_active = 0;
+}
+
+/* Called by die and sysdie: a failed run leaves nothing behind. */
+static int
+fatal_cleanup(void)
+{
+    remove_temp();
+    return 1;
+}
+
+/* SIGHUP, SIGINT and SIGTERM: remove the temporary directory, then end with
+   the signal. */
+static void
+signal_cleanup(int sig)
+{
+    remove_temp();
+    signal(sig, SIG_DFL);
+    raise(sig);
+}
+
+/*
+**  Create a directory of our own in the directory of dstpath, named
+**  hisconv.PID.N (short, whatever the length of the name of dstpath), and set
+**  tempdir, tempdb and tempfiles.  mkdir fails if the directory exists, so
+**  another conversion, running or failed, never shares it.  The paths are
+**  prepared first, and the signals the handler catches are blocked from the
+**  creation of the directory until it is marked active, so that a signal
+**  cannot leave it behind.
+*/
+static void
+make_temp(const char *dstpath)
+{
+    char name[64];
+    const char *slash;
+    char *dir;
+    unsigned int n;
+    size_t i;
+    sigset_t block, saved;
+    int status, oerrno;
+
+    xsignal(SIGHUP, signal_cleanup);
+    xsignal(SIGINT, signal_cleanup);
+    xsignal(SIGTERM, signal_cleanup);
+    slash = strrchr(dstpath, '/');
+    if (slash == NULL)
+        dir = xstrdup(".");
+    else if (slash == dstpath)
+        dir = xstrdup("/");
+    else
+        dir = xstrndup(dstpath, slash - dstpath);
+    sigemptyset(&block);
+    sigaddset(&block, SIGHUP);
+    sigaddset(&block, SIGINT);
+    sigaddset(&block, SIGTERM);
+    for (n = 0;; n++) {
+        snprintf(name, sizeof(name), "hisconv.%lu.%u",
+                 (unsigned long) getpid(), n);
+        tempdir = concatpath(dir, name);
+        tempdb = concatpath(tempdir, "history.sqlite");
+        for (i = 0; i < ARRAY_SIZE(tempfiles); i++)
+            tempfiles[i] = concat(tempdb, sqlite_suffixes[i], (char *) NULL);
+        sigprocmask(SIG_BLOCK, &block, &saved);
+        status = mkdir(tempdir, 0700);
+        oerrno = errno;
+        if (status == 0)
+            temp_active = 1;
+        sigprocmask(SIG_SETMASK, &saved, NULL);
+        if (status == 0)
+            break;
+        if (oerrno != EEXIST || n >= 100) {
+            errno = oerrno;
+            sysdie("cannot create temporary directory %s", tempdir);
+        }
+        free(tempdir);
+        free(tempdb);
+        for (i = 0; i < ARRAY_SIZE(tempfiles); i++)
+            free(tempfiles[i]);
+    }
+    free(dir);
+    message_fatal_cleanup = fatal_cleanup;
+}
+
+/*
+**  Test hook, only with INN_TESTSUITE set in the environment: according to
+**  HISSQLITE_CONVERT_TEST, act just before the publication as if something
+**  else had meanwhile.  "file" creates the destination (another conversion,
+**  or innd), "link" publishes the database already (as a link request
+**  retransmitted over NFS would have), "symlink" makes the destination a
+**  symbolic link to the database, "wait" sleeps to let a test send a signal.
+*/
+static void
+test_hook(const char *finaldb)
+{
+    const char *what;
+    int fd;
+
+    what = getenv("HISSQLITE_CONVERT_TEST");
+    if (getenv(INN_ENV_TESTSUITE) == NULL || what == NULL)
+        return;
+    if (strcmp(what, "file") == 0) {
+        fd = open(finaldb, O_WRONLY | O_CREAT | O_EXCL, 0644);
+        if (fd < 0 || write(fd, "racer\n", 6) != 6 || close(fd) != 0)
+            syswarn("test hook: cannot create %s", finaldb);
+    } else if (strcmp(what, "link") == 0) {
+        if (link(tempdb, finaldb) != 0)
+            syswarn("test hook: cannot link %s", finaldb);
+    } else if (strcmp(what, "symlink") == 0) {
+        if (symlink(tempdb, finaldb) != 0)
+            syswarn("test hook: cannot create symbolic link %s", finaldb);
+    } else if (strcmp(what, "wait") == 0) {
+        sleep(60);
+    }
+}
 
 static void
 checked(sqlite3 *db, int status, const char *what)
@@ -116,7 +262,7 @@ main(int argc, char *argv[])
 {
     const char *srcmethod = "hisv6";
     const char *srcpath, *dstpath;
-    char *finaldb, *tempbase, *tempdb;
+    char *finaldb, *tempbase;
     struct history *src, *tmp;
     struct convstate st;
     struct stat sb;
@@ -149,13 +295,14 @@ main(int argc, char *argv[])
     if (stat(finaldb, &sb) == 0)
         die("destination %s already exists; refusing to overwrite", finaldb);
 
-    /* Build into a temp file and rename it into place only on full success, so
-       a crash or error never leaves a usable-but-incomplete destination (this
-       is also what makes journal_mode=off below safe).  Clear any stale temp
-       from a previous failed run. */
-    tempbase = concat(dstpath, ".new", (char *) NULL);
-    tempdb = concat(tempbase, ".sqlite", (char *) NULL);
-    unlink(tempdb);
+    /* Build in a directory of our own next to the destination and publish the
+       database only on full success, so a crash or error never leaves a
+       usable-but-incomplete destination (this is also what makes
+       journal_mode=off below safe).  A private directory, rather than a fixed
+       temporary name, keeps two conversions to the same destination from
+       removing or publishing each other's unfinished database. */
+    make_temp(dstpath);
+    tempbase = concatpath(tempdir, "history");
 
     /* Create the temp DB with the canonical hissqlite schema, then reopen the
        raw SQLite file for a fast by-hash bulk load. */
@@ -208,16 +355,39 @@ main(int argc, char *argv[])
     if (sqlite3_close(st.db) != SQLITE_OK)
         die("cannot close %s", tempdb);
 
-    /* Atomically publish the completed database. */
-    if (rename(tempdb, finaldb) != 0)
-        sysdie("cannot rename %s to %s", tempdb, finaldb);
+    /* Publish the completed database under its final name without replacing
+       a destination created since the check above (by another conversion, or
+       by an innd already started with hismethod set to hissqlite): link fails
+       if the name exists, so the file system of the destination must support
+       hard links.  Over NFS, a retransmitted link request can fail with
+       EEXIST although the first one succeeded: the destination is then our
+       database, as the same inode tells.  lstat, so that a symbolic link to
+       our database is not taken for it. */
+    test_hook(finaldb);
+    if (link(tempdb, finaldb) != 0) {
+        struct stat tsb;
+        int oerrno = errno;
+
+        if (oerrno != EEXIST) {
+            errno = oerrno;
+            sysdie("cannot link %s to %s (the file system of the destination"
+                   " must support hard links)",
+                   tempdb, finaldb);
+        }
+        if (stat(tempdb, &tsb) != 0 || lstat(finaldb, &sb) != 0
+            || !S_ISREG(sb.st_mode) || tsb.st_dev != sb.st_dev
+            || tsb.st_ino != sb.st_ino)
+            die("destination %s was created during the conversion; refusing"
+                " to overwrite",
+                finaldb);
+    }
+    remove_temp();
 
     if (st.dups > 0)
         warn("%lu duplicate hashes in the source were skipped", st.dups);
     notice("converted %lu entries into %s", st.count, finaldb);
     free(finaldb);
     free(tempbase);
-    free(tempdb);
     return 0;
 }
 

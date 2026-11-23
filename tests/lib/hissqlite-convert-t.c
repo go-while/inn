@@ -6,8 +6,15 @@
 **  resulting hissqlite database through the public HIS API: the faithful
 **  migration must preserve tokens, timestamps and -- crucially -- the
 **  remembered (token-less) entries that a from-spool rebuild cannot
-**  reconstruct.  Also checks the refuse-to-overwrite guard and that the
-**  temporary build file is cleaned up.
+**  reconstruct.  Also checks the refuse-to-overwrite guard, that the
+**  temporary build files are cleaned up, that a conversion leaves alone a
+**  temporary file it does not own, and that of two conversions run at the same
+**  time to the same destination, exactly one publishes a complete database.
+**  A test hook of the binary (INN_TESTSUITE and HISSQLITE_CONVERT_TEST) makes
+**  a destination appear just before the publication, publishes it the way a
+**  retransmitted NFS link would, makes it a symbolic link to the new
+**  database, or holds the conversion so that SIGTERM can be checked to remove
+**  the temporary directory.
 **
 **  This drives the real binary (via system()) rather than the library, so it
 **  needs inn.conf: a minimal one is written to the temp dir and pointed at
@@ -36,10 +43,24 @@ main(void)
 
 #else
 
+#    include <dirent.h>
+#    include <fcntl.h>
+#    include <signal.h>
+#    ifdef HAVE_SYS_SELECT_H
+#        include <sys/select.h>
+#    endif
+#    ifdef HAVE_SYS_TIME_H
+#        include <sys/time.h>
+#    endif
 #    include <sys/stat.h>
 #    include <sys/wait.h>
 
 #    define BASE ((time_t) 1600000000)
+
+/* Entries of the history converted by two runs at the same time: enough for
+   both runs to pass the initial check on the destination before either one
+   publishes its database. */
+#    define BULK 20000
 
 static const char convert[] = "../../history/hissqlite/hissqlite-convert";
 
@@ -58,10 +79,77 @@ run_convert(const char *src, const char *dst)
     return WEXITSTATUS(status);
 }
 
+/* Sleep for ms milliseconds. */
+static void
+sleep_ms(long ms)
+{
+    struct timeval tv;
+
+    tv.tv_sec = ms / 1000;
+    tv.tv_usec = (ms % 1000) * 1000;
+    select(0, NULL, NULL, NULL, &tv);
+}
+
+/* Start "<convert> <src> <dst>" in the background with output suppressed and
+   return its process ID. */
+static pid_t
+start_convert(const char *src, const char *dst)
+{
+    pid_t pid;
+    int fd;
+
+    pid = fork();
+    if (pid < 0)
+        sysbail("can't fork");
+    if (pid == 0) {
+        fd = open("/dev/null", O_WRONLY);
+        if (fd >= 0) {
+            dup2(fd, 1);
+            dup2(fd, 2);
+        }
+        execl(convert, convert, src, dst, (char *) NULL);
+        _exit(127);
+    }
+    return pid;
+}
+
+/* Wait for the process started by start_convert and return its exit code, or
+   -1 if it did not exit normally. */
+static int
+wait_convert(pid_t pid)
+{
+    int status;
+
+    if (waitpid(pid, &status, 0) != pid)
+        sysbail("can't wait for %lu", (unsigned long) pid);
+    return WIFEXITED(status) ? WEXITSTATUS(status) : -1;
+}
+
+/* Count the entries of dir whose name starts with prefix, apart from the
+   entry named except (which may be NULL). */
+static int
+count_entries(const char *dir, const char *prefix, const char *except)
+{
+    DIR *d;
+    struct dirent *e;
+    int n = 0;
+
+    d = opendir(dir);
+    if (d == NULL)
+        sysbail("can't open %s", dir);
+    while ((e = readdir(d)) != NULL)
+        if (strncmp(e->d_name, prefix, strlen(prefix)) == 0
+            && (except == NULL || strcmp(e->d_name, except) != 0))
+            n++;
+    closedir(d);
+    return n;
+}
+
 int
 main(void)
 {
     char tmpdir[64], conf[128], src[128], dst[128], dstdb[160], tempdb[160];
+    char dst2[128], dst2temp[160], bulk[128], dst3[128], msgid[64];
     struct history *h;
     FILE *f;
     TOKEN t1, t2, got;
@@ -77,7 +165,7 @@ main(void)
     if (access(convert, X_OK) != 0)
         skip_all("hissqlite-convert not built");
 
-    test_init(8);
+    test_init(21);
 
     strlcpy(tmpdir, "hissqlite-conv-XXXXXX", sizeof(tmpdir));
     if (mkdtemp(tmpdir) == NULL)
@@ -87,6 +175,10 @@ main(void)
     snprintf(dst, sizeof(dst), "%s/dst", tmpdir);
     snprintf(dstdb, sizeof(dstdb), "%s/dst.sqlite", tmpdir);
     snprintf(tempdb, sizeof(tempdb), "%s/dst.new.sqlite", tmpdir);
+    snprintf(dst2, sizeof(dst2), "%s/dst2", tmpdir);
+    snprintf(dst2temp, sizeof(dst2temp), "%s/dst2.new.sqlite", tmpdir);
+    snprintf(bulk, sizeof(bulk), "%s/bulk", tmpdir);
+    snprintf(dst3, sizeof(dst3), "%s/dst3", tmpdir);
 
     /* Minimal inn.conf so both this process and the convert binary can read a
        valid configuration (convert calls innconf_read). */
@@ -187,6 +279,154 @@ main(void)
 
     /* The temporary build file must not survive a successful conversion. */
     ok(8, access(tempdb, F_OK) != 0);
+
+    /* A file at the temporary name an older version used, for instance the
+       database another conversion is building, is left alone. */
+    f = fopen(dst2temp, "w");
+    if (f == NULL)
+        sysbail("can't write %s", dst2temp);
+    fputs("not ours\n", f);
+    fclose(f);
+    ok(9, run_convert(src, dst2) == 0);
+    {
+        char buf[32] = "";
+
+        f = fopen(dst2temp, "r");
+        if (f != NULL) {
+            if (fgets(buf, sizeof(buf), f) == NULL)
+                buf[0] = '\0';
+            fclose(f);
+        }
+        ok(10, strcmp(buf, "not ours\n") == 0);
+    }
+
+    /* Two conversions to the same destination at the same time: exactly one
+       publishes, and what it publishes is complete. */
+    h = HISopen(bulk, "hisv6", HIS_CREAT | HIS_RDWR);
+    if (h == NULL)
+        bail("can't create hisv6 source %s", bulk);
+    {
+        int i;
+
+        for (i = 0; i < BULK; i++) {
+            snprintf(msgid, sizeof(msgid), "<bulk%d@conv>", i);
+            if (!HISwrite(h, msgid, BASE + i, BASE + i, (time_t) 0, &t1))
+                bail("can't seed %s", bulk);
+        }
+    }
+    HISsync(h);
+    HISclose(h);
+    {
+        pid_t one, two;
+        int rc1, rc2, i, found = 0;
+
+        one = start_convert(bulk, dst3);
+        two = start_convert(bulk, dst3);
+        rc1 = wait_convert(one);
+        rc2 = wait_convert(two);
+        ok(11, (rc1 == 0) != (rc2 == 0));
+        if ((rc1 == 0) == (rc2 == 0))
+            diag("exit codes %d and %d", rc1, rc2);
+
+        h = HISopen(dst3, "hissqlite", HIS_RDWR);
+        if (h != NULL) {
+            for (i = 0; i < BULK; i++) {
+                snprintf(msgid, sizeof(msgid), "<bulk%d@conv>", i);
+                if (HIScheck(h, msgid))
+                    found++;
+            }
+            HISclose(h);
+        }
+        ok(12, found == BULK);
+        if (found != BULK)
+            diag("%d of %d entries in the published database", found, BULK);
+    }
+
+    /* No temporary directory or file is left behind, apart from the one
+       created by this test. */
+    ok(13, count_entries(tmpdir, "hisconv.", NULL)
+                   + count_entries(tmpdir, "dst.new.", NULL)
+                   + count_entries(tmpdir, "dst2.new.", "dst2.new.sqlite")
+                   + count_entries(tmpdir, "dst3.new.", NULL)
+               == 0);
+
+    /* The test hook acts just before the publication. */
+    if (setenv("INN_TESTSUITE", "1", 1) != 0)
+        sysbail("can't set INN_TESTSUITE");
+
+    /* A destination created after the initial check, here with the hook, is
+       neither replaced nor accepted. */
+    {
+        char dst4[128], dst4db[160], buf[32] = "";
+
+        snprintf(dst4, sizeof(dst4), "%s/dst4", tmpdir);
+        snprintf(dst4db, sizeof(dst4db), "%s/dst4.sqlite", tmpdir);
+        if (setenv("HISSQLITE_CONVERT_TEST", "file", 1) != 0)
+            sysbail("can't set HISSQLITE_CONVERT_TEST");
+        ok(14, run_convert(src, dst4) != 0);
+        f = fopen(dst4db, "r");
+        if (f != NULL) {
+            if (fgets(buf, sizeof(buf), f) == NULL)
+                buf[0] = '\0';
+            fclose(f);
+        }
+        ok(15, strcmp(buf, "racer\n") == 0);
+    }
+
+    /* EEXIST from link with the destination already being the new database,
+       as after a retransmitted NFS request, is a success. */
+    if (setenv("HISSQLITE_CONVERT_TEST", "link", 1) != 0)
+        sysbail("can't set HISSQLITE_CONVERT_TEST");
+    {
+        char dst5[128];
+
+        snprintf(dst5, sizeof(dst5), "%s/dst5", tmpdir);
+        ok(16, run_convert(src, dst5) == 0);
+        h = HISopen(dst5, "hissqlite", HIS_RDWR);
+        ok(17, h != NULL && HIScheck(h, "<r1@conv>"));
+        if (h != NULL)
+            HISclose(h);
+    }
+
+    /* SIGTERM during a conversion removes its temporary directory. */
+    if (setenv("HISSQLITE_CONVERT_TEST", "wait", 1) != 0)
+        sysbail("can't set HISSQLITE_CONVERT_TEST");
+    {
+        char dst6[128];
+        pid_t pid;
+        int i, status;
+
+        snprintf(dst6, sizeof(dst6), "%s/dst6", tmpdir);
+        pid = start_convert(src, dst6);
+        for (i = 0; i < 300 && count_entries(tmpdir, "hisconv.", NULL) == 0;
+             i++)
+            sleep_ms(100);
+        sleep_ms(500); /* let it reach the hook */
+        kill(pid, SIGTERM);
+        if (waitpid(pid, &status, 0) != pid)
+            sysbail("can't wait for %lu", (unsigned long) pid);
+        ok(18, WIFSIGNALED(status) && WTERMSIG(status) == SIGTERM);
+        snprintf(dst6, sizeof(dst6), "%s/dst6.sqlite", tmpdir);
+        ok(19, count_entries(tmpdir, "hisconv.", NULL) == 0
+                   && access(dst6, F_OK) != 0);
+        if (count_entries(tmpdir, "hisconv.", NULL) != 0)
+            diag("temporary directory left after SIGTERM");
+    }
+
+    /* A symbolic link to the new database at the destination is not taken
+       for our own hard link: the conversion fails and leaves it alone. */
+    if (setenv("HISSQLITE_CONVERT_TEST", "symlink", 1) != 0)
+        sysbail("can't set HISSQLITE_CONVERT_TEST");
+    {
+        char dst7[128], dst7db[160];
+
+        snprintf(dst7, sizeof(dst7), "%s/dst7", tmpdir);
+        snprintf(dst7db, sizeof(dst7db), "%s/dst7.sqlite", tmpdir);
+        ok(20, run_convert(src, dst7) != 0);
+        ok(21, lstat(dst7db, &sb) == 0 && S_ISLNK(sb.st_mode)
+                   && count_entries(tmpdir, "hisconv.", NULL) == 0);
+    }
+    setenv("HISSQLITE_CONVERT_TEST", "", 1);
 
     {
         char cmd[160];
