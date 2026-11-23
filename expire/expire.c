@@ -414,11 +414,14 @@ EXPremove(const TOKEN *token)
 **  to the per-article SMretrieve check.
 **  *out_expireover_path and *out_cancels_snapshot are set to the file
 **  paths (caller frees and unlinks after a successful run); both are
-**  NULL when consuming is false.
+**  NULL when consuming is false.  *out_expireover_path is set only when
+**  this run read expireover.tombstone completely, and *out_expireover_st
+**  then identifies the file read, so that the caller does not unlink a
+**  log expireover published in its place in the meantime.
 */
 static struct hash *
 EXPloadtombstone(bool consuming, char **out_expireover_path,
-                 char **out_cancels_snapshot)
+                 struct stat *out_expireover_st, char **out_cancels_snapshot)
 {
     char *expireover_path = NULL;
     char *cancels_path = NULL;
@@ -436,6 +439,8 @@ EXPloadtombstone(bool consuming, char **out_expireover_path,
     bool leftover_error = false;
     bool snapshot_error = false;
     bool expireover_error = false;
+    bool expireover_read = false;
+    struct stat eb, ea;
 
     /* Default outputs to NULL; only set on the success-return path
        below.  This avoids double-frees if a future maintainer adds an
@@ -499,9 +504,19 @@ EXPloadtombstone(bool consuming, char **out_expireover_path,
         n_cancels = tombstone_read(h, cancels_path, NULL);
     }
 
-    /* Read the expireover-side log.  If it is not read completely, it
-       is not handed back for removal after the run either. */
-    n_expireover = tombstone_read(h, expireover_path, &expireover_error);
+    /* Read the expireover-side log.  It is handed back for removal after
+       the run only if this run read it completely: it existed before and
+       after the read, as the same file, and the read had no error.  An
+       absent file is not "read", and a file replaced meanwhile (by
+       expireover renaming its new log into place) is not the one read. */
+    memset(&eb, 0, sizeof(eb));
+    memset(&ea, 0, sizeof(ea));
+    if (stat(expireover_path, &eb) == 0) {
+        n_expireover = tombstone_read(h, expireover_path, &expireover_error);
+        expireover_read = !expireover_error
+                          && stat(expireover_path, &ea) == 0
+                          && ea.st_dev == eb.st_dev && ea.st_ino == eb.st_ino;
+    }
 
     if (EXPverbose)
         printf("Loaded %lu + %lu + %lu tombstone entries (%lu unique)\n",
@@ -544,12 +559,14 @@ EXPloadtombstone(bool consuming, char **out_expireover_path,
     /* Single success-return: hand both paths to the caller for
        cleanup after a successful run. */
     free(cancels_path);
-    if (expireover_error) {
-        warn("%s not read completely; it is kept for the next run",
-             expireover_path);
+    if (!expireover_read) {
+        if (expireover_error)
+            warn("%s not read completely; it is kept for the next run",
+                 expireover_path);
         free(expireover_path);
         expireover_path = NULL;
-    }
+    } else
+        *out_expireover_st = eb;
     *out_expireover_path = expireover_path;
     *out_cancels_snapshot = cancels_snapshot;
     return h;
@@ -985,10 +1002,12 @@ main(int ac, char *av[])
         char *expireover_path = NULL;
         char *cancels_snapshot = NULL;
         struct hash *tombstone = NULL;
+        struct stat expireover_st, st;
 
+        memset(&expireover_st, 0, sizeof(expireover_st));
         if (innconf->expiretombstone && innconf->groupbaseexpiry)
             tombstone = EXPloadtombstone(consuming, &expireover_path,
-                                         &cancels_snapshot);
+                                         &expireover_st, &cancels_snapshot);
 
         Bad = HISexpire(History, NHistory, EXPreason, Writing, tombstone,
                         EXPremember, EXPdoline)
@@ -1002,7 +1021,11 @@ main(int ac, char *av[])
            alt-output skipped the rename in the loader so there are
            no snapshot paths to clean up. */
         if (!Bad && consuming) {
-            if (expireover_path != NULL) {
+            /* Only the expireover log this run read: expireover may have
+               renamed a new one into place since. */
+            if (expireover_path != NULL && stat(expireover_path, &st) == 0
+                && st.st_dev == expireover_st.st_dev
+                && st.st_ino == expireover_st.st_ino) {
                 if (unlink(expireover_path) < 0 && errno != ENOENT)
                     syswarn("can't unlink %s", expireover_path);
             }
