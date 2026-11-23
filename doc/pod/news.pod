@@ -133,6 +133,18 @@ files behind after a failed creation, and the buffindexed overview method
 validates its F<group.index> file and no longer frees memory twice when
 mapping overview data fails.  Many thanks to Kevin Bowling for the patches.
 
+=item *
+
+Fixed B<batcher> losing articles when it spooled its input again after a
+batch failed.  When a batch processor exited with an error, or a write to it
+failed, the articles of the failed batch were removed from the retry file, and
+only the following ones were kept.  The retry file now starts at the first
+article of the failed batch, and B<batcher> exits with a non-zero status.  A
+batch which the processor always rejects therefore stays at the head of the
+retry file.  Articles already read from a pipe cannot be recovered.  The retry
+file also replaces the input file only when it has been completely written,
+for instance not when the disk is full.
+
 =back
 
 =head1 Changes in 2.7.5 (not yet released)
