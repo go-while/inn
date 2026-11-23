@@ -1106,6 +1106,17 @@ again:
             goto again;
         }
 
+        /* A last line without a final newline:  QIOread reports the end of
+           the file with that line still in its buffer.  Count it as a
+           skipped line instead of dropping it silently. */
+        if (QIOtell(qp) < qp->_count) {
+            hisv6_errloc(location, line, (off_t) -1);
+            hisv6_seterror(h, concat("unterminated last line ", h->histpath,
+                                     location, NULL));
+            skipped++;
+            lastskipped = line;
+        }
+
         /* A non-empty file in which no line could be used is not a history,
            or a badly damaged one:  do not take it for an empty history,
            which expire would install in its place. */

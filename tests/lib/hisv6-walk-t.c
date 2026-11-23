@@ -8,6 +8,7 @@
 ** the last line and without a final newline:  the entries after it must still
 ** be visited, and must still be in the history written by HISexpire or in the
 ** database written by hissqlite-convert, which reports the skipped line.
+** A short last line without a final newline is reported as skipped too.
 */
 
 #define LIBTEST_NEW_FORMAT 1
@@ -253,6 +254,41 @@ test_long_last(const char *path, bool newline)
     is_int(N_BEFORE, (long) c.tokens, "... and visits the articles before it");
 }
 
+/* Valid entries, then a short last line without a final newline. */
+static void
+create_short_tail(const char *path)
+{
+    struct history *h;
+
+    h = HISopen(path, "hisv6", HIS_CREAT | HIS_RDWR);
+    if (h == NULL)
+        bail("cannot create %s", path);
+    write_entries(h, "before", N_BEFORE);
+    HISclose(h);
+    append_text(path, "[0123456789ABCDEF] 1000");
+}
+
+static void
+test_short_tail(const char *path)
+{
+    struct history *h;
+    struct counts c;
+    const char *error;
+
+    create_short_tail(path);
+    memset(&c, 0, sizeof(c));
+    h = HISopen(path, "hisv6", HIS_RDONLY);
+    if (h == NULL)
+        bail("cannot open %s", path);
+    ok(HISwalk(h, NULL, &c, count_cb),
+       "HISwalk with a short unterminated last line succeeds");
+    is_int(N_BEFORE, (long) c.tokens, "... and visits the articles before it");
+    error = HISerror(h);
+    ok(error != NULL && strstr(error, "1 malformed lines skipped") != NULL,
+       "... and reports the unterminated line as skipped");
+    HISclose(h);
+}
+
 static void
 test_long_line(const char *path)
 {
@@ -314,7 +350,7 @@ test_convert(const char *tmpdir)
         if (access(programs[i], X_OK) == 0)
             program = programs[i];
     if (program == NULL) {
-        skip_block(7, "hissqlite-convert not built");
+        skip_block(9, "hissqlite-convert not built");
         return;
     }
 
@@ -367,6 +403,22 @@ test_convert(const char *tmpdir)
     free(src);
     free(dst);
 
+    /* A short unterminated last line. */
+    src = concat(tmpdir, "/hisv6-walk-conv-tail", (char *) 0);
+    dst = concat(tmpdir, "/hisv6-walk-conv-taildst", (char *) 0);
+    create_short_tail(src);
+    cmd = concat(program, " ", src, " ", dst, " >/dev/null 2>", err,
+                 (char *) 0);
+    status = system(cmd);
+    free(cmd);
+    is_int(0, WIFEXITED(status) ? WEXITSTATUS(status) : -1,
+           "hissqlite-convert with a short unterminated last line succeeds");
+    ok(file_contains(err, "unterminated last line")
+           && file_contains(err, "1 malformed lines skipped"),
+       "... and reports the line as skipped");
+    free(src);
+    free(dst);
+
     /* A file without a single valid line. */
     src = concat(tmpdir, "/hisv6-walk-conv-bad", (char *) 0);
     dst = concat(tmpdir, "/hisv6-walk-conv-baddst", (char *) 0);
@@ -399,7 +451,7 @@ test_convert(const char *tmpdir)
     free(err);
     free(conf);
 #else
-    skip_block(7, "not built with SQLite");
+    skip_block(9, "not built with SQLite");
     (void) tmpdir;
 #endif
 }
@@ -410,7 +462,7 @@ main(void)
     char *tmpdir, *path;
     char *cmd;
 
-    plan(5 + 3 + 2 + 2 + 8 + 7);
+    plan(5 + 3 + 2 + 2 + 3 + 8 + 9);
 
     tmpdir = test_tmpdir();
 
@@ -428,6 +480,10 @@ main(void)
 
     path = concat(tmpdir, "/hisv6-walk-noeol", (char *) 0);
     test_long_last(path, false);
+    free(path);
+
+    path = concat(tmpdir, "/hisv6-walk-tail", (char *) 0);
+    test_short_tail(path);
     free(path);
 
     path = concat(tmpdir, "/hisv6-walk-long", (char *) 0);
