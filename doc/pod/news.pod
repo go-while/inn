@@ -148,7 +148,11 @@ goes unnoticed: B<news.daily> used to remove the completion marker and leave
 B<innd> running with an empty history file or with files of both
 generations.  It now leaves the server paused, keeps the files not yet moved,
 and notifies the newsmaster.  It also no longer replaces the history files
-when it cannot confirm that the server is paused.
+when it cannot confirm that the server is paused, when B<expire> failed, or
+when the old history file cannot be emptied, and it no longer runs
+B<expire> while the files of an earlier incomplete installation are still
+there.  The reason it gives B<expire> no longer includes the expdir path,
+which could exceed the 80 characters B<innd> accepts.
 
 =back
 

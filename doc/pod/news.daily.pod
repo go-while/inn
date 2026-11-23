@@ -128,7 +128,13 @@ one by one.  If one of them cannot be moved, the server stays paused with an
 incomplete history database until the administrator acts: the files not yet
 moved and F<history.n.done> are kept in I<path>, and the newsmaster is
 notified, so that the installation can be completed by hand before running
-C<ctlinnd go>.
+C<ctlinnd go>.  Nothing is moved either when B<expire> failed, or when the
+old history file cannot be emptied.  As long as F<history.n.done> is in
+I<path>, B<news.daily> does not run B<expire> again (it would overwrite the
+new files) and notifies the newsmaster instead.  The server is paused with
+the reason C<Expiring> followed by the process ID of B<news.daily> and
+C<with expdir>; it used to include I<path>, which made it longer than the
+80 characters B<innd> accepts when I<path> was long.
 
 This option is not available with the C<hissqlite> history method.
 
