@@ -81,8 +81,10 @@ EndsWithNewline(FILE *F)
 {
     int c;
 
-    if (fseeko(F, 1, SEEK_END) < 0) {
-        syswarn("cannot seek to end of file");
+    if (fseeko(F, -1, SEEK_END) < 0) {
+        /* An empty file has no last byte, and needs no newline. */
+        if (errno != EINVAL)
+            syswarn("cannot seek to end of file");
         return true;
     }
 
@@ -184,12 +186,14 @@ Process(FILE *F, char *name, off_t size, off_t maxsize, bool *Changedp)
             return true;
         }
 
-        /* No newline, add it if it fits. */
-        if (len < size - 1) {
-            fclose(F);
+        /* No newline, add it if it fits.  Else the file is small enough, and
+         * is left as it is. */
+        fclose(F);
+        if (len < size) {
             *Changedp = true;
             return AppendNewline(name);
         }
+        return true;
     } else if (!EndsWithNewline(F)) {
         /* The newline is added to the new file, never to the original, which
          * stays as it is until the new file is complete. */
