@@ -133,6 +133,18 @@ files behind after a failed creation, and the buffindexed overview method
 validates its F<group.index> file and no longer frees memory twice when
 mapping overview data fails.  Many thanks to Kevin Bowling for the patches.
 
+=item *
+
+B<fastrm> now exits with status 1 when it cannot remove a file, as its
+documentation says; it only reported the error.  As a consequence,
+B<expirerm> now notices such failures: it mails the newsmaster "Expire had
+problems removing articles", exits with status 1 and keeps the list of
+articles to remove, instead of moving it to F<expire.list> as if all of
+them had been removed.  When I<expiretombstone> is set in F<inn.conf>,
+B<expirerm> also no longer records these articles as removed in the
+tombstone log read by B<expire>, which then dropped their history entries
+although they were still on disk.
+
 =back
 
 =head1 Changes in 2.7.5 (not yet released)
