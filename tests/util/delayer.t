@@ -37,7 +37,7 @@ rm -rf "$tmp"
 mkdir "$tmp" || exit 1
 
 # Print out the number of tests.
-echo 12
+echo 16
 
 # The store cannot be written (its directory does not exist): the queued lines
 # must be written out instead of being lost.
@@ -77,7 +77,7 @@ printf 'line one\n' \
     | "$delayer" --delay 600 --store "$tmp/missing/queue" \
         -- sh -c "exit 3" 2>"$tmp/err6"
 status=$?
-check '[ "$status" != 0 ] && grep "cannot write out" "$tmp/err6" >/dev/null' \
+check '[ "$status" != 0 ] && grep "cannot write to" "$tmp/err6" >/dev/null' \
     "failed write of the queued lines reported"
 
 # Normal use: the lines are saved, restored on the next start and saved again
@@ -105,6 +105,45 @@ check 'cmp -s "$tmp/want4" "$tmp/saved3"' \
 left=$(cd "$tmp" && ls | grep '^queue3\.' | grep -v '^queue3\.new$')
 check '[ -z "$left" ] && cmp -s "$tmp/want3" "$tmp/queue3.new"' \
     "no temporary file left, other files untouched"
+# A restored line which is due is written to the program, which then exits
+# with a non-zero status: the line must stay in the store, with the new one,
+# and the exit status must say it.
+perl -MStorable -e 'Storable::store(["1:old line\n"], $ARGV[0])' "$tmp/queue7"
+(sleep 1; printf 'new line\n') \
+    | "$delayer" --delay 600 --store "$tmp/queue7" \
+        -- sh -c "cat >$tmp/out7; exit 3" 2>"$tmp/err7"
+status=$?
+perl -MStorable \
+    -e 'for (@{ Storable::retrieve($ARGV[0]) }) { s/^[^:]+://; print }' \
+    "$tmp/queue7" >"$tmp/saved7" 2>/dev/null
+printf 'old line\nnew line\n' >"$tmp/want7"
+check '[ "$status" != 0 ] && grep "cannot write to" "$tmp/err7" >/dev/null' \
+    "program failing after a due line reported"
+check 'cmp -s "$tmp/want7" "$tmp/saved7"' \
+    "line written to the failing program kept in the store"
+
+# A store which cannot be read back nor moved aside (read-only directory):
+# it must be left untouched, and a failing program must still be reported.
+mkdir "$tmp/ro"
+echo 'not a saved queue' >"$tmp/ro/queue8"
+cp "$tmp/ro/queue8" "$tmp/want8"
+chmod 555 "$tmp/ro"
+if [ -w "$tmp/ro" ]; then
+    printcount "ok" "# skip directory still writable (running as root?)"
+    printcount "ok" "# skip directory still writable (running as root?)"
+else
+    printf 'line\n' \
+        | "$delayer" --delay 600 --store "$tmp/ro/queue8" \
+            -- sh -c "cat >/dev/null; exit 3" 2>"$tmp/err8"
+    status=$?
+    check '[ "$status" != 0 ] \
+        && grep "cannot write to" "$tmp/err8" >/dev/null' \
+        "failing program reported with a store left untouched"
+    check 'cmp -s "$tmp/want8" "$tmp/ro/queue8"' \
+        "unreadable store left untouched"
+fi
+chmod 755 "$tmp/ro"
+
 printf 'a\nb\n' >"$tmp/want5"
 "$delayer" --delay 600 -- sh -c "cat >$tmp/out5" <"$tmp/want5"
 check 'cmp -s "$tmp/want5" "$tmp/out5"' \
