@@ -133,6 +133,18 @@ files behind after a failed creation, and the buffindexed overview method
 validates its F<group.index> file and no longer frees memory twice when
 mapping overview data fails.  Many thanks to Kevin Bowling for the patches.
 
+=item *
+
+Fixed B<archive> removing its input file, and so forgetting the articles that
+it could not write to the archive, for instance when the file system was full.
+The tokens of these articles are now kept in the file, which is read again by
+the next run, and B<archive> exits with a non-zero status; a failure which
+repeats needs the attention of the administrator, and the tokens spooled when
+reading the standard input have to be fed back to B<archive>.  The input file
+is also left unchanged when its replacement cannot be written completely or
+when it cannot be read completely.  A retry no longer truncates the copies
+of an article which were linked to the first one.
+
 =back
 
 =head1 Changes in 2.7.5 (not yet released)
