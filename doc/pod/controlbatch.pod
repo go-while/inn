@@ -65,11 +65,12 @@ I<batchfile>C<.new> and I<batchfile>C<.work.merged> are gone; if
 I<batchfile> itself is not empty and there is no I<batchfile>C<.work>,
 rename it to I<batchfile>C<.work>.  Then:
 
-    cat batchfile.doit batchfile.work > batchfile.new
-    mv batchfile.work batchfile.work.merged
+    cat batchfile.doit batchfile.work > batchfile.new &&
+        mv batchfile.work batchfile.work.merged
 
 (leave I<batchfile>C<.doit> out of the first command if it does not exist,
-and use the real names of the files).  Run B<controlbatch> again: it
+and use the real names of the files; the rename runs only if the copy
+succeeded).  Run B<controlbatch> again: it
 publishes I<batchfile>C<.new>, removes I<batchfile>C<.work.merged> and
 processes the articles.  If the first command is interrupted, remove
 I<batchfile>C<.new> and start again; if the second one is, B<controlbatch>
