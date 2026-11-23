@@ -133,11 +133,14 @@ files behind after a failed creation, and the buffindexed overview method
 validates its F<group.index> file and no longer frees memory twice when
 mapping overview data fails.  Many thanks to Kevin Bowling for the patches.
 
-=back
+=item *
 
-=head1 Changes in 2.7.5 (not yet released)
-
-=over 2
+B<scanlogs> no longer leaves B<innd> paused when it cannot flush the log files
+or when it is interrupted by a signal during the rotation of the logs.  The
+server is resumed in these cases too, with a reason specific to the run so
+that a pause made by someone else is not released, and the lock is released
+as before.  When the server cannot be resumed, B<scanlogs> reports it and
+exits with a non-zero status.
 
 =item *
 
