@@ -623,12 +623,16 @@ When B<expireover> finds entries of a previous run that were never
 consumed (for instance because B<fastrm> failed), it checks each article
 again: entries of articles still on disk are dropped, and entries whose
 check fails for another reason than the article being absent (a
-permission problem or an I/O error) are kept in the third file, described
-below, and checked again by the next B<expireover> run.  If one of these
-files cannot be read completely, B<expireover> stops without expiring
-anything, so that no entry is lost.  When a delayed-removal run schedules
-no removal, B<expireover> renames F<expireover.tombstone.NEW> itself, as
-B<expirerm> is then not run.
+permission problem, an I/O error, or a storage method that is not
+configured or cannot be initialized) are kept in the third file, described
+below, and checked again by the next B<expireover> run.  An unconsumed
+F<expireover.tombstone> is removed as soon as its entries are saved in
+that file, so that B<expire> cannot drop the history entry of an article
+it lists that is still on disk.  If one of these files cannot be read
+completely, or an existing F<expireover.tombstone.NEW> cannot be opened,
+B<expireover> stops without expiring anything, so that no entry is lost.
+When a delayed-removal run schedules no removal, B<expireover> renames
+F<expireover.tombstone.NEW> itself, as B<expirerm> is then not run.
 
 =item F<expireover.tombstone.retry>
 

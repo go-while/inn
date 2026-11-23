@@ -72,15 +72,16 @@ build_bloom_cb(void *cookie, const HASH *hash, time_t arrived UNUSED,
 
 /*
 **  Verify each line of an in-memory tombstone buffer via SMretrieve.
-**  Entries whose article is confirmed gone (SMERR_NOENT, or SMERR_UNINIT
-**  for a storage method no longer configured) are appended to kept, to be
-**  carried into the new log.  Entries for which SMretrieve fails with
-**  another error (EIO, EACCES, etc., where we cannot tell whether the
-**  article is alive) are appended to retry: they must neither be lost
-**  nor reach a log that expire trusts, since an article whose removal
-**  failed may still be on disk and expire would then drop its history
-**  entry.  Live articles (SMretrieve returns non-NULL) are dropped: we
-**  must not re-tombstone an article that is still on disk.
+**  Entries whose article is confirmed gone (SMERR_NOENT) are appended to
+**  kept, to be carried into the new log.  Entries for which SMretrieve
+**  fails with another error (EIO, EACCES, etc., where we cannot tell
+**  whether the article is alive; SMERR_UNINIT too, which SMretrieve
+**  returns for a storage method that is not configured but also for one
+**  that failed to initialize) are appended to retry: they must neither
+**  be lost nor reach a log that expire trusts, since an article whose
+**  removal failed may still be on disk and expire would then drop its
+**  history entry.  Live articles (SMretrieve returns non-NULL) are
+**  dropped: we must not re-tombstone an article that is still on disk.
 */
 static void
 verify_tombstone_lines(char *raw, ssize_t got, struct buffer *kept,
@@ -103,14 +104,15 @@ verify_tombstone_lines(char *raw, ssize_t got, struct buffer *kept,
                 /* Article still on disk; drop from tombstone to
                    avoid orphaning history for it. */
                 SMfreearticle(art);
-            } else if (SMerrno == SMERR_NOENT || SMerrno == SMERR_UNINIT) {
+            } else if (SMerrno == SMERR_NOENT) {
                 /* Confirmed gone: the normal case. */
                 buffer_append(kept, entry, len);
                 buffer_append(kept, "\n", 1);
             } else {
-                /* Transient error: we cannot tell whether the article
-                   is alive.  Keep the record for the next run to
-                   re-evaluate, outside the log expire consumes. */
+                /* Transient error (or SMERR_UNINIT): we cannot tell
+                   whether the article is alive.  Keep the record for the
+                   next run to re-evaluate, outside the log expire
+                   consumes. */
                 buffer_append(retry, entry, len);
                 buffer_append(retry, "\n", 1);
             }
@@ -436,15 +438,17 @@ main(int argc, char *argv[])
        history for articles still on disk (fastrm failures).  Entries
        of articles confirmed gone (SMERR_NOENT) go into the new .NEW,
        those of live articles are dropped, and those whose check fails
-       otherwise (EIO, EACCES, ...) go into the retry file for the next
-       run.
+       otherwise (EIO, EACCES, SMERR_UNINIT, ...) go into the retry file
+       for the next run.
 
        No record is retired before its successor is written: a source
        that cannot be read completely stops expireover before anything
        is changed; every recovered entry is first saved to the retry
        file (which then also holds the confirmed-gone ones) before .NEW
-       is truncated; the final tombstone is left in place (it is
-       replaced when .NEW is promoted); and the retry file is reduced
+       is truncated; the final tombstone, which expire trusts, is removed
+       as soon as its entries are saved there, so that expire cannot
+       consume an entry recovery rejected even if .NEW is never promoted
+       (fastrm failed); and the retry file is reduced
        to the unverifiable entries only once .NEW holds the others for
        good (see the end of main).  Cost is one stat per leftover
        token, only on the rare crash-recovery path. */
@@ -456,7 +460,16 @@ main(int argc, char *argv[])
         tombstone_path_retry = concat(tombstone_path, ".retry", (char *) 0);
         fd = open(tombstone_path_new, O_RDWR | O_CREAT, 0664);
         if (fd < 0) {
-            syswarn("can't open tombstone log %s", tombstone_path_new);
+            struct stat sb;
+
+            /* An existing .NEW that cannot be opened may hold entries of
+               a previous run: stop, as for a read error.  Only the
+               failure to create a missing one disables the log. */
+            if (stat(tombstone_path_new, &sb) == 0 || errno != ENOENT)
+                sysdie("can't open tombstone log %s; not expiring overview,"
+                       " so that its entries are not lost",
+                       tombstone_path_new);
+            syswarn("can't create tombstone log %s", tombstone_path_new);
         } else if (!inn_lock_file(fd, INN_LOCK_WRITE, false)) {
             /* Distinguish contention (another expireover holds it)
                from other lock errors (NFS lockd outage, kernel
@@ -520,6 +533,16 @@ main(int argc, char *argv[])
                 die("not expiring overview, so that the recovered tombstone"
                     " entries are not lost");
             free(all.data);
+
+            /* Its entries are saved: retire the final tombstone now.  It
+               may list live or unverifiable articles that expire must
+               not drop, and .NEW, which replaces it, may never be
+               promoted if fastrm fails. */
+            if (unlink(tombstone_path) < 0 && errno != ENOENT)
+                sysdie("can't remove %s; not expiring overview, so that"
+                       " expire does not consume entries rejected by"
+                       " recovery",
+                       tombstone_path);
             if (retry.left > 0)
                 warn("%lu tombstone entries could not be verified; kept in"
                      " %s for the next run",
