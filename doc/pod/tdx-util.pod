@@ -4,7 +4,7 @@ tdx-util - Overview manipulation utility for tradindexed
 
 =head1 SYNOPSIS
 
-B<tdx-util> [B<-AFcgioO>] [B<-a> I<article>] [B<-f> I<status>]
+B<tdx-util> [B<-ACFcgioO>] [B<-a> I<article>] [B<-f> I<status>]
 [B<-n> I<newsgroup>] [B<-p> I<path>] [B<-R> I<path>]
 
 =head1 DESCRIPTION
@@ -42,6 +42,10 @@ set to 1.
 To audit the entire overview database for problems, use B<-A>.  Any
 problems found will be reported to standard error.  Use B<-F> to correct
 the errors found.
+
+To check the server's F<active> file against the group index, use B<-C>.
+For stable results, run the check with updates to F<active> and overview
+paused.
 
 To rebuild the database for a particular newsgroup, use B<-R>.  The B<-R>
 option takes a path to a directory which contains all of the articles for
@@ -83,6 +87,23 @@ entries, the format of the individual overview entries, the correspondence
 of index entries to overview data, and similar such things.  No changes
 will be made to the database, but problems will be reported to standard
 error.
+
+=item B<-C>
+
+Compare the water marks in F<active> (under I<pathdb>) against the
+tradindexed group index.  The check reports invalid field counts,
+water marks and status flags, and skips aliases with a nonempty target.
+For other entries it reports missing overview groups, low water marks
+that differ, and high water marks below the overview value.  Groups
+present only in overview are outside this check.  The high water mark
+in F<active> can legitimately be higher because it records the last
+article number assigned to the group.
+
+Reports are written to standard error.  The command exits with status
+1 if any problem is found and leaves both files unchanged.  After
+checking that overview is healthy, use C<ctlinnd renumber> to correct
+mark discrepancies without reducing the high water mark.  Handle
+malformed entries and missing overview groups separately.
 
 =item B<-c>
 

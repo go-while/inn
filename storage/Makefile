@@ -439,6 +439,6 @@ tradindexed/tdx-util.o: tradindexed/tdx-util.c ../include/portable/system.h \
   ../include/inn/xwrite.h ../include/inn/innconf.h \
   ../include/inn/messages.h ../include/inn/newsuser.h ../include/inn/ov.h \
   ../include/inn/storage.h ../include/inn/options.h \
-  ../include/inn/overview.h ../include/inn/paths.h ../include/inn/vector.h \
-  ../include/inn/wire.h ovinterface.h tradindexed/tdx-private.h \
-  tradindexed/tdx-structure.h
+  ../include/inn/overview.h ../include/inn/paths.h ../include/inn/qio.h \
+  ../include/inn/vector.h ../include/inn/wire.h ovinterface.h \
+  tradindexed/tdx-private.h tradindexed/tdx-structure.h
