@@ -71,16 +71,21 @@ build_bloom_cb(void *cookie, const HASH *hash, time_t arrived UNUSED,
 }
 
 /*
-**  Verify each line of an in-memory tombstone buffer via SMretrieve and
-**  append survivors to kept.  An entry survives if SMretrieve confirms
-**  the article is gone (SMERR_NOENT) or returns a non-NOENT error
-**  (SMERR_UNINIT, EIO, etc., where we cannot tell whether the article
-**  is alive); a transient failure must not silently discard a valid
-**  cancel record.  Live articles (SMretrieve returns non-NULL) are
+**  Verify each line of an in-memory tombstone buffer via SMretrieve.
+**  Entries whose article is confirmed gone (SMERR_NOENT) are appended to
+**  kept, to be carried into the new log.  Entries for which SMretrieve
+**  fails with another error (EIO, EACCES, etc., where we cannot tell
+**  whether the article is alive; SMERR_UNINIT too, which SMretrieve
+**  returns for a storage method that is not configured but also for one
+**  that failed to initialize) are appended to retry: they must neither
+**  be lost nor reach a log that expire trusts, since an article whose
+**  removal failed may still be on disk and expire would then drop its
+**  history entry.  Live articles (SMretrieve returns non-NULL) are
 **  dropped: we must not re-tombstone an article that is still on disk.
 */
 static void
-verify_tombstone_lines(char *raw, ssize_t got, struct buffer *kept)
+verify_tombstone_lines(char *raw, ssize_t got, struct buffer *kept,
+                       struct buffer *retry)
 {
     char *entry, *save_p;
 
@@ -99,17 +104,17 @@ verify_tombstone_lines(char *raw, ssize_t got, struct buffer *kept)
                 /* Article still on disk; drop from tombstone to
                    avoid orphaning history for it. */
                 SMfreearticle(art);
-            } else {
-                /* Either confirmed gone (SMERR_NOENT) or transient
-                   error (SMERR_UNINIT, EIO, etc.).  Keep the entry
-                   either way: confirmed-gone is the normal case,
-                   and on transient error we cannot tell whether
-                   the article is alive, so preserve the record so
-                   the next run can re-evaluate.  Silently dropping
-                   on transient error would leak cancels across a
-                   storage outage. */
+            } else if (SMerrno == SMERR_NOENT) {
+                /* Confirmed gone: the normal case. */
                 buffer_append(kept, entry, len);
                 buffer_append(kept, "\n", 1);
+            } else {
+                /* Transient error (or SMERR_UNINIT): we cannot tell
+                   whether the article is alive.  Keep the record for the
+                   next run to re-evaluate, outside the log expire
+                   consumes. */
+                buffer_append(retry, entry, len);
+                buffer_append(retry, "\n", 1);
             }
         }
         entry = strtok_r(NULL, "\n", &save_p);
@@ -118,43 +123,133 @@ verify_tombstone_lines(char *raw, ssize_t got, struct buffer *kept)
 
 
 /*
-**  Read an entire file into a freshly allocated buffer.  Used for
-**  leftover-recovery of expireover.tombstone (from a cycle where
-**  expirerm finalized but expire never consumed) and the .NEW
-**  leftover from a crashed prior run.  Returns NULL on missing or
-**  empty file (sets *out_size to 0); returns a malloc'd buffer with
-**  the file content otherwise (caller frees).
+**  Count the lines of the data in a buffer.
 */
-static char *
-slurp_tombstone(const char *path, ssize_t *out_size)
+static size_t
+count_lines(const struct buffer *b)
 {
+    size_t i, n = 0;
+
+    for (i = 0; i < b->left; i++)
+        if (b->data[b->used + i] == '\n')
+            n++;
+    return n;
+}
+
+
+/*
+**  Replace the retry file with the entries of retry (or remove it when
+**  there are none).  Written to a temporary file renamed into place, so
+**  that a crash leaves either the previous or the new set.  Returns false
+**  if the entries could not be saved.
+*/
+static bool
+write_retry_file(const char *path, const struct buffer *retry)
+{
+    char *tmp;
     int fd;
+    bool ok;
+
+    if (retry->left == 0) {
+        if (unlink(path) < 0 && errno != ENOENT) {
+            syswarn("can't unlink %s", path);
+            return false;
+        }
+        return true;
+    }
+    tmp = concat(path, ".tmp", (char *) 0);
+    fd = open(tmp, O_WRONLY | O_CREAT | O_TRUNC, 0664);
+    if (fd < 0) {
+        syswarn("can't create %s", tmp);
+        free(tmp);
+        return false;
+    }
+    ok = xwrite(fd, TOMBSTONE_HEADER, strlen(TOMBSTONE_HEADER)) >= 0
+         && xwrite(fd, retry->data + retry->used, retry->left) >= 0;
+    if (!ok)
+        syswarn("can't write %s", tmp);
+    if (close(fd) < 0) {
+        syswarn("can't close %s", tmp);
+        ok = false;
+    }
+    if (ok && rename(tmp, path) < 0) {
+        syswarn("can't rename %s to %s", tmp, path);
+        ok = false;
+    }
+    if (!ok && unlink(tmp) < 0 && errno != ENOENT)
+        syswarn("can't unlink %s", tmp);
+    free(tmp);
+    return ok;
+}
+
+
+/*
+**  Read the whole content of the open file fd (named path, for messages)
+**  into a freshly allocated buffer with room for a terminating nul byte.
+**  Returns 1 and sets *out and *out_size when there is content, 0 for an
+**  empty file, and -1 after a warning when the file could not be read
+**  completely (a short read is an error: the file is not to be replaced
+**  or removed on the basis of what was read).
+*/
+static int
+read_tombstone_fd(int fd, const char *path, char **out, ssize_t *out_size)
+{
     struct stat sb;
     char *raw;
     ssize_t got = 0, n;
 
+    *out = NULL;
     *out_size = 0;
-    fd = open(path, O_RDONLY);
-    if (fd < 0)
-        return NULL;
-    if (fstat(fd, &sb) < 0 || sb.st_size <= 0) {
-        close(fd);
-        return NULL;
+    if (fstat(fd, &sb) < 0) {
+        syswarn("can't stat %s", path);
+        return -1;
     }
+    if (sb.st_size <= 0)
+        return 0;
     raw = xmalloc(sb.st_size + 1);
     while (got < sb.st_size) {
         n = read(fd, raw + got, sb.st_size - got);
-        if (n <= 0)
-            break;
+        if (n < 0 && errno == EINTR)
+            continue;
+        if (n < 0) {
+            syswarn("can't read %s", path);
+            free(raw);
+            return -1;
+        }
+        if (n == 0) {
+            warn("can't read %s: file shrank while being read", path);
+            free(raw);
+            return -1;
+        }
         got += n;
     }
-    close(fd);
-    if (got <= 0) {
-        free(raw);
-        return NULL;
-    }
+    *out = raw;
     *out_size = got;
-    return raw;
+    return 1;
+}
+
+
+/*
+**  Read the whole file at path, as read_tombstone_fd.  A missing file is
+**  the same as an empty one (0); any other failure to open it is an error.
+*/
+static int
+read_tombstone(const char *path, char **out, ssize_t *out_size)
+{
+    int fd, status;
+
+    *out = NULL;
+    *out_size = 0;
+    fd = open(path, O_RDONLY);
+    if (fd < 0) {
+        if (errno == ENOENT)
+            return 0;
+        syswarn("can't open %s", path);
+        return -1;
+    }
+    status = read_tombstone_fd(fd, path, out, out_size);
+    close(fd);
+    return status;
 }
 
 
@@ -171,6 +266,9 @@ main(int argc, char *argv[])
     char *path;
     char *tombstone_path = NULL;
     char *tombstone_path_new = NULL;
+    char *tombstone_path_retry = NULL;
+    struct buffer retry = {0, 0, 0, NULL};
+    off_t recovered_end = 0;
     FILE *lowmark = NULL;
     bool purge_deleted = false;
     bool always_stat = false;
@@ -328,28 +426,50 @@ main(int argc, char *argv[])
        them in normal flow.  The lock is released by fclose at
        finalize time.
 
-       Leftover handling: two recovery paths, both verified per-token
-       with SMretrieve(RETR_STAT) before merging into the new .NEW.
-       (1) An existing .NEW file means a previous run crashed or
-       whose expirerm failed.  (2) An existing final tombstone
-       (without a .NEW) means the previous cycle's expirerm promoted
-       it but expire never consumed.  Naively truncating .NEW or
-       overwriting the final would lose cancels that genuinely
+       Leftover handling: three recovery sources, all verified
+       per-token with SMretrieve(RETR_STAT).  (1) An existing .NEW
+       file means a previous run crashed or its expirerm failed.
+       (2) An existing final tombstone means the previous cycle's
+       expirerm promoted it but expire never consumed it.  (3)
+       expireover.tombstone.retry holds the entries a previous run
+       could not verify; expire never reads it.  Naively truncating
+       .NEW or overwriting the final would lose cancels that genuinely
        happened, while preserving them blindly would risk dropping
-       history for articles still on disk (fastrm failures).  Per-
-       token verification keeps confirmed-gone entries (SMERR_NOENT)
-       and entries with transient errors (SMERR_UNINIT, EIO, ...) so
-       the next run can re-evaluate them without silent loss; live
-       articles are dropped.  Cost is one stat per leftover token,
-       only on the rare crash-recovery path. */
+       history for articles still on disk (fastrm failures).  Entries
+       of articles confirmed gone (SMERR_NOENT) go into the new .NEW,
+       those of live articles are dropped, and those whose check fails
+       otherwise (EIO, EACCES, SMERR_UNINIT, ...) go into the retry file
+       for the next run.
+
+       No record is retired before its successor is written: a source
+       that cannot be read completely stops expireover before anything
+       is changed; every recovered entry is first saved to the retry
+       file (which then also holds the confirmed-gone ones) before .NEW
+       is truncated; the final tombstone, which expire trusts, is removed
+       as soon as its entries are saved there, so that expire cannot
+       consume an entry recovery rejected even if .NEW is never promoted
+       (fastrm failed); and the retry file is reduced
+       to the unverifiable entries only once .NEW holds the others for
+       good (see the end of main).  Cost is one stat per leftover
+       token, only on the rare crash-recovery path. */
     if (innconf->expiretombstone && innconf->groupbaseexpiry) {
         int fd;
 
         tombstone_path = concatpath(innconf->pathdb, "expireover.tombstone");
         tombstone_path_new = concat(tombstone_path, ".NEW", (char *) 0);
+        tombstone_path_retry = concat(tombstone_path, ".retry", (char *) 0);
         fd = open(tombstone_path_new, O_RDWR | O_CREAT, 0664);
         if (fd < 0) {
-            syswarn("can't open tombstone log %s", tombstone_path_new);
+            struct stat sb;
+
+            /* An existing .NEW that cannot be opened may hold entries of
+               a previous run: stop, as for a read error.  Only the
+               failure to create a missing one disables the log. */
+            if (stat(tombstone_path_new, &sb) == 0 || errno != ENOENT)
+                sysdie("can't open tombstone log %s; not expiring overview,"
+                       " so that its entries are not lost",
+                       tombstone_path_new);
+            syswarn("can't create tombstone log %s", tombstone_path_new);
         } else if (!inn_lock_file(fd, INN_LOCK_WRITE, false)) {
             /* Distinguish contention (another expireover holds it)
                from other lock errors (NFS lockd outage, kernel
@@ -368,58 +488,66 @@ main(int argc, char *argv[])
         } else {
             /* Recover leftover content under the lock, filter through
                SMretrieve, then truncate .NEW and rewrite.  All under
-               the same fd/lock so no other writer can race.  Two
-               sources to recover:
-
-                 (a) the existing .NEW file: residue from a prior
-                     expireover run that crashed, or whose expirerm
-                     never promoted .NEW to final.
-                 (b) the existing final tombstone: residue from a
-                     prior cycle where expirerm did promote .NEW to
-                     final but expire never ran (or never finished)
-                     so the entries were never consumed.  Without
-                     this recovery, this expireover's end-of-run
-                     rename(.NEW, final) would silently overwrite
-                     the unconsumed file, dropping its records.
-
-               Both use verify_tombstone_lines, which preserves
-               entries on transient SMretrieve errors so a momentary
-               storage outage doesn't silently lose cancel records. */
-            struct buffer kept;
-            struct stat sb;
+               the same fd/lock so no other writer can race.  The three
+               sources are described above. */
+            struct buffer kept, all;
             char *raw;
-            ssize_t got = 0;
+            ssize_t got;
+            const char *source[2];
+            int i, status;
 
             kept.data = NULL;
             kept.size = kept.used = kept.left = 0;
-
-            /* Recover unconsumed final tombstone first. */
-            raw = slurp_tombstone(tombstone_path, &got);
-            if (raw != NULL) {
-                verify_tombstone_lines(raw, got, &kept);
-                free(raw);
-                /* Unlink whether or not we extracted entries: the
-                   active .NEW (after this run's rename) becomes the
-                   new authoritative final.  Preserving the old one
-                   would risk a future expireover folding the same
-                   entries in twice. */
-                if (unlink(tombstone_path) < 0 && errno != ENOENT)
-                    syswarn("can't unlink leftover %s", tombstone_path);
-            }
-
-            /* Recover .NEW leftover. */
-            if (fstat(fd, &sb) == 0 && sb.st_size > 0) {
-                raw = xmalloc(sb.st_size + 1);
-                got = 0;
-                while (got < sb.st_size) {
-                    ssize_t n = read(fd, raw + got, sb.st_size - got);
-                    if (n <= 0)
-                        break;
-                    got += n;
+            source[0] = tombstone_path_retry;
+            source[1] = tombstone_path;
+            for (i = 0; i < 2; i++) {
+                status = read_tombstone(source[i], &raw, &got);
+                if (status < 0)
+                    die("not expiring overview, so that the tombstone"
+                        " entries of %s are not lost",
+                        source[i]);
+                if (status > 0) {
+                    verify_tombstone_lines(raw, got, &kept, &retry);
+                    free(raw);
                 }
-                verify_tombstone_lines(raw, got, &kept);
+            }
+            status = read_tombstone_fd(fd, tombstone_path_new, &raw, &got);
+            if (status < 0)
+                die("not expiring overview, so that the tombstone entries"
+                    " of %s are not lost",
+                    tombstone_path_new);
+            if (status > 0) {
+                verify_tombstone_lines(raw, got, &kept, &retry);
                 free(raw);
             }
+
+            /* Save every recovered entry, confirmed gone or not, before
+               the truncation below discards the .NEW copy of them; the
+               retry file is reduced to the unverifiable ones at the end,
+               once .NEW holds the others. */
+            all.data = NULL;
+            all.size = all.used = all.left = 0;
+            buffer_append(&all, retry.data + retry.used, retry.left);
+            buffer_append(&all, kept.data + kept.used, kept.left);
+            if (!write_retry_file(tombstone_path_retry, &all))
+                die("not expiring overview, so that the recovered tombstone"
+                    " entries are not lost");
+            free(all.data);
+
+            /* Its entries are saved: retire the final tombstone now.  It
+               may list live or unverifiable articles that expire must
+               not drop, and .NEW, which replaces it, may never be
+               promoted if fastrm fails. */
+            if (unlink(tombstone_path) < 0 && errno != ENOENT)
+                sysdie("can't remove %s; not expiring overview, so that"
+                       " expire does not consume entries rejected by"
+                       " recovery",
+                       tombstone_path);
+            if (retry.left > 0)
+                warn("%lu tombstone entries could not be verified; kept in"
+                     " %s for the next run",
+                     (unsigned long) count_lines(&retry),
+                     tombstone_path_retry);
             if (ftruncate(fd, 0) < 0) {
                 syswarn("can't truncate %s", tombstone_path_new);
                 close(fd);
@@ -438,24 +566,27 @@ main(int argc, char *argv[])
                     /* Format marker.  Readers tolerate comment lines
                        (lines starting with #), so any future format
                        change can be detected by inspecting this
-                       header without breaking earlier readers. */
-                    if (fputs(TOMBSTONE_HEADER, OVtombstonefile) == EOF)
-                        syswarn("can't write header to %s",
+                       header without breaking earlier readers.
+                       Then replay the verified leftover entries before
+                       this run's new entries are appended by
+                       OVEXPremove.  (struct buffer convention: appended
+                       data lives at data[used .. used+left].)  If they
+                       cannot be written, give up the log for this run;
+                       the retry file still holds them. */
+                    if (fputs(TOMBSTONE_HEADER, OVtombstonefile) == EOF
+                        || (kept.left > 0
+                            && fwrite(kept.data + kept.used, 1, kept.left,
+                                      OVtombstonefile)
+                                   != kept.left)
+                        || fflush(OVtombstonefile) == EOF
+                        || (recovered_end = ftello(OVtombstonefile)) < 0) {
+                        syswarn("can't write recovered leftover to %s;"
+                                " disabling tombstone for this run",
                                 tombstone_path_new);
-                    if (kept.left > 0) {
-                        /* Replay verified leftover entries before
-                           this run's new entries are appended by
-                           OVEXPremove.  (struct buffer convention:
-                           appended data lives at data[used ..
-                           used+left]; used==0 here so we start at
-                           data.) */
-                        if (fwrite(kept.data + kept.used, 1, kept.left,
-                                   OVtombstonefile)
-                                != kept.left
-                            || fflush(OVtombstonefile) == EOF)
-                            syswarn("can't write recovered leftover"
-                                    " to %s",
-                                    tombstone_path_new);
+                        fclose(OVtombstonefile);
+                        OVtombstonefile = NULL;
+                        if (unlink(tombstone_path_new) < 0)
+                            syswarn("can't unlink %s", tombstone_path_new);
                     }
                 }
             }
@@ -464,8 +595,10 @@ main(int argc, char *argv[])
         if (OVtombstonefile == NULL) {
             free(tombstone_path);
             free(tombstone_path_new);
+            free(tombstone_path_retry);
             tombstone_path = NULL;
             tombstone_path_new = NULL;
+            tombstone_path_retry = NULL;
         }
     }
 
@@ -542,41 +675,60 @@ main(int argc, char *argv[])
        to its final name iff we completed a full pass without errors --
        a partial log would let expire incorrectly drop history entries
        for articles that were not actually cancelled this run.
-       In delayrm mode, leave the .NEW alone: expirerm performs the
-       rename after fastrm has actually deleted the articles.  If
-       expirerm fails or is skipped, the .NEW is wiped by the next
-       expireover, so a partial log can never be consumed by expire.
-       No fsync: the log is advisory; if a crash loses the buffered
-       tail, expire just runs the slow path. */
+       In delayrm mode, leave the .NEW alone when this run scheduled
+       removals: expirerm performs the rename after fastrm has actually
+       deleted the articles.  If expirerm fails or is skipped, the next
+       expireover verifies the .NEW again.  When this run scheduled no
+       removal, .NEW only holds recovered entries already confirmed gone,
+       and news.daily does not run expirerm for an empty list: rename it
+       here as in inline-cancel mode, so that they are published without
+       waiting for an unrelated removal.
+       Once .NEW (or the final tombstone) holds the recovered entries,
+       reduce the retry file to the unverifiable ones; otherwise it keeps
+       all of them.  No fsync: the log is advisory; if a crash loses the
+       buffered tail, expire just runs the slow path. */
     if (OVtombstonefile != NULL) {
+        bool fresh, published = false;
+        off_t end;
+
+        end = ftello(OVtombstonefile);
+        fresh = (end < 0 || end != recovered_end);
         if (fclose(OVtombstonefile) == EOF) {
             syswarn("can't finalize tombstone log %s", tombstone_path_new);
             tombstone_clean = false;
         }
         if (signalled)
             tombstone_clean = false;
-        if (ovge.delayrm) {
+        if (ovge.delayrm && fresh) {
             /* Leave .NEW for expirerm.  If we were signalled or hit
                an error, unlink it so expirerm doesn't promote a
                truncated log. */
             if (!tombstone_clean) {
                 if (unlink(tombstone_path_new) < 0)
                     syswarn("can't unlink %s", tombstone_path_new);
-            }
+            } else
+                published = true;
         } else if (tombstone_clean) {
             if (rename(tombstone_path_new, tombstone_path) < 0) {
                 syswarn("can't rename %s to %s", tombstone_path_new,
                         tombstone_path);
                 if (unlink(tombstone_path_new) < 0)
                     syswarn("can't unlink %s", tombstone_path_new);
-            }
+            } else
+                published = true;
         } else {
             if (unlink(tombstone_path_new) < 0)
                 syswarn("can't unlink %s", tombstone_path_new);
         }
+        if (published && !write_retry_file(tombstone_path_retry, &retry))
+            warn("%s still lists entries now in the tombstone log; they"
+                 " are checked again next run",
+                 tombstone_path_retry);
         free(tombstone_path);
         free(tombstone_path_new);
+        free(tombstone_path_retry);
     }
+    free(retry.data);
 
     return 0;
 }
