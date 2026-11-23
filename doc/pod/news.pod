@@ -133,6 +133,20 @@ files behind after a failed creation, and the buffindexed overview method
 validates its F<group.index> file and no longer frees memory twice when
 mapping overview data fails.  Many thanks to Kevin Bowling for the patches.
 
+=item *
+
+B<delayer> run with B<--store> no longer silently loses the lines it has
+queued when it cannot save them (for instance because the disk is full):
+they are then written out, as without B<--store>, and an error is reported.
+A file it cannot read back upon startup is no longer removed but renamed with
+a F<.bad> suffix, without replacing an earlier one.  The file is now written
+under a temporary name first, so that an interrupted save does not leave a
+truncated file, and the file read upon startup is kept until the next save.
+When writing to the program it feeds fails, or that program exits with a
+non-zero status, B<delayer> now reports it, saves the lines which may not
+have reached it if possible, and exits with status 1, instead of dying of
+C<SIGPIPE> or exiting with status 0.
+
 =back
 
 =head1 Changes in 2.7.5 (not yet released)
