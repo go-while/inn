@@ -21,8 +21,9 @@ I<remembered> (token-less) entries, which a rebuild cannot reconstruct.
 
 Malformed lines of the source, such as a line of a damaged F<history> file
 too long to be read, are skipped:  a warning is printed for each of them, and
-then their number.  A source in which no line is valid is refused, whereas an
-empty source history gives an empty database.
+then their number.  A last line without a final newline is skipped and
+counted too, and that warning says so.  A source in which no line is valid is
+refused, whereas an empty source history gives an empty database.
 
 The new database is built in a temporary file and atomically renamed into
 place only on full success, so an interrupted or failed run never leaves a

@@ -57,7 +57,10 @@ exists, the slow history lookup is skipped.  If it reports the article is not
 found, B<expireover> falls back to a direct history lookup for correctness.
 False positives (the Bloom filter incorrectly reporting an article exists) are
 benign; the orphaned overview entry will be cleaned up on the next expiration
-run.
+run.  Malformed lines of a hisv6 history are skipped while building the Bloom
+filter, with a warning, except a last line without a final newline:  as
+B<innd> is not paused during that read, it is normally the line B<innd> is
+writing, so it is skipped silently.
 
 The false positive rate and memory usage of the Bloom filter are
 controlled by the I<expirebloomfp> setting in F<inn.conf>.  Setting it

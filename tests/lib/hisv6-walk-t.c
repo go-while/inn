@@ -8,7 +8,10 @@
 ** the last line and without a final newline:  the entries after it must still
 ** be visited, and must still be in the history written by HISexpire or in the
 ** database written by hissqlite-convert, which reports the skipped line.
-** A short last line without a final newline is reported as skipped too.
+** A short last line without a final newline is counted as skipped too:
+** HISwalk (which did not pause the server) does not warn about it, since it
+** is normally the line the server is writing, but sets the error that
+** hissqlite-convert prints; HISexpire warns about it.
 */
 
 #define LIBTEST_NEW_FORMAT 1
@@ -21,6 +24,7 @@
 #include "inn/history.h"
 #include "inn/innconf.h"
 #include "inn/libinn.h"
+#include "inn/messages.h"
 #include "inn/storage.h"
 #include "tap/basic.h"
 
@@ -268,6 +272,16 @@ create_short_tail(const char *path)
     append_text(path, "[0123456789ABCDEF] 1000");
 }
 
+/* Count the warnings. */
+static unsigned long warnings;
+
+static void
+count_warning(size_t len UNUSED, const char *fmt UNUSED, va_list args UNUSED,
+              int err UNUSED)
+{
+    warnings++;
+}
+
 static void
 test_short_tail(const char *path)
 {
@@ -280,13 +294,24 @@ test_short_tail(const char *path)
     h = HISopen(path, "hisv6", HIS_RDONLY);
     if (h == NULL)
         bail("cannot open %s", path);
+    warnings = 0;
+    message_handlers_warn(1, count_warning);
     ok(HISwalk(h, NULL, &c, count_cb),
        "HISwalk with a short unterminated last line succeeds");
+    message_handlers_warn(1, message_log_stderr);
     is_int(N_BEFORE, (long) c.tokens, "... and visits the articles before it");
     error = HISerror(h);
-    ok(error != NULL && strstr(error, "1 malformed lines skipped") != NULL,
-       "... and reports the unterminated line as skipped");
+    ok(error != NULL && strstr(error, "1 malformed lines skipped") != NULL
+           && strstr(error, "unterminated") != NULL,
+       "... and counts the unterminated line as skipped");
+    is_int(0, (long) warnings, "... without warning about it");
     HISclose(h);
+
+    warnings = 0;
+    message_handlers_warn(1, count_warning);
+    ok(expire(path), "HISexpire with a short unterminated last line succeeds");
+    message_handlers_warn(1, message_log_stderr);
+    ok(warnings > 0, "... and warns about it");
 }
 
 static void
@@ -413,8 +438,9 @@ test_convert(const char *tmpdir)
     free(cmd);
     is_int(0, WIFEXITED(status) ? WEXITSTATUS(status) : -1,
            "hissqlite-convert with a short unterminated last line succeeds");
-    ok(file_contains(err, "unterminated last line")
-           && file_contains(err, "1 malformed lines skipped"),
+    ok(file_contains(err, "source not converted completely")
+           && file_contains(err, "1 malformed lines skipped")
+           && file_contains(err, "unterminated"),
        "... and reports the line as skipped");
     free(src);
     free(dst);
@@ -462,7 +488,7 @@ main(void)
     char *tmpdir, *path;
     char *cmd;
 
-    plan(5 + 3 + 2 + 2 + 3 + 8 + 9);
+    plan(5 + 3 + 2 + 2 + 6 + 8 + 9);
 
     tmpdir = test_tmpdir();
 

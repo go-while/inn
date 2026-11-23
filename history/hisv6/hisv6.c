@@ -73,6 +73,15 @@ hisv6_seterror(struct hisv6 *h, const char *s)
     his_seterror(h->history, s);
 }
 
+/*
+**  set the error without reporting it
+*/
+static void
+hisv6_seterror_quiet(struct hisv6 *h, const char *s)
+{
+    his_seterror_quiet(h->history, s);
+}
+
 
 /*
 **  format line or offset into a string for error reporting
@@ -1011,6 +1020,7 @@ hisv6_traverse(struct hisv6 *h, struct hisv6_walkstate *cookie,
        line cannot be read or processed, or when no line at all is valid. */
     bool r = true;
     bool valid = false;
+    bool tail = false;
     unsigned long skipped = 0;
     size_t lastskipped = 0;
     QIOSTATE *qp;
@@ -1108,13 +1118,19 @@ again:
 
         /* A last line without a final newline:  QIOread reports the end of
            the file with that line still in its buffer.  Count it as a
-           skipped line instead of dropping it silently. */
+           skipped line instead of dropping it silently.  A walk while the
+           server was not paused normally sees the line the server is
+           writing:  it is then counted without being reported (the error
+           is still set, for callers which print it). */
         if (QIOtell(qp) < qp->_count) {
-            hisv6_errloc(location, line, (off_t) -1);
-            hisv6_seterror(h, concat("unterminated last line ", h->histpath,
-                                     location, NULL));
+            tail = true;
             skipped++;
             lastskipped = line;
+            if (!cookie->walk || cookie->paused) {
+                hisv6_errloc(location, line, (off_t) -1);
+                hisv6_seterror(h, concat("unterminated last line ",
+                                         h->histpath, location, NULL));
+            }
         }
 
         /* A non-empty file in which no line could be used is not a history,
@@ -1126,12 +1142,17 @@ again:
             r = false;
         } else if (skipped > 0) {
             char buf[32];
+            char *msg;
 
             snprintf(buf, sizeof(buf), "%lu", skipped);
             hisv6_errloc(location, lastskipped, (off_t) -1);
-            hisv6_seterror(h, concat(buf, " malformed lines skipped, the",
-                                     " last one: ", h->histpath, location,
-                                     NULL));
+            msg = concat(buf, " malformed lines skipped, the last one",
+                         tail ? " (unterminated): " : ": ", h->histpath,
+                         location, NULL);
+            if (cookie->walk && !cookie->paused)
+                hisv6_seterror_quiet(h, msg);
+            else
+                hisv6_seterror(h, msg);
         }
     }
 fail:
@@ -1174,6 +1195,7 @@ hisv6_walk(void *history, const char *reason, void *cookie,
     hiscookie.cookie = cookie;
     hiscookie.new = NULL;
     hiscookie.paused = false;
+    hiscookie.walk = true;
     /* Ignore malformed history lines during walk.  The walk is a read-only
        operation (e.g., building a Bloom filter for expireover); aborting
        over one corrupt line in a potentially 180 GB file would be
@@ -1334,6 +1356,7 @@ hisv6_expire(void *history, const char *path, const char *reason, bool writing,
     /* during expire we ignore errors whilst reading the history file
      * so any errors in it get fixed automagically */
     hiscookie.ignore = true;
+    hiscookie.walk = false;
 
     if (writing && (h->flags & HIS_RDWR)) {
         hisv6_seterror(h, concat("can't expire from read/write history ",
