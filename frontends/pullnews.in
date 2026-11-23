@@ -423,14 +423,6 @@ my %info = (
 if ($rnews) {
     if ($no_op) {
         print "Would write to rnews file $rnews\n";
-    } else {
-        # Do not truncate a batch which was not handled: after a failed run,
-        # the config file counts its articles as done.
-        die "rnews-format output $rnews already exists and is not empty;"
-          . " feed it to rnews and remove it first\n"
-          if -f $rnews and -s $rnews;
-        open(RNEWS, ">$rnews")
-          || die "can't open rnews-format output: $rnews: $!\n";
     }
     $info{'rnews'}{bytes} = 0;
     $info{'rnews'}{fed} = 0;
@@ -470,6 +462,21 @@ if ($use_inn_shlock) {
 # Now that a lock file has been created, ensure we release it when this process
 # ends or is stopped.
 $runEndBlock = 1;
+
+# The output is opened once the config file is locked, and without truncating
+# it, so that a run which overlaps another one cannot destroy a batch which was
+# written and counted as done in the config file.
+if ($rnews and not $no_op) {
+    sysopen(RNEWS, $rnews, O_WRONLY | O_CREAT, 0666)
+      or die "can't open rnews-format output: $rnews: $!\n";
+
+    # A batch which was not handled is kept: after a failed run, the config
+    # file counts its articles as done.
+    if (-f RNEWS and -s RNEWS) {
+        die "rnews-format output $rnews already exists and is not empty;"
+          . " feed it to rnews and remove it first\n";
+    }
+}
 
 print LOG scalar(localtime(time)), " start\n\n" unless $quiet;
 

@@ -249,6 +249,7 @@ which the config file counts as done, so that B<pullnews> refuses to start
 when I<file> already exists and is not empty.  Feed I<file> to B<rnews> (after
 removing its incomplete last article), and remove it, before running
 B<pullnews> again with the same name; else, use another name.
+The file is opened, without truncating it, once the config file is locked.
 
 =item B<-R>
 
