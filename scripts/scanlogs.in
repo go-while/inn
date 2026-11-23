@@ -212,8 +212,28 @@ if ${ROTATE}; then
     trap 'echo "$0: log rotation interrupted" >&2; exit 1' 1 2 3 15
 
     HERE=$(pwd)
-    cd ${MOST_LOGS}
-    test ! -d ${OLD} && mkdir ${OLD}
+    cd "${MOST_LOGS}" || exit 1
+    mkdir -p "${OLD}" || exit 1
+
+    ##  Save pending sources from an interrupted rotation before flushing.
+    ##  Keep them outside the numbered generations so they are not aged out.
+    recovered_dir=
+    for F in ${LOGS}; do
+        BASE=${F##*/}
+        pending="${OLD}/${BASE}"
+        test -f "${pending}" || continue
+        if [ -z "${recovered_dir}" ]; then
+            recovered_dir="${OLD}/recovered.$$"
+            suffix=0
+            while [ -e "${recovered_dir}" ] || [ -L "${recovered_dir}" ]; do
+                suffix=$((suffix + 1))
+                recovered_dir="${OLD}/recovered.$$.${suffix}"
+            done
+            (umask 077 && mkdir "${recovered_dir}") || exit 1
+        fi
+        mv "${pending}" "${recovered_dir}/${BASE}" || exit 1
+        echo "$0: saved pending log to ${recovered_dir}/${BASE}" >&2
+    done
 
     ctlinnd -s logmode
     PAUSED=maybe
@@ -285,7 +305,6 @@ if ${ROTATE}; then
     for F in ${LOGS}; do
         ##  Process the current (just-flushed) log.
         BASE=$(basename ${F})
-        rm -f ${OLD}/${BASE}
         case ${F} in
         ${SYSLOG_CRIT} | ${SYSLOG_ERR} | ${ERRLOG} | ${LOG} | \
             ${SYSLOG_NOTICE} | ${PERLNOCEM})
@@ -314,7 +333,7 @@ if ${ROTATE}; then
             if [ -f ${F}.old ]; then
                 mv ${F}.old ${OLD}/${BASE}
             else
-                rm -f ${OLD}/${BASE} ${F}.new
+                rm -f ${F}.new
                 touch ${F}.new
                 chmod 0660 ${F}.new
                 ln ${F} ${F}.old
