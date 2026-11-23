@@ -16,8 +16,7 @@
 void
 CMDgroup(int ac, char *av[])
 {
-    ARTNUM i;
-    int low, high;
+    ARTNUM i, low, high;
     char *grplist[2];
     char *group;
     void *handle;

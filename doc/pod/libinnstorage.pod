@@ -133,7 +133,7 @@ libinnstorage - Routines for managing INN storage
 
     bool OVctl(OVCTLTYPE type, void *val);
 
-    bool OVgroupstats(char *group, int *lo, int *hi, int *count,
+    bool OVgroupstats(char *group, ARTNUM *lo, ARTNUM *hi, int *count,
                       int *flag);
 
     bool OVgroupadd(char *group, ARTNUM lo, ARTNUM hi, char *flag);

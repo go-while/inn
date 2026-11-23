@@ -18,8 +18,8 @@
 BEGIN_DECLS
 
 bool tradindexed_open(int mode);
-bool tradindexed_groupstats(const char *group, int *low, int *high, int *count,
-                            int *flag);
+bool tradindexed_groupstats(const char *group, ARTNUM *low, ARTNUM *high,
+                            int *count, int *flag);
 bool tradindexed_groupadd(const char *group, ARTNUM low, ARTNUM high,
                           char *flag);
 bool tradindexed_groupdel(const char *group);

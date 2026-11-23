@@ -23,7 +23,7 @@ struct vector;
 typedef struct overview_method {
     const char *name;
     bool (*open)(int mode);
-    bool (*groupstats)(const char *group, int *lo, int *hi, int *count,
+    bool (*groupstats)(const char *group, ARTNUM *lo, ARTNUM *hi, int *count,
                        int *flag);
     bool (*groupadd)(const char *group, ARTNUM lo, ARTNUM hi, char *flag);
     bool (*groupdel)(const char *group);

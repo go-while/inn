@@ -1268,7 +1268,7 @@ GROUPfind(const char *group, bool Ignoredeleted, bool *failed)
 }
 
 bool
-buffindexed_groupstats(const char *group, int *lo, int *hi, int *count,
+buffindexed_groupstats(const char *group, ARTNUM *lo, ARTNUM *hi, int *count,
                        int *flag)
 {
     GROUPLOC gloc;
@@ -2926,7 +2926,8 @@ int
 main(int argc, char **argv)
 {
     char *group, flag[2], buff[OV_BLOCKSIZE];
-    int lo, hi, count, flags, i;
+    ARTNUM lo, hi;
+    int count, flags, i;
     OVSEARCH *search;
     GROUPENTRY *ge;
     GROUPLOC gloc;
@@ -3004,7 +3005,7 @@ main(int argc, char **argv)
     }
     flag[0] = (char) flags;
     flag[1] = '\0';
-    fprintf(stdout, "%s: low is %d, high is %d, count is %d, flag is '%s'\n",
+    fprintf(stdout, "%s: low is %lu, high is %lu, count is %d, flag is '%s'\n",
             group, lo, hi, count, flag);
     if ((search = (OVSEARCH *) ovopensearch(group, lo, hi, true)) == NULL) {
         fprintf(stderr, "ovopensearch failed for group %s\n", group);

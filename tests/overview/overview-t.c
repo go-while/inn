@@ -14,6 +14,7 @@
 
 #include <errno.h>
 #include <fcntl.h>
+#include <limits.h>
 #include <sys/stat.h>
 #include <sys/wait.h>
 
@@ -232,21 +233,22 @@ overview_verify_groups(void *data, void *cookie)
 {
     struct group *group = (struct group *) data;
     bool *status = (bool *) cookie;
-    int low, high, count, flag;
+    ARTNUM low, high;
+    int count, flag;
 
     if (!OVgroupstats(group->group, &low, &high, &count, &flag)) {
         warn("Unable to get data for %s", group->group);
         *status = false;
         return;
     }
-    if ((unsigned long) low != group->low) {
+    if (low != group->low) {
         warn("Low article wrong for %s: %lu != %lu", group->group,
-             (unsigned long) low, group->low);
+             low, group->low);
         *status = false;
     }
-    if ((unsigned long) high != group->high) {
+    if (high != group->high) {
         warn("High article wrong for %s: %lu != %lu", group->group,
-             (unsigned long) high, group->high);
+             high, group->high);
         *status = false;
     }
     if ((unsigned long) count != group->count) {
@@ -512,7 +514,8 @@ overview_verify_readonly_remap(void)
     char target[] = "remap.1024";
     char byte;
     int ready[2], resume[2], result[2];
-    int i, low, high, count, seenflag, status;
+    int i, count, seenflag, status;
+    ARTNUM low, high;
     pid_t child;
     bool okay = true;
 
@@ -567,10 +570,14 @@ main(void)
 {
     struct hash *groups;
     bool status;
+    ARTNUM low, high;
+    const ARTNUM first = (ARTNUM) INT_MAX + 1;
+    char wide_group[] = "example.wide-marks";
+    char flag[] = NF_FLAG_OK_STRING;
     int fd;
     char trailing = 0;
 
-    test_init(23);
+    test_init(24);
 
     if (access("../data/overview/basic", F_OK) == 0) {
         if (chdir("../data") < 0) {
@@ -636,6 +643,10 @@ main(void)
     groups = overview_load("overview/bogus");
     ok(19, true);
     ok(20, overview_verify_data("overview/bogus"));
+    status = OVgroupadd(wide_group, first, first + 1, flag)
+             && OVgroupstats(wide_group, &low, &high, NULL, NULL)
+             && low == first && high == first + 1;
+    ok(21, status);
     hash_free(groups);
     OVclose();
 
@@ -644,9 +655,9 @@ main(void)
             die("Opening the overview database failed, cannot continue");
         status = overview_verify_readonly_remap();
         OVclose();
-        ok(21, status);
+        ok(22, status);
     } else {
-        skip(21, "read-only remap test is buffindexed-specific");
+        skip(22, "read-only remap test is buffindexed-specific");
     }
 
     if (strcmp(innconf->ovmethod, "buffindexed") == 0) {
@@ -655,15 +666,15 @@ main(void)
             sysbail("cannot append partial group.index entry");
         close(fd);
         status = OVopen(OV_READ | OV_WRITE);
-        ok(22, !status);
+        ok(23, !status);
         if (status)
             OVclose();
     } else {
-        skip(22, "partial group.index test is buffindexed-specific");
+        skip(23, "partial group.index test is buffindexed-specific");
     }
     if (system("/bin/rm -rf ov-tmp") < 0)
         sysdie("Cannot rm ov-tmp");
-    ok(23, true);
+    ok(24, true);
 
     return 0;
 }

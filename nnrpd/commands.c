@@ -502,7 +502,8 @@ CMDnewgroups(int ac, char *av[])
     QIOSTATE *qp;
     time_t date;
     char *grplist[2];
-    int hi, lo, count, flag;
+    ARTNUM hi, lo;
+    int count, flag;
     GROUPDATA *grouplist = NULL;
     GROUPDATA key;
     GROUPDATA *gd;

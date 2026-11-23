@@ -689,7 +689,8 @@ main(int argc, char *argv[])
     void *s;
     ARTNUM a, start = 0, stop = 0, low, high;
     char *data, *disp_db = NULL;
-    int len, c, count, flag, lowi, highi;
+    int len, c, count, flag;
+    ARTNUM lowi, highi;
     int getgs = 0, getcount = 0, getinfo = 0, err = 0, gotone = 0;
     int disp_lock = 0, disp_log = 0, disp_mem = 0, disp_mem_all = 0,
         disp_txn = 0, disp_ver = 0;
@@ -852,10 +853,10 @@ Usage:\n\
             if (getgs) {
                 if (ovdb_groupstats(argv[o], &lowi, &highi, &count, &flag)) {
                     if (html)
-                        printf("<td>%d<td>%d<td>%d<td>%c", lowi, highi, count,
+                        printf("<td>%lu<td>%lu<td>%d<td>%c", lowi, highi, count,
                                flag);
                     else
-                        printf("%s: groupstats: low: %d, high: %d, count: %d, "
+                        printf("%s: groupstats: low: %lu, high: %lu, count: %d, "
                                "flag: %c\n",
                                argv[o], lowi, highi, count, flag);
                 }

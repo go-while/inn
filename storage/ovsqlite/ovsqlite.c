@@ -727,7 +727,8 @@ ovsqlite_open(int mode)
 }
 
 bool
-ovsqlite_groupstats(const char *group, int *low, int *high, int *count,
+ovsqlite_groupstats(const char *group, ARTNUM *low, ARTNUM *high,
+                    int *count,
                     int *flag)
 {
     sqlite3_stmt *stmt;
@@ -1585,8 +1586,12 @@ expire_one(char const *group, int *low, struct history *h)
                 return false;
         }
     } while (!done);
-    if (low != NULL)
-        ovsqlite_groupstats(group, low, NULL, NULL, NULL);
+    if (low != NULL) {
+        ARTNUM low_mark;
+
+        if (ovsqlite_groupstats(group, &low_mark, NULL, NULL, NULL))
+            *low = (int) low_mark;
+    }
     return true;
 }
 
@@ -1719,7 +1724,7 @@ ovsqlite_open(int mode UNUSED)
 }
 
 bool
-ovsqlite_groupstats(const char *group UNUSED, int *lo UNUSED, int *hi UNUSED,
+ovsqlite_groupstats(const char *group UNUSED, ARTNUM *lo UNUSED, ARTNUM *hi UNUSED,
                     int *count UNUSED, int *flag UNUSED)
 {
     return false;

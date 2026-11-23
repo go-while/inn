@@ -169,7 +169,8 @@ static bool
 CMD_list_single(char *group)
 {
     char *grplist[2] = {NULL, NULL};
-    int lo, hi, count, flag;
+    ARTNUM lo, hi;
+    int count, flag;
 
     if (PERMspecified) {
         grplist[0] = group;
@@ -199,7 +200,7 @@ CMD_list_single(char *group)
             hi = lo - 1;
         }
         Reply("%d %s\r\n", NNTP_OK_LIST, INFOactive.Format);
-        Printf("%s %0*d %0*d %c\r\n", group, ARTNUMPRINTSIZE, hi,
+        Printf("%s %0*lu %0*lu %c\r\n", group, ARTNUMPRINTSIZE, hi,
                ARTNUMPRINTSIZE, lo, flag);
         Printf(".\r\n");
         return true;
@@ -224,7 +225,8 @@ CMDlist(int ac, char *av[])
     char *wildarg = NULL;
     char savec;
     unsigned int i;
-    int lo, hi, count, flag;
+    ARTNUM lo, hi;
+    int count, flag;
 
     p = av[1];
 
@@ -390,7 +392,7 @@ CMDlist(int ac, char *av[])
                 }
 
                 if (flag != NF_FLAG_ALIAS) {
-                    Printf("%s %d %d %d %c\r\n", p, hi, lo, count,
+                    Printf("%s %lu %lu %d %c\r\n", p, hi, lo, count,
                            PERMaccessconf->locpost
                                    && (flag == NF_FLAG_IGNORE
                                        || flag == NF_FLAG_JUNK
@@ -402,7 +404,7 @@ CMDlist(int ac, char *av[])
 
                     if ((q = strrchr(p, NF_FLAG_ALIAS)) != NULL) {
                         *save = '\0';
-                        Printf("%s %d %d %d %s\r\n", p, hi, lo, count, q);
+                        Printf("%s %lu %lu %d %s\r\n", p, hi, lo, count, q);
                     }
                 }
             }
