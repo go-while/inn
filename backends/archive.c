@@ -620,6 +620,8 @@ main(int argc, char *argv[])
     /* If we could not read all our input, write the rest of stdin to the
      * spool file. */
     if (QIOerror(qp)) {
+        /* Whatever the fallback does, the input was not read completely. */
+        status = 1;
         if (fprintf(spool, "%s\n", line != NULL ? line : "") == EOF) {
             syswarn("cannot start spool");
             status = 1;

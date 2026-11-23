@@ -126,7 +126,8 @@ tokens were not read.  If there was an input filename, the file is left as it
 is, and B<archive> exits with a non-zero status: the articles already archived
 are archived again by the next run.  If the input was the standard input,
 B<archive> copies the rest of the standard input to I<pathoutgoing>/archive,
-which can miss the tokens that were already read from the input.
+which can miss the tokens that were already read from the input, and exits
+with a non-zero status in any case.
 
 =head1 EXAMPLES
 
