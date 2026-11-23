@@ -4,14 +4,78 @@ package e2e
 
 import (
 	"fmt"
+	"net"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
+	testkit "github.com/go-while/nntp-testkit"
 	"github.com/go-while/nntp-testkit/client"
 )
+
+// peerFrom dials innd from the loopback address ip and reads the greeting.
+func peerFrom(tb testing.TB, s *Site, ip string) *client.Conn {
+	tb.Helper()
+	d := net.Dialer{LocalAddr: &net.TCPAddr{IP: net.ParseIP(ip)}, Timeout: testkit.Deadline()}
+	nc, err := d.Dial("tcp", s.Addr)
+	if err != nil {
+		tb.Fatalf("dial %s from %s: %v", s.Addr, ip, err)
+	}
+	c := client.New(tb, nc)
+	g, err := c.ReadGreeting()
+	if err != nil {
+		tb.Fatalf("greeting for %s: %v", ip, err)
+	}
+	c.Greeting = g
+	return c
+}
+
+// TestPeerMaxConnectionsLockout: with inn.conf maxconnections 4, peer a (PeerIP) with
+// max-connections 2 and peer b (127.0.0.3) listed too, a opens three connections, then b
+// connects.  innd counts the new connection itself against maxconnections (nc.c, NCcreate:
+// NCcount >= maxconnections), so 4 lets three connections in.  Without max-connections, a
+// gets all three and b gets "400 Too many connections"; with it, a's third gets "400 You
+// are limited to 2 connections" and b gets 200.
+func TestPeerMaxConnectionsLockout(t *testing.T) {
+	const peerB = "127.0.0.3"
+	s := NewSite(t, SiteOptions{
+		InnConf: map[string]string{"maxconnections": "4"},
+		Incoming: fmt.Sprintf(`peer a {
+    hostname: "%s"
+    streaming: true
+    max-connections: 2
+}
+
+peer b {
+    hostname: "%s"
+    streaming: true
+}
+`, PeerIP, peerB),
+	})
+	openPeers(t, s, 2)
+	a3 := s.Peer(t)
+	t.Logf("peer a, third connection: greeting %q", a3.Greeting)
+	code3, _ := client.ParseCode(a3.Greeting)
+	refused := code3 == 400 && strings.Contains(a3.Greeting, "limited to 2 connections")
+	if refused {
+		if line, err := a3.ReadLine(); err == nil {
+			t.Errorf("peer a, third connection: got %q after the 400, want the connection closed", line)
+		}
+		lines, _ := nntpChannels(t, s)
+		t.Logf("ctlinnd name '' before peer b connects:\n%s", strings.Join(lines, "\n"))
+	}
+	b := peerFrom(t, s, peerB)
+	t.Logf("peer b: greeting %q", b.Greeting)
+	if !refused {
+		t.Errorf("peer a with max-connections 2: third connection got %q, want 400 You are limited to 2 connections", a3.Greeting)
+	}
+	if code, _ := client.ParseCode(b.Greeting); code != 200 {
+		t.Fatalf("peer b locked out after peer a opened three connections: greeting %q, want 200", b.Greeting)
+	}
+	expect(t, b, 203, "MODE STREAM")
+}
 
 // maxCnxIncoming lists PeerIP as a streaming peer with max-connections and hold-time.
 func maxCnxIncoming(maxCnx, holdTime int) string {

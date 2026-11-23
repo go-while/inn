@@ -36,6 +36,7 @@ needs the Go standard library:
 | `TestPeerMaxConnectionsHoldTime` | innd, ctlinnd | with `max-connections: 2` and `hold-time: 3`, the third connection is greeted but not served and shown as paused, is served when another one closes, and a connection still over the limit is closed after the hold time |
 | `TestPeerMaxConnectionsHoldTimeExpiry` | innd | with `max-connections: 2` and `hold-time: 3`, two connections are held; after the first is closed at the end of its hold time and an accepted one closes, the second is served |
 | `TestPeerMaxConnectionsSample` | innd, ctlinnd | with the sample incoming.conf (`max-connections: 8`), the ninth connection from 127.0.0.1 (peer ME) gets 400 and innd logs "too many connections from ME" |
+| `TestPeerMaxConnectionsLockout` | innd | with `maxconnections: 4` in inn.conf, peer a with `max-connections: 2` and peer b listed too: a's third connection gets 400 and b, connecting next, gets 200 (without the limit, a takes the last free connection and b gets "400 Too many connections") |
 | `TestSIGTERMWhileIdle` | innd | an idle innd exits on SIGTERM |
 | `TestSIGTERMWhileBusy` | innd, Perl filter | a SIGTERM received while innd is busy in a slow `filter_art` takes effect once the filter returns, not at the next connection |
 | `TestSIGTERMUnderLoad` | innd | innd exits with status 0 on SIGTERM while peers and readers connect |
