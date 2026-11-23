@@ -91,16 +91,19 @@ error.
 =item B<-C>
 
 Compare the water marks in F<active> (under I<pathdb>) against the
-tradindexed group index.  Aliases are skipped.  The check reports
-malformed entries, missing overview groups, low water marks that
-differ, and high water marks below the overview value.  The high water
-mark in F<active> can legitimately be higher because it records the
-last article number assigned to the group.
+tradindexed group index.  The check reports invalid field counts,
+water marks and status flags, and skips aliases with a nonempty target.
+For other entries it reports missing overview groups, low water marks
+that differ, and high water marks below the overview value.  Groups
+present only in overview are outside this check.  The high water mark
+in F<active> can legitimately be higher because it records the last
+article number assigned to the group.
 
 Reports are written to standard error.  The command exits with status
 1 if any problem is found and leaves both files unchanged.  After
-checking that overview is healthy, use C<ctlinnd renumber> to update the
-marks without reducing the high water mark.
+checking that overview is healthy, use C<ctlinnd renumber> to correct
+mark discrepancies without reducing the high water mark.  Handle
+malformed entries and missing overview groups separately.
 
 =item B<-c>
 

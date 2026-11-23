@@ -34,6 +34,21 @@
 #include "tdx-private.h"
 #include "tdx-structure.h"
 
+/* Check whether an active status field is a flag or a nonempty alias. */
+static bool
+valid_active_status(const char *status)
+{
+    if (status[0] == NF_FLAG_ALIAS)
+        return status[1] != '\0';
+    return status[0] != '\0' && status[1] == '\0'
+           && strchr(NF_FLAG_OK_STRING NF_FLAG_MODERATED_STRING
+                         NF_FLAG_NOLOCAL_STRING NF_FLAG_JUNK_STRING
+                         NF_FLAG_IGNORE_STRING,
+                     status[0])
+                  != NULL;
+}
+
+
 /*
 **  Check the active water marks against tradindexed.  The active high mark
 **  may be ahead of overview since it is also the last number ever assigned.
@@ -54,8 +69,12 @@ check_active(void)
         die("cannot open group index");
     path = concatpath(innconf->pathdb, INN_PATH_ACTIVE);
     active = QIOopen(path);
-    if (active == NULL)
-        sysdie("cannot open %s", path);
+    if (active == NULL) {
+        syswarn("cannot open %s", path);
+        free(path);
+        tdx_index_close(index);
+        return false;
+    }
 
     while ((line = QIOread(active)) != NULL) {
         const struct group_entry *entry;
@@ -67,6 +86,11 @@ check_active(void)
         if (fields->count != 4 || !IsValidArticleNumber(fields->strings[1])
             || !IsValidArticleNumber(fields->strings[2])) {
             warn("%s:%lu: invalid active entry", path, lineno);
+            clean = false;
+            continue;
+        }
+        if (!valid_active_status(fields->strings[3])) {
+            warn("%s:%lu: invalid active status", path, lineno);
             clean = false;
             continue;
         }
@@ -568,6 +592,7 @@ main(int argc, char *argv[])
             newsgroup = optarg;
             break;
         case 'p':
+            free(innconf->pathoverview);
             innconf->pathoverview = xstrdup(optarg);
             break;
         case 'A':
