@@ -105,7 +105,7 @@ REST_INSTALLED	= \
 ALL_INSTALLED	= $(REST_INSTALLED)
 
 SPECIAL		= $D$(PATH_ACTIVE) $D$(PATH_ACTIVE_TIMES) \
-		$D$(PATH_NEWSGROUPS) $D$(PATH_HISTORY)
+		$D$(PATH_NEWSGROUPS) install-history
 
 ##  Get new versions of everything from samples directory.
 all:		$(ALL) config
@@ -151,29 +151,40 @@ $D$(PATH_ACTIVE_TIMES):
 	fi
 	chmod $(FILEMODE) $@
 
+##  The history database is set up by a rule that runs on every install,
+##  rather than by a file target: with a file target named after the default
+##  location, an existing file there made make skip the whole recipe, even
+##  when inn.conf sets another pathhistory or hismethod.
+##
 ##  For a real install ($D empty), the history location and method come from
 ##  the installed inn.conf via innconfval, so a non-default pathhistory is
-##  honoured, and existence checks on the real files keep reruns no-ops (the
-##  make target above is only the default location).  With hismethod set to
-##  hissqlite, the empty database is created by running makehistory once
-##  (instant on an empty spool); no hisv6 history text file is touched.  If
-##  a non-empty hisv6 history text file is present in pathhistory (which can
-##  happen when pathhistory differs from the default location), hismethod has
-##  just been changed on an existing server: rebuilding from the spool could
-##  take hours and would lose the remembered entries, so hissqlite-convert is
-##  advised instead.  A
-##  DESTDIR (packaging) install just creates the placeholder text file at the
-##  default location, as before, and leaves database initialization to the
-##  package's post-install.
-$D$(PATH_HISTORY):
+##  honoured, and existence checks on the real files keep reruns no-ops.  With
+##  hismethod set to hissqlite, the empty database is created by running
+##  makehistory once (instant on an empty spool); no hisv6 history text file
+##  is touched.  If a non-empty hisv6 history text file is present in
+##  pathhistory, hismethod has just been changed on an existing server:
+##  rebuilding from the spool could take hours and would lose the remembered
+##  entries, so hissqlite-convert is advised instead.  A DESTDIR (packaging)
+##  install just creates the placeholder text file at the default location if
+##  nothing is there yet (anything there, even a dangling symbolic link, is
+##  left alone; ls -d tells, test -e is missing from older Bourne shells), as
+##  before, and leaves database initialization to the package's post-install.
+##  install-history is declared phony so that a file of that name in this
+##  directory cannot make make skip it.
+.PHONY: install-history
+install-history:
 	@ME=`$(WHOAMI)` ; \
 	if [ -n "$D" ] ; then \
-	    touch $@ ; \
-	    if [ x"$$ME" = xroot ] ; then \
-	        chown $(RUNASUSER) $@ ; \
-	        chgrp $(RUNASGROUP) $@ ; \
+	    if ls -d "$D$(PATH_HISTORY)" >/dev/null 2>&1 ; then \
+	        : ; \
+	    else \
+	        touch "$D$(PATH_HISTORY)" ; \
+	        if [ x"$$ME" = xroot ] ; then \
+	            chown $(RUNASUSER) "$D$(PATH_HISTORY)" ; \
+	            chgrp $(RUNASGROUP) "$D$(PATH_HISTORY)" ; \
+	        fi ; \
+	        chmod $(FILEMODE) "$D$(PATH_HISTORY)" ; \
 	    fi ; \
-	    chmod $(FILEMODE) $@ ; \
 	else \
 	    HISTDIR=`$(PATHBIN)/innconfval pathhistory` ; \
 	    if [ -z "$$HISTDIR" ] ; then \
