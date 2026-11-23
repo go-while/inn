@@ -1263,11 +1263,10 @@ cnfs_init(SMATTRIBUTE *attr)
                 if (i == 0)
                     reference = position;
                 position -= reference;
-                /* Equal or neighboring cycles preserve the distance even
-                   when an article used more than half a member.  Widely
-                   separated cycles can belong to previously unrelated disks.
-                   For those, choose the nearest phase, including when the
-                   numeric cycle counter wraps. */
+                /* Keep distances of zero or one cycle from the first
+                   member.  Larger gaps can come from reused buffers or
+                   articles that only fit one member.  Use the nearest
+                   phase for those gaps and across a cycle counter wrap. */
                 if (member->cyclenum != first->cyclenum) {
                     if (member->cyclenum > first->cyclenum
                         && member->cyclenum - first->cyclenum == 1)

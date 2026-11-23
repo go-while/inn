@@ -66,7 +66,8 @@ sub store_batch {
 
 # Capacity in 4 KiB blocks, excluding the 16 KiB disk header.
 my %capacity = (A => 32, B => 64, C => 16);
-for my $mode (qw(INTERLEAVE WEIGHTED)) {
+sub setup_buffers {
+    my ($mode) = @_;
     my $config = '';
     for my $name (sort keys %capacity) {
         my $kib = 16 + 4 * $capacity{$name};
@@ -75,6 +76,10 @@ for my $mode (qw(INTERLEAVE WEIGHTED)) {
         $config .= "cycbuff:$name:$dir/$name:$kib\n";
     }
     write_file('cycbuff.conf', $config . "metacycbuff:BOTH:A,B,C:$mode\n");
+    return $config;
+}
+for my $mode (qw(INTERLEAVE WEIGHTED)) {
+    my $config = setup_buffers($mode);
     my @initial = store_batch(1, 48);
     is_deeply([map { $_->[0] } @initial], [qw(A B)],
         "$mode stores the large article on the only member it fits");
@@ -108,6 +113,18 @@ for my $mode (qw(INTERLEAVE WEIGHTED)) {
         }
     }
     if ($mode eq 'WEIGHTED') {
+        # Leave B one cycle ahead of A, with a smaller offset than C.
+        $config = setup_buffers($mode);
+        my @seed = store_batch(31, 48);
+        my @rolled = store_batch(13, 40);
+        is_deeply([map { $_->[0] } @seed, @rolled], [qw(A B C B)],
+            'WEIGHTED fixture rolls B over without moving A or rolling C');
+        is($rolled[1]->[1], $seed[0]->[1] + 1,
+            'B is one cycle ahead of the first configured member');
+        my @resumed = store_batch(1, 1, 1, 1);
+        is_deeply([map { $_->[0] } @resumed], [qw(C C C A)],
+            'WEIGHTED second reopen keeps B ahead of A and C');
+
         # Initialize D with the existing writer, leaving it outside BOTH.
         write_file('D', '');
         truncate("$dir/D", 20 * 1024) or die $!;

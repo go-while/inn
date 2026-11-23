@@ -102,10 +102,13 @@ a colon and the mode at the end of the metacycbuff line.
 
 C<WEIGHTED> interleaves writes in proportion to usable space, including
 block padding and unused space at rollover.  Each article goes to a member
-large enough to hold it.  On restart, members in the same or adjacent
-cycles resume their relative positions.  For more distant cycle counters,
-including repurposed disks, the writer estimates the closest position
-within a turn.  The first placements can then differ from continuous use.
+large enough to hold it.  On restart, each member resumes its position
+relative to the first configured member if their cycle counters are
+equal or differ by one.  Larger gaps can arise when many articles fit
+only one member, or when disks are reused.  For those gaps the writer
+estimates the closest position within a turn, and the first placements
+can differ from continuous use.
+B<innd> fails to start if a weighted member has at most one usable block.
 
 =back
 
