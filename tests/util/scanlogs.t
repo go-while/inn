@@ -1,7 +1,7 @@
 #! /bin/sh
 # Exercise scanlogs in a private spool with a stand-in for ctlinnd.
 . "$C_TAP_SOURCE/tap/libtap.sh"
-plan 37
+plan 41
 fixture=$(test_tmpdir)/scanlogs-$$
 mkdir -p "$fixture/bin" "$fixture/log" || exit 1
 export fixture
@@ -123,14 +123,22 @@ set -- "$fixture"/doex*
 ok 'throttle failure removes the report buffer' test ! -e "$1"
 
 echo interruption >"$fixture/log/news"
-echo interruption >"$fixture/expected"
+echo interruption >"$fixture/interrupted"
 run 'gzip -interrupt'
 ok 'interrupted rotation exits nonzero' test "$?" -ne 0
 ok 'partial compressor output is hidden during the run' test -f "$fixture/archive-hidden"
 ok 'interrupted rotation leaves no partial archive' test ! -e "$old/news.0.gz"
-ok 'interrupted rotation preserves the uncompressed source' cmp "$old/news" "$fixture/expected"
+ok 'interrupted rotation preserves the uncompressed source' cmp "$old/news" "$fixture/interrupted"
 ok 'interrupted rotation releases the scanlogs lock' test ! -e "$fixture/LOCK.scanlogs"
 set -- "$old"/.scanlogs.*
 ok 'interrupted rotation removes staged output' test ! -e "$1"
+
+echo next-run >"$fixture/log/news"
+echo next-run >"$fixture/expected"
+ok 'rotation can restart after an interruption' run 'gzip -9'
+ok 'next rotation archives the new log intact' cmp "$old/news.1.gz" "$fixture/expected"
+set -- "$old"/recovered.*/news
+ok 'next rotation saves the interrupted log intact' cmp "$1" "$fixture/interrupted"
+ok 'next rotation reports the saved log path' grep -Fq "saved pending log to $1" "$fixture/output"
 
 rm -rf "$fixture"

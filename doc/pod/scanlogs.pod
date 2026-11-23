@@ -29,6 +29,10 @@ After a method change, older archives keep their suffix as they rotate.
 If compression fails, the current log is archived in plain text and
 B<scanlogs> exits with a nonzero status.
 
+If a rotation is interrupted, the next rotation moves any pending logs
+to a uniquely named F<recovered.*> directory under I<pathlog>/OLD and
+reports their paths.  These files are kept outside the numbered rotation.
+
 It invokes B<tally.control> if F<newgroup.log> or F<rmgroup.log> exists
 in I<pathlog> (see the F<control.log> entry of newslog(5) for more
 information about that).
