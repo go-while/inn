@@ -80,7 +80,8 @@ typedef struct {
 
 typedef enum {
     INTERLEAVE,
-    SEQUENTIAL
+    SEQUENTIAL,
+    WEIGHTED
 } METAMODE;
 
 typedef struct metacycbuff {
@@ -91,6 +92,7 @@ typedef struct metacycbuff {
     unsigned long write_count; /* Number of writes since last header flush */
     struct metacycbuff *next;
     METAMODE metamode;
+    double *progress;          /* Fractional turns per member in WEIGHTED mode */
 } METACYCBUFF;
 
 typedef struct _CNFSEXPIRERULES {
