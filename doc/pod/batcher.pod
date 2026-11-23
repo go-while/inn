@@ -145,7 +145,8 @@ unchanged.
 
 =back
 
-If a batch could not be written or closed successfully (for instance when the
+If a batch could not be started (the exit status is then non-zero too), or
+could not be written or closed successfully (for instance when the
 program given with B<-p> exits with a non-zero status, or when a write to it
 failed), none of its articles is considered as batched: the spooled input
 begins at the first article of that batch, and B<batcher> exits with a
@@ -157,7 +158,7 @@ The spooled input can only begin at the first article of the batch when
 the input can be positioned, which is not the case of a pipe.  When the input
 is a pipe, the articles which were already read from it and belong to a
 rejected batch cannot be recovered: B<batcher> warns about it, and exits with a
-non-zero status.
+non-zero status.  The article that it had read but not sent is spooled.
 
 Upon receipt of an interrupt or termination signal, B<batcher> will finish
 batching the current article, close the batch, and then rewrite the batch

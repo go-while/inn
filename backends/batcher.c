@@ -36,6 +36,7 @@ static int BATCHcount;
 static int MaxBatches;
 static int BATCHstatus;
 static off_t BatchStart = -1;
+static bool StartFailed;
 
 /* The input cannot be positioned (a pipe), so there is no offset to go back
  * to. */
@@ -126,7 +127,7 @@ RequeueAndExit(off_t Cookie, char *line, long BytesInArt)
 
     /* Last batch exit okay? */
     if (BATCHstatus == 0) {
-        if (feof(stdin) && Cookie != -1) {
+        if (feof(stdin) && Cookie != -1 && line == NULL) {
             /* Yes, and we're all done -- remove input and exit. */
             fclose(stdin);
             if (Input)
@@ -193,7 +194,7 @@ RequeueAndExit(off_t Cookie, char *line, long BytesInArt)
     }
 
     free(spool);
-    exit(i != 0 || BATCHstatus != 0 ? 1 : 0);
+    exit(i != 0 || BATCHstatus != 0 || StartFailed ? 1 : 0);
     /* NOTREACHED */
 }
 
@@ -229,6 +230,7 @@ main(int ac, char *av[])
     ARTHANDLE *art;
     char *artdata;
     size_t written;
+    bool Unsent = false;
 
     /* Set defaults. */
     openlog("batcher", L_OPENLOG_FLAGS | LOG_PID, LOG_INN_PROG);
@@ -351,6 +353,7 @@ main(int ac, char *av[])
             }
             artdata = wire_to_native(art->data, art->len, &BytesInArt);
             SMfreearticle(art);
+            Unsent = true;
         } else {
             warn("%s skipping %.40s: not token", Host, p);
             continue;
@@ -366,6 +369,7 @@ main(int ac, char *av[])
             }
             if ((F = BATCHstart()) == NULL) {
                 syswarn("%s cannot start batch %d", Host, BATCHcount);
+                StartFailed = true;
                 break;
             }
             BatchStart = Cookie;
@@ -405,6 +409,7 @@ main(int ac, char *av[])
 
             if ((F = BATCHstart()) == NULL) {
                 syswarn("%s cannot start batch %d", Host, BATCHcount);
+                StartFailed = true;
                 break;
             }
             BatchStart = Cookie;
@@ -434,6 +439,8 @@ main(int ac, char *av[])
         if (written != BytesInArt || ferror(F))
             break;
 
+        Unsent = false;
+
         /* Update the counts. */
         BytesInCB += BytesInArt;
         BytesWritten += BytesInArt;
@@ -455,8 +462,10 @@ main(int ac, char *av[])
     /* A batch which failed to close was not accepted: none of its articles
      * is done, and the input has to be read again from its first one. */
     if (BATCHstatus != 0 && BatchStart != -1)
-        RequeueAndExit(BatchStart, NULL, 0);
-    RequeueAndExit(Cookie, NULL, 0);
+        RequeueAndExit(BatchStart, BatchStart == NOSEEK && Unsent ? line : NULL,
+                       BytesInArt);
+    RequeueAndExit(Cookie, Cookie == NOSEEK && Unsent ? line : NULL,
+                   BytesInArt);
 
     /* NOTREACHED */
     return 0;
