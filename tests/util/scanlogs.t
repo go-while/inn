@@ -1,7 +1,7 @@
 #! /bin/sh
 # Exercise scanlogs in a private spool with a stand-in for ctlinnd.
 . "$C_TAP_SOURCE/tap/libtap.sh"
-plan 25
+plan 37
 fixture=$(test_tmpdir)/scanlogs-$$
 mkdir -p "$fixture/bin" "$fixture/log" || exit 1
 export fixture
@@ -26,10 +26,33 @@ MAILCMD=$fixture/bin/mail
 PATH=$fixture/bin:$PATH
 export PATH
 EOF
-printf '#! /bin/sh\necho Ok\n' >"$fixture/bin/ctlinnd"
-printf '#! /bin/sh\nfor lock do :; done\necho "$$" >"$lock"\n' >"$fixture/bin/shlock"
+cat >"$fixture/bin/ctlinnd" <<'EOF'
+#! /bin/sh
+if [ "${TEST_THROTTLE_FAILURE:-}" = yes ]; then
+    case " $* " in
+        *' mode '*) echo 'Server paused by [innwatch: fixture]'; exit 0 ;;
+        *' throttle '*) exit 1 ;;
+    esac
+fi
+echo Ok
+EOF
+printf '#! /bin/sh\nfor lock do :; done\necho "$2" >"$lock"\n' >"$fixture/bin/shlock"
 printf '#! /bin/sh\ncat >"$fixture/mail"\n' >"$fixture/bin/mail"
-printf '#! /bin/sh\n[ "$1" = -9 ] || exit 1\ncat\n' >"$fixture/bin/gzip"
+cat >"$fixture/bin/gzip" <<'EOF'
+#! /bin/sh
+case "$1" in
+    -9) cat ;;
+    -interrupt)
+        if IFS= read -r line && [ "$line" = interruption ]; then
+            echo partial
+            test ! -f "$fixture/log/OLD/news.0.gz" &&
+                touch "$fixture/archive-hidden"
+            kill -TERM "$(cat "$fixture/LOCK.scanlogs")"
+        fi
+        ;;
+    *) echo partial; exit 1 ;;
+esac
+EOF
 printf '#! /bin/sh\necho analysis-complete\n' >"$fixture/bin/innreport"
 chmod +x "$fixture"/bin/*
 touch "$fixture/active"
@@ -83,4 +106,31 @@ ok 'news.daily reports the rotation failure after mailing' test "$?" -ne 0
 ok 'mail contains the analysis' grep -q analysis-complete "$fixture/mail"
 ok 'mail contains the compressor warning' grep -q 'compressor unavailable' "$fixture/mail"
 ok 'daily log rotated intact' cmp "$old/news.1" "$fixture/expected"
+
+printf '#! /bin/sh\nexit 0\n' >"$fixture/bin/sleep"
+printf '#! /bin/sh\necho expiry-status\n' >"$fixture/bin/innstat"
+chmod +x "$fixture/bin/sleep" "$fixture/bin/innstat"
+rm -f "$fixture/mail"
+echo both-fail >"$fixture/log/news"
+TEST_THROTTLE_FAILURE=yes COMPRESSFORMAT="$fixture/missing/gzip" \
+    sh "$fixture/news.daily" noexpireover noexplog noprocbatch norenumber norm nostat
+ok 'daily maintenance fails after scanlogs and throttle both fail' test "$?" -ne 0
+ok 'throttle failure report still contains the analysis' grep -q analysis-complete "$fixture/mail"
+ok 'throttle failure report includes the compressor warning' grep -q 'compressor unavailable' "$fixture/mail"
+ok 'throttle failure report includes the throttle diagnostic' grep -q 'Cannot throttle while innwatch paused' "$fixture/mail"
+ok 'throttle failure releases the daily lock' test ! -e "$fixture/LOCK.news.daily"
+set -- "$fixture"/doex*
+ok 'throttle failure removes the report buffer' test ! -e "$1"
+
+echo interruption >"$fixture/log/news"
+echo interruption >"$fixture/expected"
+run 'gzip -interrupt'
+ok 'interrupted rotation exits nonzero' test "$?" -ne 0
+ok 'partial compressor output is hidden during the run' test -f "$fixture/archive-hidden"
+ok 'interrupted rotation leaves no partial archive' test ! -e "$old/news.0.gz"
+ok 'interrupted rotation preserves the uncompressed source' cmp "$old/news" "$fixture/expected"
+ok 'interrupted rotation releases the scanlogs lock' test ! -e "$fixture/LOCK.scanlogs"
+set -- "$old"/.scanlogs.*
+ok 'interrupted rotation removes staged output' test ! -e "$1"
+
 rm -rf "$fixture"

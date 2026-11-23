@@ -1669,8 +1669,8 @@ The program and optional arguments scanlogs(8) uses to compress archived
 logs.  Set this string to C<"gzip -9">, C<"xz --memlimit=50%">, or C<cat>
 for plain logs.  Supported program names are B<gzip>, B<bzip2>, B<compress>,
 B<xz> and B<cat>.  An absolute path to any of these programs is accepted.
-Options are separated by whitespace and passed literally.  Use filter options that
-read standard input and write the compressed result to standard output.
+Options are separated by whitespace and passed literally.  Use filter options
+that read standard input and write the compressed result to standard output.
 When unset, the default comes from B<--with-log-compress> at build time.
 
 =item I<logcycles>

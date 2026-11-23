@@ -143,6 +143,21 @@ if ${ROTATE}; then
     set +f
 fi
 
+archive_tmp=
+cleanup_rotation() {
+    status=$?
+    ##  Resume the server unless resumeserver already failed and reported it.
+    if [ "${RESUMESTATUS}" -eq 0 ]; then
+        resumeserver || status=1
+    fi
+    if [ -n "${archive_tmp}" ]; then
+        rm -f "${archive_tmp}"
+        rmdir "${archive_tmp%/*}"
+    fi
+    rm -f "${LOCK}"
+    exit "${status}"
+}
+
 ##  Make sure every log exists.
 for F in ${LOGS}; do
     test ! -f ${F} && touch ${F}
@@ -190,7 +205,11 @@ if ${ROTATE}; then
         echo "$0: cannot resume innd, run: ctlinnd go \"${PAUSEREASON}\"" 1>&2
         return 1
     }
-    trap 'resumeserver; STATUS=$?; rm -f ${LOCK}; exit ${STATUS}' 1 2 3 15
+    ##  On every exit after this point, cleanup_rotation resumes the server,
+    ##  removes a partly written archive and releases the lock.  A signal
+    ##  only reports the interruption and makes the exit status 1.
+    trap cleanup_rotation 0
+    trap 'echo "$0: log rotation interrupted" >&2; exit 1' 1 2 3 15
 
     HERE=$(pwd)
     cd ${MOST_LOGS}
@@ -208,8 +227,6 @@ if ${ROTATE}; then
     if [ "$OUTPUT" != "Ok" -a "$OUTPUT" != "In debug mode" ]; then
         echo "$OUTPUT"
         echo 'Cannot flush logs.'
-        resumeserver
-        rm -f ${LOCK}
         exit 1
     fi
 
@@ -398,6 +415,12 @@ rotate_archives() {
     if [ X${LOGCYCLES} = X ]; then
         LOGCYCLES=3
     fi
+    if [ "$#" -gt 0 ]; then
+        ##  Stage output on the archive filesystem for an atomic rename.
+        stage="${OLD}/.scanlogs.$$"
+        (umask 077 && mkdir "${stage}") || return 1
+        archive_tmp="${stage}/archive"
+    fi
     for F in ${LOGS}; do
         ##  Skip if file doesn't exist.
         BASE=$(basename ${F})
@@ -405,18 +428,19 @@ rotate_archives() {
 
         ##  On compressor failure keep this generation in plain text.
         EXT=${COMPRESS_EXT}
-        if [ "$#" -gt 0 ] && "$@" <"${BASE}" >"${BASE}.0${EXT}"; then
+        if [ "$#" -gt 0 ] && "$@" <"${BASE}" >"${archive_tmp}"; then
+            chmod 0440 "${archive_tmp}" || return 1
+            mv -f "${archive_tmp}" "${BASE}.0${EXT}" || return 1
             rm -f "${BASE}"
         else
             if [ "$#" -gt 0 ]; then
                 echo "$0: compression failed for ${BASE}, keeping plain log" >&2
-                rm -f "${BASE}.0${EXT}"
+                rm -f "${archive_tmp}"
             fi
-            EXT=''
             mv -f "${BASE}" "${BASE}.0" || return 1
+            chmod 0440 "${BASE}.0"
             result=1
         fi
-        chmod 0440 "${BASE}.0${EXT}"
 
         ##  Older generations retain their original compression method.
         for suffix in '' .gz .bz2 .Z .xz "${Z}"; do
@@ -440,7 +464,6 @@ rotate_archives() {
 if ${ROTATE}; then
     rotate_archives "$@"
     result=$?
-    rm -f "${LOCK}"
 fi
 
 ##  All done.
