@@ -24,15 +24,57 @@ given together.
 
 B<controlbatch> first makes sure that no other copy of itself is already
 running, using a lock file named F<LOCK.controlbatch> in I<pathrun> (as
-set in F<inn.conf>); if one is found, it silently exits.  It then merges
+set in F<inn.conf>); if one is found, it silently exits.  It then finishes
+the handoff of a previous run which was interrupted (see below), and merges
 any leftover I<batchfile>C<.work> file (left behind by an interrupted
-previous run) into I<batchfile>C<.doit>.  If I<batchfile> itself is not
-empty, it is renamed to I<batchfile>C<.work>, and B<ctlinnd> is used to
-flush the site named I<feedsite> so that B<innd> stops writing to it
-while it is being processed; the flushed batch is then appended to
-I<batchfile>C<.doit> as well.  Finally, if I<batchfile>C<.doit> is not
-empty, it is fed to B<controlchan>, whose output is appended to
-F<controlbatch.log> in I<pathlog> (as set in F<inn.conf>).
+previous run, or by one which could not flush the site) into
+I<batchfile>C<.doit>, after having flushed the site again so that B<innd>
+no longer writes to it.  If I<batchfile> itself is not empty, it is renamed
+to I<batchfile>C<.work>, and B<ctlinnd> is used to flush the site named
+I<feedsite> so that B<innd> stops writing to it while it is being
+processed; the flushed batch is then merged into I<batchfile>C<.doit> as
+well.  Finally, if I<batchfile>C<.doit> is not empty, it is fed to
+B<controlchan>, whose output is appended to F<controlbatch.log> in
+I<pathlog> (as set in F<inn.conf>).
+
+The merge of I<batchfile>C<.work> is done by staging and replacement, so that
+no control article is lost, or processed twice, when the disk is full or when
+B<controlbatch> is interrupted.  First, I<batchfile>C<.new> is written with
+the content of I<batchfile>C<.doit> followed by that of I<batchfile>C<.work>.
+Then I<batchfile>C<.work> is renamed to I<batchfile>C<.work.merged>, which
+means that I<batchfile>C<.new> is complete.  Finally I<batchfile>C<.new> is
+renamed to I<batchfile>C<.doit> and I<batchfile>C<.work.merged> is removed.
+The next run completes the last steps if they were interrupted, looking at
+the files which are there:  I<batchfile>C<.work.merged> together with
+I<batchfile>C<.new> means that I<batchfile>C<.new> has to be published, and
+I<batchfile>C<.work.merged> alone is removed only if I<batchfile>C<.doit> ends
+with its content (otherwise B<controlbatch> stops with an error and keeps
+all the files, so that you can check them).  Do not remove these files by
+hand while B<controlbatch> may be running.
+
+I<batchfile>C<.work> stays where it is until a flush of the site succeeds,
+because B<innd> may still be writing to it; the batch file and
+I<batchfile>C<.doit> are processed meanwhile.  If B<innd> is stopped for
+good or the site has been removed from F<newsfeeds> (for instance during
+a migration), the flush can never succeed.  Once you are sure that B<innd>
+is not running, or no longer feeds this site, hand it over by hand with the
+same staging and replacement, while no B<controlbatch> is running.  In
+I<pathoutgoing>, first run B<controlbatch> once (its recovery of an
+interrupted handoff runs even if the flush fails) and check that
+I<batchfile>C<.new> and I<batchfile>C<.work.merged> are gone; if
+I<batchfile> itself is not empty and there is no I<batchfile>C<.work>,
+rename it to I<batchfile>C<.work>.  Then:
+
+    cat batchfile.doit batchfile.work > batchfile.new &&
+        mv batchfile.work batchfile.work.merged
+
+(leave I<batchfile>C<.doit> out of the first command if it does not exist,
+and use the real names of the files; the rename runs only if the copy
+succeeded).  Run B<controlbatch> again: it
+publishes I<batchfile>C<.new>, removes I<batchfile>C<.work.merged> and
+processes the articles.  If the first command is interrupted, remove
+I<batchfile>C<.new> and start again; if the second one is, B<controlbatch>
+finishes the job.
 
 I<batchfile>C<.doit> is removed only if B<controlchan> succeeds.  Otherwise,
 it is kept so that it is processed again during the next run, and the number
