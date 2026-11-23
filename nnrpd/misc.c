@@ -625,15 +625,15 @@ CMDstarttls(int ac UNUSED, char *av[] UNUSED)
 
 #    if defined(HAVE_SASL)
     /* Tell SASL about the negotiated layer. */
-    result = sasl_setprop(sasl_conn, SASL_SSF_EXTERNAL,
-                          (sasl_ssf_t *) &tls_cipher_usebits);
-    if (result != SASL_OK) {
-        syslog(L_NOTICE, "sasl_setprop() failed: CMDstarttls()");
-    }
+    if (sasl_conn != NULL) {
+        result = sasl_setprop(sasl_conn, SASL_SSF_EXTERNAL,
+                              (sasl_ssf_t *) &tls_cipher_usebits);
+        if (result != SASL_OK)
+            syslog(L_NOTICE, "sasl_setprop() failed: CMDstarttls()");
 
-    result = sasl_setprop(sasl_conn, SASL_AUTH_EXTERNAL, tls_peer_CN);
-    if (result != SASL_OK) {
-        syslog(L_NOTICE, "sasl_setprop() failed: CMDstarttls()");
+        result = sasl_setprop(sasl_conn, SASL_AUTH_EXTERNAL, tls_peer_CN);
+        if (result != SASL_OK)
+            syslog(L_NOTICE, "sasl_setprop() failed: CMDstarttls()");
     }
 #    endif /* HAVE_SASL */
 
