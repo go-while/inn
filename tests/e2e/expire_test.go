@@ -243,6 +243,72 @@ func TestExpireoverTombstoneQuietCycle(t *testing.T) {
 	}
 }
 
+// TestExpireoverRejectedFinalLog: with expiretombstone and delayed removal, an unconsumed
+// expireover.tombstone listing a live article is verified by the next expireover, which
+// rejects that entry; when this run's removals then fail (so that expirerm does not promote
+// .NEW), expire must not consume the old log and drop the history entry of the live
+// article.  An existing expireover.tombstone.NEW that cannot be opened stops expireover
+// (HIS-2).
+func TestExpireoverRejectedFinalLog(t *testing.T) {
+	s := NewSite(t, SiteOptions{
+		Groups:  []Group{{Name: "e2e.test"}, {Name: "e2e.expire.a"}},
+		InnConf: map[string]string{"expiretombstone": "true"},
+		Etc: map[string]string{
+			"expire.ctl": "/remember/:11\n*:A:never:never:never\n" +
+				"e2e.expire.*:A:" + expireDays + ":" + expireDays + ":" + expireDays + "\n",
+		},
+	})
+	if err := os.MkdirAll(filepath.Join(s.Dir, "log", "OLD"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	db := filepath.Join(s.Dir, "db")
+	run := func(name string, args ...string) error {
+		out, err := runFor(s, time.Minute, name, args...)
+		t.Logf("%s %s: err=%v\n%s", name, strings.Join(args, " "), err, out)
+		return err
+	}
+	live := s.Inject(t, "e2e.test", 1)[0]
+	liveToken := historyToken(t, s, live)
+	s.writeFile(t, "db/expireover.tombstone", "# inn-tombstone v1\n"+liveToken+"\n")
+
+	// An unopenable .NEW stops expireover before it changes anything.
+	newLog := filepath.Join(db, "expireover.tombstone.NEW")
+	s.writeFile(t, "db/expireover.tombstone.NEW", "# inn-tombstone v1\n")
+	if err := os.Chmod(newLog, 0); err != nil {
+		t.Fatal(err)
+	}
+	if err := run("expireover"); err == nil {
+		t.Errorf("expireover succeeded although %s could not be opened", newLog)
+	}
+	if err := os.Remove(newLog); err != nil {
+		t.Fatal(err)
+	}
+
+	// A removal that fails: expirerm does not promote .NEW.
+	s.Inject(t, "e2e.expire.a", 1)
+	time.Sleep(expireWait)
+	dirA := filepath.Join(s.Dir, "spool", "articles", "e2e", "expire", "a")
+	chmodUntilCleanup(t, dirA, 0o555)
+	rm := filepath.Join(s.Dir, "tmp", "rm")
+	if err := run("expireover", "-z", rm); err != nil {
+		t.Fatalf("expireover -z: %v", err)
+	}
+	if err := run("expirerm", rm); err == nil {
+		t.Fatalf("expirerm succeeded although the article could not be removed")
+	}
+	if b, err := os.ReadFile(filepath.Join(db, "expireover.tombstone")); err == nil &&
+		strings.Contains(string(b), liveToken) {
+		t.Errorf("expireover.tombstone still lists the live article %s:\n%s", liveToken, b)
+	}
+	if err := run("expire", "-v1"); err != nil {
+		t.Fatalf("expire -v1: %v", err)
+	}
+	if got := historyToken(t, s, live); got != liveToken {
+		t.Errorf("grephistory %s = %q after expire, want %q: the history entry of a live "+
+			"article was dropped", live, got, liveToken)
+	}
+}
+
 // TestExpireCancelSnapshotRetry: with expiretombstone, an expire run that finds the
 // cancels.tombstone.processing snapshot of an interrupted run and new entries in
 // cancels.tombstone keeps both on disk until it has built the new history: when that run
@@ -393,10 +459,10 @@ func TestNewsDailyExpdirInstallFailure(t *testing.T) {
 // unpause innd (expire unpauses it when it finishes, so news.daily has to pause it again for
 // the installation; see HIS-7).
 func TestNewsDailyExpdirInstall(t *testing.T) {
-	// "x-n" contains "-n": news.daily must not take it for expire's -n flag.  The names
-	// are short because innd refuses a reason longer than 80 characters, and the reason
-	// news.daily gives expire includes the expdir path.
-	for _, name := range []string{"x", "x-n"} {
+	// "x-n" contains "-n": news.daily must not take it for expire's -n flag.  The long name
+	// would make the pause reason exceed the 80 characters innd accepts if news.daily still
+	// put the expdir path in it.
+	for _, name := range []string{"x", "x-n", strings.Repeat("long", 12)} {
 		t.Run(name, func(t *testing.T) { testNewsDailyExpdirInstall(t, name) })
 	}
 }
@@ -501,5 +567,92 @@ func TestFastrmExitStatus(t *testing.T) {
 	cmd.Stdin = strings.NewReader("e2e/nothere\n")
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Errorf("fastrm with a file that does not exist: %v\n%s", err, out)
+	}
+}
+
+// newsDailyMailer writes a mail command that appends what it gets to a report file, and
+// returns both paths.
+func newsDailyMailer(t *testing.T) (mailer, report string) {
+	t.Helper()
+	bin := t.TempDir()
+	report = filepath.Join(bin, "report")
+	mailer = filepath.Join(bin, "mailer")
+	script := fmt.Sprintf("#! /bin/sh\nhead -c 65536 >>'%s'\n", report)
+	if err := os.WriteFile(mailer, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	return mailer, report
+}
+
+// TestNewsDailyExpdirPendingInstall: when the expdir directory still holds history.n.done of
+// an earlier installation that did not complete, news.daily does not run expire, which would
+// overwrite what may be the only complete history, and notifies the newsmaster (HIS-7).
+func TestNewsDailyExpdirPendingInstall(t *testing.T) {
+	mailer, report := newsDailyMailer(t)
+	s := NewSite(t, SiteOptions{InnConf: map[string]string{"mailcmd": mailer}})
+	s.Inject(t, "e2e.test", 1)
+	expdir := filepath.Join(s.Dir, "x")
+	if err := os.Mkdir(expdir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	s.writeFile(t, "x/history.n", "pending history of an earlier run\n")
+	s.writeFile(t, "x/history.n.done", "")
+
+	out, err := runNewsDaily(s, 150*time.Second, "expdir="+expdir, "noexpireover",
+		"noprocbatch", "nologs", "nostat")
+	t.Logf("news.daily: err=%v\n%s", err, out)
+	mail, _ := os.ReadFile(report)
+	t.Logf("mail:\n%s", mail)
+	if b, _ := os.ReadFile(filepath.Join(expdir, "history.n")); string(b) != "pending history of an earlier run\n" {
+		t.Errorf("the pending history.n was overwritten or moved: %q", b)
+	}
+	if !strings.Contains(string(mail), "earlier installation") {
+		t.Errorf("the newsmaster was not told about the earlier installation")
+	}
+	if mode := s.Ctlinnd(t, "mode"); !strings.Contains(mode, "Server running") {
+		t.Errorf("innd is not running (news.daily should not have touched it):\n%s", mode)
+	}
+}
+
+// TestNewsDailyExpdirTruncateFailure: when news.daily cannot empty the old history file
+// (here: the file is read-only), it moves nothing, keeps the new files and history.n.done
+// in the expdir directory, does not unpause innd and notifies the newsmaster (HIS-7).
+func TestNewsDailyExpdirTruncateFailure(t *testing.T) {
+	mailer, report := newsDailyMailer(t)
+	s := NewSite(t, SiteOptions{InnConf: map[string]string{"mailcmd": mailer}})
+	id := s.Inject(t, "e2e.test", 1)[0]
+	token := historyToken(t, s, id)
+	expdir := filepath.Join(s.Dir, "x")
+	if err := os.Mkdir(expdir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	history := filepath.Join(s.Dir, "db", "history")
+	if err := os.Chmod(history, 0o444); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(history, 0o644) })
+
+	out, err := runNewsDaily(s, 150*time.Second, "expdir="+expdir, "noexpireover",
+		"noprocbatch", "nologs", "nostat")
+	t.Logf("news.daily: err=%v\n%s", err, out)
+	mail, _ := os.ReadFile(report)
+	t.Logf("mail:\n%s", mail)
+	if _, err := os.Stat(filepath.Join(expdir, "history.n.done")); err != nil {
+		t.Errorf("history.n.done was removed: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(expdir, "history.n")); err != nil {
+		t.Errorf("history.n was moved although the old history could not be emptied: %v", err)
+	}
+	if !strings.Contains(string(mail), "Cannot empty") {
+		t.Errorf("the newsmaster was not notified")
+	}
+	if mode := s.Ctlinnd(t, "mode"); strings.Contains(mode, "Server running") {
+		t.Errorf("innd was unpaused:\n%s", mode)
+	}
+	if err := os.Chmod(history, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if got := historyToken(t, s, id); got != token {
+		t.Errorf("grephistory %s = %q, want %q: the old history was changed", id, got, token)
 	}
 }
