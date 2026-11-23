@@ -121,8 +121,19 @@ mkdir ov-tmp
 dd if=/dev/zero of=ov-tmp/buffer bs=1024k count=1 >/dev/null 2>&1
 INNCONF="etc/inn-bfx.conf"
 export INNCONF
-if ! $makehistory -x -O >/dev/null 2>&1; then
+
+# buffindexed needs System V semaphores, which some systems (such as
+# GNU/Hurd) do not implement.  Skip the buffindexed tests when makehistory
+# fails for that reason.  The messages are matched in the C locale.
+if ! out=$(LC_ALL=C $makehistory -x -O 2>&1); then
+    if echo "$out" | grep 'semaphore.*Function not implemented' >/dev/null; then
+        printcount "ok" "# skip System V semaphores not implemented"
+        printcount "ok" "# skip System V semaphores not implemented"
+        rm -rf spool ov-tmp tmp run db/group.index
+        exit 0
+    fi
     echo "makehistory failed, unable to continue" >&2
+    echo "$out" >&2
     exit 1
 fi
 out=$($inndf -n)
