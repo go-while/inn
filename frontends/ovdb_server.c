@@ -166,9 +166,9 @@ do_groupstats(struct reader *r)
 
     debug("OVDB: rs: do_groupstats '%s'", group);
     if (ovdb_groupstats(group, &low, &high, &reply->count, &reply->flag)) {
-        /* Keep the existing OVDB reader protocol layout. */
-        reply->lo = (int) low;
-        reply->hi = (int) high;
+        /* Keep the existing width of the OVDB reader protocol fields. */
+        reply->lo = (unsigned int) low;
+        reply->hi = (unsigned int) high;
         reply->status = CMD_GROUPSTATS;
         reply->aliaslen = 0;
     } else {

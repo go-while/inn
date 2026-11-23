@@ -133,6 +133,14 @@ files behind after a failed creation, and the buffindexed overview method
 validates its F<group.index> file and no longer frees memory twice when
 mapping overview data fails.  Many thanks to Kevin Bowling for the patches.
 
+=item *
+
+The C overview API function B<OVgroupstats> now returns the low and
+high water marks through C<ARTNUM *> parameters.  Rebuild callers
+against the new headers before using the updated library.  The OVDB
+reader protocol still limits water marks to the width of its existing
+unsigned integer fields.
+
 =back
 
 =head1 Changes in 2.7.5 (not yet released)
