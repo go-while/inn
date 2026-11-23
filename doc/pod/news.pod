@@ -133,6 +133,17 @@ files behind after a failed creation, and the buffindexed overview method
 validates its F<group.index> file and no longer frees memory twice when
 mapping overview data fails.  Many thanks to Kevin Bowling for the patches.
 
+=item *
+
+When I<expiretombstone> is set in F<inn.conf> and an interrupted B<expire>
+run left F<cancels.tombstone.processing> behind, the next run no longer
+renames F<cancels.tombstone> over it and then removes the result before the
+new history is in place.  If that run was interrupted as well, the
+cancellations recorded in both files were lost, and their history entries
+were kept.  The leftover snapshot is now kept until a run succeeds, and the
+live file is consumed by the following run.  A tombstone file that could
+not be read completely is no longer removed after a successful run.
+
 =back
 
 =head1 Changes in 2.7.5 (not yet released)
