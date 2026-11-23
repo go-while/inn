@@ -35,28 +35,40 @@
 
 #define MAX_SIZE 0x7fffffffUL
 
+#ifndef PATH_MAX
+#    define PATH_MAX 4096
+#endif
+
 static void Usage(void) __attribute__((__noreturn__));
 
 
 /*
-**  Open a safe unique temporary file that will go away when closed.
+**  Create a temporary file next to the file to replace, so that the final
+**  rename stays on the same file system.  Return the stream and set *tmpname
+**  to the name of the file, to free by the caller.
 */
 static FILE *
-OpenTemp(void)
+OpenStaging(const char *name, char **tmpname)
 {
     FILE *F;
-    char *filename;
     int fd;
 
-    filename = concatpath(innconf->pathtmp, "shrinkXXXXXX");
-    fd = mkstemp(filename);
-    if (fd < 0)
-        sysdie("cannot create temporary file");
-    F = fdopen(fd, "w+");
-    if (F == NULL)
-        sysdie("cannot fdopen %s", filename);
-    unlink(filename);
-    free(filename);
+    xasprintf(tmpname, "%s.shrinkXXXXXX", name);
+    fd = mkstemp(*tmpname);
+    if (fd < 0) {
+        syswarn("cannot create temporary file %s", *tmpname);
+        free(*tmpname);
+        *tmpname = NULL;
+        return NULL;
+    }
+    F = fdopen(fd, "w");
+    if (F == NULL) {
+        syswarn("cannot fdopen %s", *tmpname);
+        close(fd);
+        unlink(*tmpname);
+        free(*tmpname);
+        *tmpname = NULL;
+    }
     return F;
 }
 
@@ -69,8 +81,10 @@ EndsWithNewline(FILE *F)
 {
     int c;
 
-    if (fseeko(F, 1, SEEK_END) < 0) {
-        syswarn("cannot seek to end of file");
+    if (fseeko(F, -1, SEEK_END) < 0) {
+        /* An empty file has no last byte, and needs no newline. */
+        if (errno != EINVAL)
+            syswarn("cannot seek to end of file");
         return true;
     }
 
@@ -134,9 +148,14 @@ Process(FILE *F, char *name, off_t size, off_t maxsize, bool *Changedp)
     FILE *tmp;
     struct stat Sb;
     char buff[BUFSIZ + 1];
+    char resolved[PATH_MAX];
+    char *tmpname;
+    struct stat Tb;
     int c;
     size_t i;
+    size_t copied = 0;
     bool err;
+    bool need_newline = false;
 
     /* Get the file's size. */
     if (fstat((int) fileno(F), &Sb) < 0) {
@@ -167,17 +186,18 @@ Process(FILE *F, char *name, off_t size, off_t maxsize, bool *Changedp)
             return true;
         }
 
-        /* No newline, add it if it fits. */
-        if (len < size - 1) {
-            fclose(F);
+        /* No newline, add it if it fits.  Else the file is small enough, and
+         * is left as it is. */
+        fclose(F);
+        if (len < size) {
             *Changedp = true;
             return AppendNewline(name);
         }
+        return true;
     } else if (!EndsWithNewline(F)) {
-        if (!AppendNewline(name)) {
-            fclose(F);
-            return false;
-        }
+        /* The newline is added to the new file, never to the original, which
+         * stays as it is until the new file is complete. */
+        need_newline = true;
     }
 
     /* We now have a file that ends with a newline that is bigger than
@@ -191,49 +211,84 @@ Process(FILE *F, char *name, off_t size, off_t maxsize, bool *Changedp)
 
     while ((c = getc(F)) != '\n')
         if (c == EOF) {
+            /* The missing final newline ends the line. */
+            if (need_newline && !ferror(F)) {
+                need_newline = false;
+                break;
+            }
             syswarn("cannot read");
             fclose(F);
             return false;
         }
 
-    /* Copy rest of file to temp. */
-    tmp = OpenTemp();
+    /* Copy the rest of the file to a temporary file in the same directory.
+     * The original is replaced only when the copy is complete and has
+     * reached the disk. */
+    if (realpath(name, resolved) == NULL) {
+        syswarn("cannot find the real name of %s", name);
+        fclose(F);
+        return false;
+    }
+    tmp = OpenStaging(resolved, &tmpname);
+    if (tmp == NULL) {
+        fclose(F);
+        return false;
+    }
     err = false;
-    while ((i = fread(buff, 1, sizeof buff, F)) > 0)
+    while ((i = fread(buff, 1, sizeof buff, F)) > 0) {
+        copied += i;
         if (fwrite(buff, 1, i, tmp) != i) {
             err = true;
             break;
         }
+    }
+    if (ferror(F))
+        err = true;
+    if (!err && need_newline && copied > 0 && fputc('\n', tmp) == EOF)
+        err = true;
     if (err) {
-        syswarn("cannot copy to temporary file");
+        syswarn("cannot copy to temporary file %s", tmpname);
         fclose(F);
         fclose(tmp);
+        unlink(tmpname);
+        free(tmpname);
         return false;
     }
-
-    /* Now copy temp back to original file. */
     fclose(F);
-    if ((F = fopen(name, "w")) == NULL) {
-        syswarn("cannot overwrite file");
-        fclose(tmp);
-        return false;
-    }
-    fseeko(tmp, 0, SEEK_SET);
 
-    while ((i = fread(buff, 1, sizeof buff, tmp)) > 0)
-        if (fwrite(buff, 1, i, F) != i) {
+    /* Give the new file the owner and the mode of the old one, in this
+     * order as changing the owner can remove set-ID bits, and check that
+     * it worked. */
+    if (fflush(tmp) == EOF || ferror(tmp) || fsync(fileno(tmp)) < 0) {
+        syswarn("cannot write temporary file %s", tmpname);
+        err = true;
+    } else {
+        /* An unprivileged user cannot always give a file to another one;
+         * it is only an error if the owner or group would change. */
+        if (fchown(fileno(tmp), Sb.st_uid, Sb.st_gid) < 0 && errno != EPERM)
+            syswarn("cannot change the owner of %s", tmpname);
+        if (fchmod(fileno(tmp), Sb.st_mode & 07777) < 0
+            || fstat(fileno(tmp), &Tb) < 0 || Tb.st_uid != Sb.st_uid
+            || Tb.st_gid != Sb.st_gid
+            || (Tb.st_mode & 07777) != (Sb.st_mode & 07777)) {
+            syswarn("cannot give the owner and permissions of %s to %s", name,
+                    tmpname);
             err = true;
-            break;
         }
-    if (err) {
-        syswarn("cannot overwrite file");
-        fclose(F);
-        fclose(tmp);
-        return false;
     }
-
-    fclose(F);
-    fclose(tmp);
+    if (fclose(tmp) == EOF && !err) {
+        syswarn("cannot close temporary file %s", tmpname);
+        err = true;
+    }
+    if (!err && rename(tmpname, resolved) < 0) {
+        syswarn("cannot replace %s", resolved);
+        err = true;
+    }
+    if (err)
+        unlink(tmpname);
+    free(tmpname);
+    if (err)
+        return false;
     *Changedp = true;
     return true;
 }
@@ -316,6 +371,7 @@ int
 main(int ac, char *av[])
 {
     bool Changed;
+    bool Failed = false;
     bool Verbose;
     bool no_op;
     FILE *F;
@@ -367,6 +423,7 @@ main(int ac, char *av[])
     while ((p = *av++) != NULL) {
         if ((F = fopen(p, "r")) == NULL) {
             syswarn("cannot open %s", p);
+            Failed = true;
             continue;
         }
 
@@ -382,9 +439,10 @@ main(int ac, char *av[])
         } else {
             /* No -n, do some real work. */
             Changed = false;
-            if (!Process(F, p, size, maxsize, &Changed))
+            if (!Process(F, p, size, maxsize, &Changed)) {
                 syswarn("cannot shrink %s", p);
-            else if (Verbose && Changed)
+                Failed = true;
+            } else if (Verbose && Changed)
                 notice("shrunk %s", p);
         }
     }
@@ -392,7 +450,8 @@ main(int ac, char *av[])
         notice("did not find a file that was too large");
     }
 
-    /* If -n, then exit non-zero to indicate no file too big. */
-    exit(no_op ? 1 : 0);
+    /* If -n, then exit non-zero to indicate no file too big.  Otherwise, exit
+     * non-zero if a file could not be shrunk. */
+    exit(no_op || Failed ? 1 : 0);
     /* NOTREACHED */
 }
