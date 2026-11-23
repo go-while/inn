@@ -301,9 +301,10 @@ static off_t nnrpd_tombstone_size = 0;
 **  monotonic-append between rotations and so changes whenever a
 **  new line is added.  Together they catch every modification.
 **
-**  If tombstone_read reports a partial read (mid-file ferror), the
-**  cached mtime/size are not updated, so the next call retries the
-**  read instead of trusting a partial hashset.
+**  If tombstone_read reports an error (the file cannot be opened, or a
+**  read error in the middle of it), the hashset is dropped and false is
+**  returned:  a token missing from an incomplete hashset would be
+**  reported as present.  The next call retries the read.
 */
 static bool
 nnrpd_tombstone_refresh(void)
@@ -342,11 +343,14 @@ nnrpd_tombstone_refresh(void)
     nnrpd_tombstone = tombstone_hash_create(initial_buckets);
     tombstone_read(nnrpd_tombstone, nnrpd_tombstone_path, &read_error);
     if (read_error) {
-        /* Partial parse; do not advance the freshness key so the
-         * next call retries.  The hashset still holds whatever lines
-         * we did parse, which is not wrong (those are real cancels),
-         * just incomplete. */
-        return true;
+        /* Empty or partial hashset:  a miss would wrongly mean that the
+         * article is present, so use the slow path and retry the read on
+         * the next call. */
+        hash_free(nnrpd_tombstone);
+        nnrpd_tombstone = NULL;
+        nnrpd_tombstone_mtime = 0;
+        nnrpd_tombstone_size = 0;
+        return false;
     }
     nnrpd_tombstone_mtime = sb.st_mtime;
     nnrpd_tombstone_size = sb.st_size;
