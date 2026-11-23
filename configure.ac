@@ -276,7 +276,8 @@ AC_ARG_ENABLE([largefiles],
     [AS_HELP_STRING([--enable-largefiles],
         [Support for files larger than 2GB @<:@default=no@:>@])],
     [AS_IF([test x"$enableval" = xyes], [inn_enable_largefiles=yes])])
-AS_IF([test x"$inn_enable_tagged_hash" = xyes && test x"$inn_enable_largefiles" = xyes],
+AS_IF([test x"$inn_enable_tagged_hash" = xyes \
+       && test x"$inn_enable_largefiles" = xyes],
     [AC_MSG_ERROR([--enable-tagged-hash conflicts with --enable-largefiles.])])
 
 dnl Checks for a recent enough Perl interpreter.
