@@ -429,8 +429,12 @@ main(int ac, char *av[])
     if (Debug)
         fprintf(stderr, "< %s\n", REMclean(buff));
     if (NNTPsendpassword(REMhost, From, To) < 0 || GotAlarm) {
-        warn("%s authentication failed%s", REMhost,
-             GotAlarm ? ": timeout" : "");
+        if (GotAlarm)
+            warn("%s authentication failed: timeout", REMhost);
+        else if (errno != 0)
+            syswarn("%s authentication failed", REMhost);
+        else
+            warn("%s authentication failed", REMhost);
         /* Don't send quit; we want the remote to print a message. */
         exit(1);
     }

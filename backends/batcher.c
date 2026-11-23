@@ -79,7 +79,7 @@ BATCHclose(FILE *F)
 {
     BATCHopen = false;
     if (F == stdout)
-        return fflush(stdout) == EOF ? 1 : 0;
+        return fflush(stdout) == EOF ? -1 : 0;
     return pclose(F);
 }
 

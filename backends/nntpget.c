@@ -147,8 +147,11 @@ SITEconnect(char *host)
     if (i < 0)
         sysdie("cannot connect to %s", host);
 
-    if (NNTPsendpassword(host, From, To) < 0)
+    if (NNTPsendpassword(host, From, To) < 0) {
+        if (errno != 0)
+            sysdie("cannot authenticate to %s", host);
         die("cannot authenticate to %s", host);
+    }
 
     /* Build the structure. */
     sp = xmalloc(sizeof(SITE));

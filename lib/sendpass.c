@@ -10,7 +10,9 @@
 
 
 /*
-**  Send authentication information to an NNTP server.
+**  Send authentication information to an NNTP server.  On failure, errno
+**  describes a local error when available and is zero for a rejected reply
+**  or a clean EOF from the peer.
 */
 int
 NNTPsendpassword(char *server, FILE *FromServer, FILE *ToServer)
@@ -38,12 +40,19 @@ NNTPsendpassword(char *server, FILE *FromServer, FILE *ToServer)
     /* Open the password file; coarse check on errno, but good enough. */
     path = concatpath(innconf->pathetc, INN_PATH_NNTPPASS);
     F = fopen(path, "r");
+    oerrno = errno;
     free(path);
+    errno = oerrno;
     if (F == NULL)
         return errno == EPERM ? -1 : 0;
 
     /* Scan the file, skipping blank and comment lines. */
-    while (fgets(buff, sizeof buff, F) != NULL) {
+    for (;;) {
+        int response;
+
+        errno = 0;
+        if (fgets(buff, sizeof buff, F) == NULL)
+            break;
         if ((p = strchr(buff, '\n')) != NULL)
             *p = '\0';
         if (buff[0] == '\0' || buff[0] == '#')
@@ -71,24 +80,33 @@ NNTPsendpassword(char *server, FILE *FromServer, FILE *ToServer)
 
         if (*user) {
             /* Send the first part of the command, get a reply. */
-            fprintf(ToServer, "AUTHINFO USER %s\r\n", user);
-            if (fflush(ToServer) == EOF || ferror(ToServer))
+            errno = 0;
+            if (fprintf(ToServer, "AUTHINFO USER %s\r\n", user) < 0
+                || fflush(ToServer) == EOF || ferror(ToServer))
                 break;
+            errno = 0;
             if (fgets(input, sizeof input, FromServer) == NULL)
                 break;
-            if (atoi(input) == NNTP_OK_AUTHINFO)
+            response = atoi(input);
+            errno = 0;
+            if (response == NNTP_OK_AUTHINFO)
                 authenticated = true;
-            else if (atoi(input) != NNTP_CONT_AUTHINFO)
+            else if (response != NNTP_CONT_AUTHINFO)
                 break;
         }
 
         if (*pass && !authenticated) {
             /* Send the second part of the command, get a reply. */
-            fprintf(ToServer, "AUTHINFO PASS %s\r\n", pass);
-            if (fflush(ToServer) == EOF || ferror(ToServer))
+            errno = 0;
+            if (fprintf(ToServer, "AUTHINFO PASS %s\r\n", pass) < 0
+                || fflush(ToServer) == EOF || ferror(ToServer))
                 break;
-            if (fgets(input, sizeof input, FromServer) == NULL
-                || atoi(input) != NNTP_OK_AUTHINFO)
+            errno = 0;
+            if (fgets(input, sizeof input, FromServer) == NULL)
+                break;
+            response = atoi(input);
+            errno = 0;
+            if (response != NNTP_OK_AUTHINFO)
                 break;
         }
 
