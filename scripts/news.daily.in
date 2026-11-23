@@ -217,8 +217,10 @@ ${DOEXPIRE} || {
     RMFILE=
 }
 
+##  The reason is kept short: innd refuses a reason longer than 80
+##  characters, and the expdir path could make it exceed that.
 test -n "${EXPDIR}" && {
-    test -z "${REASON}" && REASON="Expiring $$ on ${EXPDIR}"
+    test -z "${REASON}" && REASON="Expiring $$ with expdir"
     EXPIREFLAGS="${EXPIREFLAGS} '-d${EXPDIR}' '-r${REASON}'"
 }
 
@@ -352,6 +354,23 @@ fi
 ##  The heart of the matter: prologs, expire, epilogs.
 if ${DOEXPIRE}; then
 
+    ##  history.n.done left in the expdir directory means that an earlier
+    ##  installation of new history files did not complete: the history in
+    ##  place may be incomplete and the only complete copy may be the one
+    ##  in ${EXPDIR}, which expire would overwrite.  Leave it to the
+    ##  administrator.
+    if [ -n "${EXPDIR}" ] && [ -f "${EXPDIR}/history.n.done" ]; then
+        (
+            echo "$0: ${EXPDIR}/history.n.done exists: an earlier installation"
+            echo "of new history files did not complete.  Finish it (move the"
+            echo "remaining history.n files of ${EXPDIR} to ${HISTDIR} without"
+            echo "the .n, remove history.n.done, ctlinnd go) before the next"
+            echo "expiration."
+            ${INNSTAT}
+        ) | eval ${MAIL}
+        exit 1
+    fi
+
     ##  Wait to be fairly certain innwatch is not in the middle of a pass.
     ##  Since we're locked, innwatch will pause now till we're done.
     sleep 30
@@ -410,25 +429,39 @@ if ${DOEXPIRE}; then
 
     ##  Actual expire the articles (finally!).
     test -n "${EXPIRECTL}" && EXPIREFLAGS="${EXPIREFLAGS} ${EXPIRECTL}"
+    ##  The exit status of expire comes back on descriptor 3, as expire
+    ##  runs in a pipeline.
     if ${DOEXPLOG}; then
         echo "expire begin $(date): (${EXPIREFLAGS})" >>${EXPLOG}
-        (
-            cd ${HISTDIR}
-            exec 2>&1
-            eval expire "${EXPIREFLAGS}"
-        ) \
-            | ${SED} -e '/No such file or directory/d' \
-                -e 's/^/    /' >>${EXPLOG}
+        EXPSTATUS=$({
+            (
+                cd ${HISTDIR}
+                exec 2>&1
+                eval expire "${EXPIREFLAGS}"
+                echo $? >&3
+            ) \
+                | ${SED} -e '/No such file or directory/d' \
+                    -e 's/^/    /' >>${EXPLOG}
+        } 3>&1)
         echo "expire end $(date)" >>${EXPLOG}
     else
-        eval expire "${EXPIREFLAGS}" 2>&1 | grep -v 'No such file or directory'
-    fi
+        EXPSTATUS=$({
+            {
+                eval expire "${EXPIREFLAGS}" 2>&1
+                echo $? >&3
+            } | grep -v 'No such file or directory' >&4
+        } 3>&1)
+    fi 4>&1
 
     ##  If built on another filesystem, move hisv6 history files.
     if [ -n "${EXPDIR}" ]; then
-        if [ ! -f ${EXPDIR}/history.n -o ! -f ${EXPDIR}/history.n.done ]; then
+        ##  Only the output of this expire run: it must have succeeded (the
+        ##  check at the start ruled out files of an earlier run).
+        if [ "${EXPSTATUS}" != 0 ] || [ ! -f ${EXPDIR}/history.n ] \
+            || [ ! -f ${EXPDIR}/history.n.done ]; then
             (
-                echo "$0: No new history files"
+                echo "$0: No new history files (expire exit status:" \
+                    "${EXPSTATUS:-unknown})"
                 ${INNSTAT}
             ) | eval ${MAIL}
             ##  Remove the possible reserve mode (in case expire was killed).
@@ -437,20 +470,80 @@ if ${DOEXPIRE}; then
             fi
             exit 1
         fi
-        cp /dev/null ${HISTORY}
-        mv -f ${EXPDIR}/history.n ${HISTORY}
-        mv -f ${EXPDIR}/history.n.dir ${HISTORY}.dir
+        ##  innd must not run while the history files are replaced: expire -d
+        ##  leaves it paused with ${REASON} (it was already paused or
+        ##  throttled when expire ran with -n).  Check its mode, pause it if
+        ##  it runs, and fail closed: when it cannot be paused or does not
+        ##  answer, leave the old history in place.  It opens the new files
+        ##  on go.
+        HISMODE=$(ctlinnd -t "$TOUT" mode 2>/dev/null | ${SED} 1q)
+        case "${HISMODE}" in
+        "Server running"*)
+            ctlinnd -t "$TOUT" -s pause "${REASON}" 2>&1 \
+                && HISMODE="Server paused ${REASON}"
+            ;;
+        esac
+        case "${HISMODE}" in
+        "Server paused"* | "Server throttled"*) ;;
+        *)
+            (
+                echo "$0: Cannot make sure that the server is paused"
+                echo "(mode: ${HISMODE:-no answer}).  The new history files"
+                echo "are left in ${EXPDIR} and the old ones in place."
+                ${INNSTAT}
+            ) | eval ${MAIL}
+            exit 1
+            ;;
+        esac
+
+        ##  The old history file is emptied first because expdir is used
+        ##  when its filesystem cannot hold both generations.  If a file
+        ##  cannot be moved, the history in place is incomplete or mixes
+        ##  both generations: do not unpause the server, keep the files not
+        ##  yet moved and history.n.done in ${EXPDIR}, and report it.
         if [ X${TAGGEDHASH} = XDO ]; then
-            mv -f ${EXPDIR}/history.n.pag ${HISTORY}.pag
+            HISEXTS="dir pag"
         else
-            mv -f ${EXPDIR}/history.n.index ${HISTORY}.index
-            mv -f ${EXPDIR}/history.n.hash ${HISTORY}.hash
+            HISEXTS="dir index hash"
+        fi
+        ##  "true >" rather than "cp /dev/null": BusyBox cp replaces a file
+        ##  it cannot open for writing instead of failing.
+        if ! true >"${HISTORY}"; then
+            (
+                echo "$0: Cannot empty ${HISTORY} to install the new history"
+                echo "files of ${EXPDIR}; nothing was moved and the server is"
+                echo "left paused.  Install them by hand, remove history.n.done"
+                echo "and unpause the server (ctlinnd go with the reason shown"
+                echo "by ctlinnd mode)."
+                ${INNSTAT}
+            ) | eval ${MAIL}
+            exit 1
+        fi
+        HISFAILED=
+        mv -f ${EXPDIR}/history.n ${HISTORY} || HISFAILED=history.n
+        for EXT in ${HISEXTS}; do
+            test -z "${HISFAILED}" || break
+            mv -f ${EXPDIR}/history.n.${EXT} ${HISTORY}.${EXT} \
+                || HISFAILED=history.n.${EXT}
+        done
+        if [ -n "${HISFAILED}" ]; then
+            (
+                echo "$0: Cannot move ${EXPDIR}/${HISFAILED} to ${HISTDIR}"
+                echo "The history database is incomplete and the server is left"
+                echo "paused.  Move the remaining history.n files of ${EXPDIR}"
+                echo "to ${HISTDIR} (without the .n) and remove history.n.done"
+                echo "before unpausing it (ctlinnd go with the reason shown by"
+                echo "ctlinnd mode)."
+                ${INNSTAT}
+            ) | eval ${MAIL}
+            exit 1
         fi
         rm -f ${EXPDIR}/history.n.done
 
-        case "${EXPIREFLAGS}" in
-        *-n*) ;;
-        *)
+        ##  Unpause innd if it was paused for the expiration, not if it was
+        ##  already paused or throttled before.
+        case "${HISMODE}" in
+        "Server paused ${REASON}"*)
             MESSAGE="${REASON}"
             ;;
         esac
