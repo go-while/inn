@@ -74,6 +74,10 @@ offset of the base file for the corresponding I<key> to I<value>, if any.
 B<dbzstore> inserts the I<key>-I<data> pair and returns C<DBZSTORE_OK>.
 If the key already exists, it returns C<DBZSTORE_EXISTS> and keeps the
 original offset.  The same rule applies to both index formats.
+With tagged hashing, the database must have its history text file open
+and the text for previously indexed keys must be visible to that reader
+before storing another key.  For example, flush any buffered writes to
+the text file before calling B<dbzstore>.
 B<dbzstore> returns C<DBZSTORE_ERROR> if the database is closed, read-only,
 or unable to complete the operation.
 

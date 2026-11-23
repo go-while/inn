@@ -133,6 +133,12 @@ files behind after a failed creation, and the buffindexed overview method
 validates its F<group.index> file and no longer frees memory twice when
 mapping overview data fails.  Many thanks to Kevin Bowling for the patches.
 
+=item *
+
+With tagged hashing, the hisv6 history index now retains the first
+offset for a duplicate Message-ID, as the default index already does.
+hisv6 logs these duplicates as C<dbzstore duplicate message-id>.
+
 =back
 
 =head1 Changes in 2.7.5 (not yet released)

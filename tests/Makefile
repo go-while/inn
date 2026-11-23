@@ -167,8 +167,8 @@ lib/daemon.t: lib/daemon.o lib/daemon-t.o tap/basic.o $(LIBINN)
 lib/date.t: lib/date-t.o tap/basic.o tap/string.o $(LIBINN)
 	$(LINK) lib/date-t.o tap/basic.o tap/string.o $(LIBINN)
 
-lib/dbz.t: lib/dbz-t.o tap/basic.o $(LIBINN)
-	$(LINK) lib/dbz-t.o tap/basic.o $(LIBINN) $(LIBS)
+lib/dbz.t: lib/dbz-t.o tap/basic.o $(STORAGEDEPS)
+	$(LINKDEPS) lib/dbz-t.o tap/basic.o $(STORAGELIBS) $(LIBS)
 
 lib/dispatch.t: lib/dispatch-t.o tap/basic.o $(LIBINN)
 	$(LINK) lib/dispatch-t.o tap/basic.o $(LIBINN)
