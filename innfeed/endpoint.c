@@ -1001,7 +1001,7 @@ doExcept(EndPoint endp)
         errno = optval;
         syswarn("ME exception: fd %d", fd);
     } else
-        syswarn("ME exception: fd %d: Unknown error", fd);
+        warn("ME exception: fd %d: Unknown error", fd);
 
 #if defined(INNFEED_DEBUG)
     sleep(5);
