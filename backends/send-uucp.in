@@ -327,6 +327,18 @@ C<compress>, C<gzip> or C<none>.  Arguments for the compression command may be
 specified by using C<_> instead of spaces.  For example, C<gzip_-9>.
 The default value is C<gzip>.
 
+Each compressed batch starts with a line telling the receiving B<rnews> how
+to unpack it: C<#! gunbatch> for B<gzip>, C<#! bunbatch> for B<bzip2> and
+C<#! cunbatch> for B<compress> (see rnews(1)).  B<gzip> is the best choice
+in most cases.  B<compress> and C<cunbatch> are older; they are only useful
+to feed old systems that do not know the other formats, like some bulletin
+board systems or offline news readers.  (INN's B<rnews> unpacks C<cunbatch>
+batches with B<gzip>, which also reads the B<compress> format.)
+
+B<send-uucp> does not generate the 7-bit encoded batches unpacked by
+B<c7unbatch>.  They are only needed over links that are not 8-bit clean;
+see "SEVEN-BIT BATCHES" in rnews(1) to generate them with batcher(8).
+
 =item I<maxsize>
 
 The maximum size in bytes of a single batch I<before> compression.  The default
