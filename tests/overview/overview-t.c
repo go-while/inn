@@ -501,6 +501,42 @@ overview_verify_full_search(const char *data)
     return status;
 }
 
+/* With the index cache kept, as nnrpd keeps it, look up each group's high
+   water mark and one article past it.  The second lookup must fail without
+   reading past the cached index.  Called from hash_traverse like
+   overview_verify_groups. */
+static void
+overview_verify_cached_high(void *data, void *cookie)
+{
+    struct group *group = data;
+    bool *status = cookie;
+    void *search;
+    unsigned long artnum;
+    char *overview;
+    int length;
+    TOKEN token;
+    time_t arrived;
+
+    search = OVopensearch(group->group, group->low, group->high);
+    if (search == NULL) {
+        warn("Unable to open search for %s", group->group);
+        *status = false;
+        return;
+    }
+    while (OVsearch(search, &artnum, &overview, &length, &token, &arrived))
+        ;
+    OVclosesearch(search);
+    if (!OVgetartinfo(group->group, group->high, &token)) {
+        warn("Cached lookup of %s:%lu failed", group->group, group->high);
+        *status = false;
+    }
+    if (OVgetartinfo(group->group, group->high + 1, &token)) {
+        warn("Found %s:%lu past the high water mark", group->group,
+             group->high + 1);
+        *status = false;
+    }
+}
+
 /* Verify that a read-only buffindexed process can remap group.index after a
    writer grows it.  This specifically exercises mmap protection on the rare
    remap path rather than the protection used during initial open. */
@@ -570,7 +606,7 @@ main(void)
     int fd;
     char trailing = 0;
 
-    test_init(23);
+    test_init(24);
 
     if (access("../data/overview/basic", F_OK) == 0) {
         if (chdir("../data") < 0) {
@@ -650,20 +686,37 @@ main(void)
     }
 
     if (strcmp(innconf->ovmethod, "buffindexed") == 0) {
+        bool cache = true;
+
+        if (!overview_init())
+            die("Opening the overview database failed, cannot continue");
+        groups = overview_load("overview/basic");
+        status = OVctl(OVCACHEKEEP, &cache);
+        hash_traverse(groups, overview_verify_cached_high, &status);
+        cache = false;
+        OVctl(OVCACHEKEEP, &cache);
+        hash_free(groups);
+        OVclose();
+        ok(22, status);
+    } else {
+        skip(22, "cached index lookup test is buffindexed-specific");
+    }
+
+    if (strcmp(innconf->ovmethod, "buffindexed") == 0) {
         fd = open("ov-tmp/group.index", O_WRONLY | O_APPEND);
         if (fd < 0 || xwrite(fd, &trailing, 1) != 1)
             sysbail("cannot append partial group.index entry");
         close(fd);
         status = OVopen(OV_READ | OV_WRITE);
-        ok(22, !status);
+        ok(23, !status);
         if (status)
             OVclose();
     } else {
-        skip(22, "partial group.index test is buffindexed-specific");
+        skip(23, "partial group.index test is buffindexed-specific");
     }
     if (system("/bin/rm -rf ov-tmp") < 0)
         sysdie("Cannot rm ov-tmp");
-    ok(23, true);
+    ok(24, true);
 
     return 0;
 }

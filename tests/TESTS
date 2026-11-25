@@ -62,6 +62,7 @@ lib/xwrite
 nnrpd/auth-ext
 overview/api
 overview/buffindexed
+overview/expire-hdr
 overview/overchan
 overview/ovsqlite
 overview/ovsqlite-integ
@@ -74,6 +75,7 @@ storage/caf
 storage/cancel-tombstone
 storage/makehistory
 storage/sm
+storage/tradspool-artnum
 util/convdate
 util/innbind
 util/inndf
