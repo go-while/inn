@@ -225,7 +225,9 @@ it creates, rather than to a temporary file of its own choosing, and returns
 a C<FILE> opened for reading on that path, or NULL on error.  Calling it
 directly, rather than through B<CAlistopen>, is only useful for a caller
 that wants to control the destination path itself; it is otherwise
-considered an internal routine.
+considered an internal routine.  The caller then owns I<pathname>:
+B<CA_listopen> does not remove it, also on error, and does not touch the
+file opened by B<CAopen> or B<CAlistopen>.
 
 B<CAclose> closes the F<active> file and removes any temporary file that might
 have been created by B<CAopen> or B<CAlistopen>.

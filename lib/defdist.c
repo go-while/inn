@@ -47,37 +47,58 @@ DDstart(FILE *FromServer, FILE *ToServer)
             return NULL;
         name = concatpath(innconf->pathtmp, INN_PATH_TEMPACTIVE);
         fd = mkstemp(name);
-        if (fd < 0)
+        if (fd < 0) {
+            i = errno;
+            free(name);
+            errno = i;
             return NULL;
+        }
         close(fd);
         if ((F = CA_listopen(name, FromServer, ToServer, "DISTRIB.PATS"))
-            == NULL)
+            == NULL) {
+            i = errno;
+            unlink(name);
+            free(name);
+            errno = i;
             return NULL;
+        }
     }
 
     /* Count lines. */
     for (i = 0; fgets(buff, sizeof buff, F) != NULL; i++)
         continue;
 
+    /* An empty file gives the empty default, like a missing one. */
+    if (i == 0) {
+        fclose(F);
+        if (name != NULL) {
+            unlink(name);
+            free(name);
+        }
+        return NULL;
+    }
+
     /* Allocate space for the handle. */
     if ((h = xmalloc(sizeof(DDHANDLE))) == NULL) {
         i = errno;
         fclose(F);
-        if (name != NULL)
+        if (name != NULL) {
             unlink(name);
+            free(name);
+        }
         errno = i;
         return NULL;
     }
     h->Count = 0;
     h->Current = NULL;
-    if (i == 0) {
-        return NULL;
-    } else if ((h->Entries = xmalloc(sizeof(DDENTRY) * i)) == NULL) {
+    if ((h->Entries = xmalloc(sizeof(DDENTRY) * i)) == NULL) {
         i = errno;
         free(h);
         fclose(F);
-        if (name != NULL)
+        if (name != NULL) {
             unlink(name);
+            free(name);
+        }
         errno = i;
         return NULL;
     }
@@ -102,8 +123,10 @@ DDstart(FILE *FromServer, FILE *ToServer)
     h->Count = ep - h->Entries;
 
     fclose(F);
-    if (name != NULL)
+    if (name != NULL) {
         unlink(name);
+        free(name);
+    }
     return h;
 }
 
