@@ -10,6 +10,8 @@
 
 #include "portable/system.h"
 
+#include <fcntl.h>
+
 #include "inn/messages.h"
 #include "tap/basic.h"
 #include "tap/messages.h"
@@ -19,6 +21,10 @@
 
 /* Need this because nnrpd is still bad about global variables. */
 double IDLEtime = 0;
+
+/* Descriptor opened by log_open_fd and the number of calls to it. */
+static int logged_fd = -1;
+static int log_calls = 0;
 
 /* The basic information that we always send to the program. */
 static const char info[] = "\
@@ -114,13 +120,63 @@ test_external(struct client *client, const char *arg, const char *user,
     test_file_path_free(auth_test_path);
 }
 
+/* A warn and notice handler that opens a descriptor and keeps it, as
+   syslog() does when it (re)connects to the log socket.  It runs while
+   auth_external is still working, after the helper has exited. */
+static void
+log_open_fd(size_t len UNUSED, const char *fmt UNUSED, va_list args UNUSED,
+            int error UNUSED)
+{
+    log_calls++;
+    if (logged_fd < 0)
+        logged_fd = open("/dev/null", O_RDONLY);
+}
+
+/* Run the test authenticator with a handler that opens a descriptor while
+   auth_external logs the exit status, and check that auth_external does not
+   close that descriptor afterwards.  The pipes to the helper are already
+   closed at that point, so the new descriptor may reuse one of their
+   numbers. */
+static void
+test_fd_reuse(struct client *client, const char *arg)
+{
+    char *auth_test_path, *result, *command;
+
+    diag("descriptor reuse, mode %s", arg);
+
+    auth_test_path = test_file_path("nnrpd/auth-test");
+    if (auth_test_path == NULL)
+        bail("cannot find nnrpd/auth-test helper");
+    basprintf(&command, "%s %s", auth_test_path, arg);
+
+    logged_fd = -1;
+    log_calls = 0;
+    message_handlers_warn(1, log_open_fd);
+    message_handlers_notice(1, log_open_fd);
+    result = auth_external(client, command, ".", NULL, NULL);
+    errors_uncapture();
+    unlink("input");
+    is_string(NULL, result, "no user from %s", arg);
+    free(result);
+    ok(log_calls > 0 && logged_fd >= 0,
+       "%s: log handler opened a descriptor", arg);
+    ok(logged_fd >= 0 && fcntl(logged_fd, F_GETFD) >= 0,
+       "%s: descriptor opened while logging still open afterwards", arg);
+    if (logged_fd >= 0)
+        close(logged_fd);
+    logged_fd = -1;
+
+    free(command);
+    test_file_path_free(auth_test_path);
+}
+
 int
 main(void)
 {
     struct client *client;
     char *result;
 
-    plan(13 * 6 + 2);
+    plan(13 * 6 + 2 + 2 * 3);
 
     client = client_new();
 
@@ -152,6 +208,9 @@ main(void)
               "empty external command is reported");
     free(errors);
     errors = NULL;
+
+    test_fd_reuse(client, "empty-error");
+    test_fd_reuse(client, "signal");
 
     free(client);
     return 0;
