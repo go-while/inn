@@ -58,6 +58,12 @@ L<Upgrading from 2.6 to 2.7>.
 
 =item *
 
+The B<innd> and B<innfeed> HTML status reports can include site markup
+at the start of their C<< <head> >> element.  Put the markup, at most
+64 KB, in an optional F<inn_status.head> file in I<pathetc>.
+
+=item *
+
 A new history storage method based on SQLite has been added, named
 C<hissqlite>, selectable instead of C<hisv6> via the I<hismethod>
 parameter in F<inn.conf> when INN is built with SQLite support.  The

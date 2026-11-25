@@ -1689,6 +1689,20 @@ text status file is written to I<pathlog>/inn.status.  This is a boolean
 value and the default is true (an HTML status file is written).  Also see
 the I<status> parameter.
 
+To customize the HTML report, place an optional F<inn_status.head> file
+in I<pathetc>.  Its contents are included verbatim at the start of the
+C<< <head> >> element, for example to link a site stylesheet.  The
+built-in metadata (the refresh interval and the title) follows it in
+any case.  A file larger than 64 KB (65536 bytes), one that cannot be
+read, or one that is not a regular file (a FIFO or a directory, for
+example) is skipped with a warning, logged once until the file can be
+read again or is removed; the report then has only the built-in header,
+as when the file does not exist.
+
+B<innfeed> reads the same F<inn_status.head> file for its own HTML
+status page, but whether that page is written in HTML is controlled by
+the I<gen-html> key in F<innfeed.conf>, not by I<htmlstatus>.
+
 =item I<incominglogfrequency>
 
 How many articles to process on an incoming channel before logging the
