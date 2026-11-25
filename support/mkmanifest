@@ -346,6 +346,7 @@ tests/overview/api.t
 tests/overview/buffindexed.t
 tests/overview/expire-hdr.t
 tests/overview/ovsqlite.t
+tests/overview/ovsqlite-damage.t
 tests/overview/ovsqlite-read.t
 tests/overview/ovsqlite-write.t
 tests/overview/tdx-group.t

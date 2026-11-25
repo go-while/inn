@@ -43,7 +43,8 @@ TESTS	= authprogs/ident.t expire/tombstone.t expire/tombstone-hisexpire.t \
 ##  Extra stuff that needs to be built before tests can be run.
 
 EXTRA	= runtests clients/server-list docs/pod.t lib/xmalloc nnrpd/auth-test \
-	  overview/ovsqlite-read.t overview/ovsqlite-write.t \
+	  overview/ovsqlite-damage.t overview/ovsqlite-read.t \
+	  overview/ovsqlite-write.t \
 	  perl/minimum-version.t
 
 BENCHMARKS = lib/history-bench
@@ -358,6 +359,9 @@ overview/expire-hdr.t: overview/expire-hdr-t.o tap/basic.o $(STORAGEDEPS)
 
 overview/ovsqlite.t: overview/ovsqlite-t.o tap/basic.o $(STORAGEDEPS)
 	$(LINKDEPS) overview/ovsqlite-t.o tap/basic.o $(STORAGELIBS) $(LIBS)
+
+overview/ovsqlite-damage.t: overview/ovsqlite-damage-t.o $(STORAGEDEPS)
+	$(LINKDEPS) overview/ovsqlite-damage-t.o $(STORAGELIBS) $(LIBS)
 
 overview/ovsqlite-read.t: overview/ovsqlite-read-t.o tap/basic.o $(STORAGEDEPS)
 	$(LINKDEPS) overview/ovsqlite-read-t.o tap/basic.o $(STORAGELIBS) \

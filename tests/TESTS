@@ -65,6 +65,7 @@ overview/buffindexed
 overview/expire-hdr
 overview/overchan
 overview/ovsqlite
+overview/ovsqlite-corrupt
 overview/ovsqlite-integ
 overview/tdx-group
 overview/tradindexed
@@ -76,6 +77,7 @@ storage/cancel-tombstone
 storage/makehistory
 storage/sm
 storage/tradspool-artnum
+storage/tradspool-xpost
 util/convdate
 util/innbind
 util/inndf
