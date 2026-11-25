@@ -2,6 +2,7 @@ authprogs/ckpasswd
 authprogs/domain
 authprogs/ident
 clients/getlist
+control/sendme
 docs/pod
 expire/tombstone
 expire/tombstone-e2e
