@@ -81,7 +81,12 @@ a key.
 B<inncheck> checks all files for permission problems.  If the B<--perm>
 flag is used, then I<only> the files specified by the I<file> or
 I<file>B<=>I<path> command line arguments will be checked for problems
-other than permission problems.
+other than permission problems.  The history database checked is the one of
+the history method set with I<hismethod> in F<inn.conf> (F<history> for
+C<hisv6>, F<history.sqlite> for C<hissqlite>, both in I<pathhistory>), even
+when the files of another method are still present, for instance after a
+conversion with B<hissqlite-convert>; it is reported if it is not a regular
+file.
 
 =item B<-q>, B<--quiet>
 
