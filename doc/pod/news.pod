@@ -78,6 +78,11 @@ COMPRESS, AUTHINFO SASL or STARTTLS in B<nnrpd> at run time.
 
 =item *
 
+The new C<WEIGHTED> mode in F<cycbuff.conf> interleaves writes among CNFS
+buffers in proportion to their usable sizes.
+
+=item *
+
 A new history storage method based on SQLite has been added, named
 C<hissqlite>, selectable instead of C<hisv6> via the I<hismethod>
 parameter in F<inn.conf> when INN is built with SQLite support.  The

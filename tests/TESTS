@@ -85,6 +85,7 @@ perl/ovsqlite-client
 storage/archive
 storage/caf
 storage/cancel-tombstone
+storage/cnfs-weighted
 storage/makehistory
 storage/sm
 storage/sm-path
