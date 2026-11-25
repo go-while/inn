@@ -455,8 +455,10 @@ loading of that file, then that method is called immediately after the
 file is loaded.  Every time a reader asks B<nnrpd> to read or post an
 article, the Python method C<dynamic> is invoked before proceeding with
 the requested operation.  Based on the value returned by C<dynamic>, the
-operation is either permitted or denied.  When the connection with the
-client is closed, the method C<access_close> is called if it exists.
+operation is either permitted or denied.  For an article requested by
+Message-ID, C<dynamic> is called for each newsgroup of the article and the
+article is sent if one of them is allowed (see below).  When the connection
+with the client is closed, the method C<access_close> is called if it exists.
 
 =head2 Writing a Python B<nnrpd> Authentication Module
 
@@ -547,6 +549,14 @@ Returns C<None> to grant access, or a non-empty string encoded in UTF-8
 (which will be reported back to the client in response to GROUP or POST,
 and in any case logged in news logs files for all relevant NNTP commands)
 otherwise.
+
+When a reader requests an article by Message-ID (ARTICLE, HEAD, BODY, STAT,
+HDR, XHDR or XPAT), the method is called once for each newsgroup of the
+article, in the order of its Xref header field (or of its Newsgroups header
+field if it has no Xref), until a call grants access.  The article is sent
+if any of these calls grants access, and refused only if all of them refuse
+it, as with the I<read> parameter of F<readers.conf>.  A crossposted article
+may therefore lead to several calls for one command.
 
 =item dynamic_close(I<self>)
 

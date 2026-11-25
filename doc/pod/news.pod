@@ -518,6 +518,18 @@ from that CAF without waiting for another article to select a different
 file, even when other storage methods keep B<innd> busy.  Expiration can
 still wait until the next flush; this does not add a new timer.
 
+=item *
+
+The Python C<dynamic> hook of B<nnrpd> now gets the name of a newsgroup in
+the I<newsgroup> attribute when a reader requests an article by Message-ID
+(ARTICLE, HEAD, BODY, STAT, HDR, XHDR and XPAT).  It used to get an empty
+string for an article with an Xref header field, and the whole list of
+newsgroups for an article without one, in a single call.  The hook is now
+called once for each newsgroup of the article, until a call grants access,
+so a crossposted article may lead to several calls for one command.  The
+article is sent if any of these calls grants access, and refused only if all
+of them refuse it, as with the I<read> parameter of F<readers.conf>.
+
 =back
 
 =head1 Changes in 2.7.4 (2026-06-22)
