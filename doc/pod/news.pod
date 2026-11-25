@@ -380,6 +380,15 @@ and renumbering the F<active> file, or while another run holds the lock.  A
 third run could then start expiring at the same time as the second one.  The
 lock is now only removed by the run whose process ID it contains.
 
+=item *
+
+B<scanlogs> no longer leaves B<innd> paused when it cannot flush the log files
+or when it is interrupted by a signal during the rotation of the logs.  The
+server is resumed in these cases too, with a reason specific to the run so
+that a pause made by someone else is not released, and the lock is released
+as before.  When the server cannot be resumed, B<scanlogs> reports it and
+exits with a non-zero status.
+
 =back
 
 =head1 Changes in 2.7.5 (not yet released)
