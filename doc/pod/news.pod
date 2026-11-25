@@ -134,6 +134,11 @@ when the resulting limit is high enough for that cache.
 
 =item *
 
+Added library man pages for the shared configuration parser, the inn.conf
+and inn-secrets.conf interfaces, and the innbind socket helpers.
+
+=item *
+
 The LIST OVERVIEW.FMT command now advertises the byte count and line count
 metadata in their preferred format (C<:bytes> and C<:lines>) to news clients
 which have previously sent a CAPABILITIES command.  Other news clients still

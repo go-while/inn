@@ -1,0 +1,48 @@
+=head1 NAME
+
+network_innbind_ipv4, network_innbind_ipv6, network_innbind_all - bind INN sockets with optional innbind assistance
+
+=head1 SYNOPSIS
+
+    #include <inn/network-innbind.h>
+
+    socket_type network_innbind_ipv4(int type, const char *address,
+                                     unsigned short port);
+    socket_type network_innbind_ipv6(int type, const char *address,
+                                     unsigned short port);
+    bool network_innbind_all(int type, unsigned short port, socket_type **fds,
+                             unsigned int *count);
+
+=head1 DESCRIPTION
+
+These routines bind sockets of I<type> to I<port>, given in host byte
+order.  Load the INN configuration with B<innconf_read> before calling
+them.  The functions use regular network binding with root privileges
+or when the I<port> setting in F<inn.conf> (C<innconf-E<gt>port>) is 1024
+or higher.  Otherwise, they ask B<innbind> from I<pathbin> to bind the
+socket.  The I<port> argument controls the port requested for the socket.
+
+B<network_innbind_ipv4> and B<network_innbind_ipv6> bind the appropriate
+address family to the numeric I<address>.  Use C<any> or C<all> for
+the wildcard address.  The functions return the bound socket or
+C<INVALID_SOCKET>.  The IPv6 routine reports failure on platforms
+without IPv6 support.
+
+B<network_innbind_all> tries the available wildcard bindings.
+It returns true if at least one succeeds and stores the socket array
+and number of sockets through I<fds> and I<count>.  Initialize I<*fds>
+to NULL before calling, since an early error can leave it untouched,
+and release it with B<network_bind_all_free>.  Close the sockets before
+releasing the array.  An allocated array can also be returned if no
+binding succeeds.
+
+=head1 HISTORY
+
+The helper-backed binding routines were split out of INN's general
+network utility code in 2014.
+
+=head1 SEE ALSO
+
+inn.conf(5), innbind(8), libinn(3), libinn_innconf(3).
+
+=cut

@@ -203,17 +203,21 @@ doc/man/libinn_bloom.3                Manpage for bloom routines
 doc/man/libinn_buffer.3               Manpage for buffer routines
 doc/man/libinn_clientlib.3            Manpage for C News library interface
 doc/man/libinn_concat.3               Manpage for concat routines
+doc/man/libinn_confparse.3            Manpage for INN configuration parsing
 doc/man/libinn_dbz.3                  Manpage for DBZ database interface
 doc/man/libinn_dispatch.3             Manpage for command dispatch
 doc/man/libinn_hashtab.3              Manpage for generic hash table
+doc/man/libinn_innconf.3              Manpage for the inn.conf API
 doc/man/libinn_inndcomm.3             Manpage for part of INN library
 doc/man/libinn_list.3                 Manpage for list routines
 doc/man/libinn_md5.3                  Manpage for MD5 routines
 doc/man/libinn_mmap.3                 Manpage to synchronize a range of mapped pages
 doc/man/libinn_network.3              Manpage for network routines
+doc/man/libinn_network_innbind.3      Manpage for innbind socket helpers
 doc/man/libinn_newsuser.3             Manpage for news account routines
 doc/man/libinn_nntp.3                 Manpage for nntp routines
 doc/man/libinn_qio.3                  Manpage for fast I/O file routines
+doc/man/libinn_secrets.3              Manpage for the secrets configuration API
 doc/man/libinn_sequence.3             Manpage to compare wrapping sequence numbers
 doc/man/libinn_sqlite_helper.3        Manpage for SQLite statement helpers
 doc/man/libinn_timer.3                Manpage for timer routines
@@ -348,17 +352,21 @@ doc/pod/libinn_bloom.pod              Master file for libinn_bloom.3
 doc/pod/libinn_buffer.pod             Master file for libinn_buffer.3
 doc/pod/libinn_clientlib.pod          Master file for libinn_clientlib.3
 doc/pod/libinn_concat.pod             Master file for libinn_concat.3
+doc/pod/libinn_confparse.pod          Master file for libinn_confparse.3
 doc/pod/libinn_dbz.pod                Master file for libinn_dbz.3
 doc/pod/libinn_dispatch.pod           Master file for libinn_dispatch.3
 doc/pod/libinn_hashtab.pod            Master file for libinn_hashtab.3
+doc/pod/libinn_innconf.pod            Master file for libinn_innconf.3
 doc/pod/libinn_inndcomm.pod           Master file for libinn_inndcomm.3
 doc/pod/libinn_list.pod               Master file for libinn_list.3
 doc/pod/libinn_md5.pod                Master file for libinn_md5.3
 doc/pod/libinn_mmap.pod               Master file for libinn_mmap.3
 doc/pod/libinn_network.pod            Master file for libinn_network.3
+doc/pod/libinn_network_innbind.pod    Master file for libinn_network_innbind.3
 doc/pod/libinn_newsuser.pod           Master file for libinn_newsuser.3
 doc/pod/libinn_nntp.pod               Master file for libinn_nntp.3
 doc/pod/libinn_qio.pod                Master file for libinn_qio.3
+doc/pod/libinn_secrets.pod            Master file for libinn_secrets.3
 doc/pod/libinn_sequence.pod           Master file for libinn_sequence.3
 doc/pod/libinn_sqlite_helper.pod      Master file for libinn_sqlite_helper.3
 doc/pod/libinn_timer.pod              Master file for libinn_timer.3
