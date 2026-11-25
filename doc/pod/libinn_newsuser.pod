@@ -1,0 +1,44 @@
+=head1 NAME
+
+get_news_uid_gid, ensure_news_user, ensure_news_grp, ensure_news_user_grp - look up or check the news user and group
+
+=head1 SYNOPSIS
+
+    #include <inn/newsuser.h>
+
+    int get_news_uid_gid(uid_t *uid, gid_t *gid, bool may_die);
+
+    void ensure_news_user(bool may_setuid);
+    void ensure_news_grp(bool may_setgid);
+    void ensure_news_user_grp(bool may_setuid, bool may_setgid);
+
+=head1 DESCRIPTION
+
+B<get_news_uid_gid> looks up the UID of I<runasuser> and the GID of
+I<runasgroup> from inn.conf(5).  If the configuration has yet to be read,
+it uses the values selected when INN was configured.  A B<NULL> I<uid> or
+I<gid> pointer skips that lookup.  It writes each ID it resolves to the
+corresponding pointer and returns 0 if all requested lookups succeed.  If a lookup fails, it exits with an error when I<may_die> is
+true and otherwise returns -1.
+
+B<ensure_news_user> requires both the real and effective UID to match the
+news UID.  If the effective UID is root, it first changes the UID if
+I<may_setuid> is true or exits with an error otherwise.
+B<ensure_news_grp> requires both the real and effective GID to match the
+news GID.  If the effective UID is root and I<may_setgid> is true, it
+first changes the GID.
+
+B<ensure_news_user_grp> calls B<ensure_news_grp> and then
+B<ensure_news_user>, passing the respective flags.  All three
+B<ensure> functions exit with an error upon a failed lookup, change
+or check.
+
+=head1 HISTORY
+
+Written by Ivan Shmakov in 2007.
+
+=head1 SEE ALSO
+
+inn.conf(5), libinn(3).
+
+=cut

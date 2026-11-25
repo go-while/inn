@@ -8,8 +8,9 @@ SEC1	= convdate.1 fastrm.1 gencancel.1 getlist.1 \
 	shrinkfile.1 simpleftp.1
 
 SEC3	= innshellvars.3 libinn.3 libinn_clientlib.3 libinn_dbz.3 \
-	libinn_hashtab.3 libinn_inndcomm.3 libinn_list.3 libinn_mmap.3 \
-	libinn_qio.3 libinn_sequence.3 libinn_tst.3 libinn_utility.3 \
+	libinn_dispatch.3 libinn_hashtab.3 libinn_inndcomm.3 libinn_list.3 \
+	libinn_md5.3 libinn_mmap.3 libinn_newsuser.3 libinn_qio.3 \
+	libinn_sequence.3 libinn_tombstone.3 libinn_tst.3 libinn_utility.3 \
 	libinn_uwildmat.3 libinnauth.3 libinnhist.3 libinnstorage.3 \
 	libinnstorage_overview.3
 
