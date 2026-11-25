@@ -482,6 +482,15 @@ B<expirerm> also no longer records these articles as removed in the
 tombstone log read by B<expire>, which then dropped their history entries
 although they were still on disk.
 
+=item *
+
+Fixed B<innfeed> removing the backlog file of a peer after a read error.  The
+file was handled as if its end had been reached, so that the entries not read
+yet were lost.  The file is now kept, and read again when B<innfeed> next
+looks for a file to read.  A F<I<peer>.input> file which exists is now also
+adopted when it is not open, instead of being overwritten by the
+F<I<peer>.output> file.
+
 =back
 
 =head1 Changes in 2.7.5 (not yet released)

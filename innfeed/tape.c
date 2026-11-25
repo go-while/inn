@@ -643,20 +643,33 @@ getArticle(Tape tape)
         tape->changed = true;
 
         if (fgets(line, sizeof(line), tape->inFp) == NULL) {
-            if (ferror(tape->inFp))
+            bool readFailed = false;
+
+            if (ferror(tape->inFp)) {
                 syswarn("ME ioerr on tape file %s", tape->inputFilename);
-            else if (!feof(tape->inFp))
+                readFailed = true;
+            } else if (!feof(tape->inFp)) {
                 syswarn("ME oserr fgets %s", tape->inputFilename);
+                readFailed = true;
+            }
 
             if (fclose(tape->inFp) != 0)
                 syswarn("ME ioerr fclose %s", tape->inputFilename);
 
-            d_printf(1, "No more articles on tape %s\n", tape->inputFilename);
-
             tape->inFp = NULL;
             tape->scribbled = false;
 
-            unlink(tape->inputFilename);
+            if (readFailed) {
+                /* Not the end of the tape: the entries after the last
+                 * checkpoint have not been read.  Keep the file; the next
+                 * rotation opens it again. */
+                warn("ME keeping tape file %s after a read error",
+                     tape->inputFilename);
+            } else {
+                d_printf(1, "No more articles on tape %s\n",
+                         tape->inputFilename);
+                unlink(tape->inputFilename);
+            }
 
             if ((now - tape->lastRotated) > rotatePeriod)
                 prepareFiles(tape); /* rotate files to try next. */
@@ -965,8 +978,8 @@ prepareFiles(Tape tape)
         inpExists = fileExistsP(tape->inputFilename);
         outExists = fileExistsP(tape->outputFilename);
     } else {
-        inpExists =
-            (tape->inFp != NULL) ? true : false; /* can this ever be true?? */
+        /* The input file can still be there after a read error. */
+        inpExists = tape->inFp != NULL || fileExistsP(tape->inputFilename);
         outExists =
             (tape->outFp != NULL && tape->outputSize > 0) ? true : false;
     }
@@ -1046,7 +1059,15 @@ prepareFiles(Tape tape)
                     while (c != EOF && c != '\n')
                         c = fgetc(tape->inFp);
 
-                    if (c == EOF) {
+                    if (c == EOF && ferror(tape->inFp)) {
+                        /* A read error is not the end of the tape: keep the
+                         * file, which is tried again at the next rotation. */
+                        syswarn("ME ioerr on tape file %s",
+                                tape->inputFilename);
+                        fclose(tape->inFp);
+                        tape->inFp = NULL;
+                        tape->scribbled = false;
+                    } else if (c == EOF) {
                         fclose(tape->inFp);
                         unlink(tape->inputFilename);
                         tape->inFp = NULL;
