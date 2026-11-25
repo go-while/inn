@@ -432,6 +432,14 @@ an address prefix, or a single C<*> between literal parts such as
 C<node*.cluster.test>.  Both C<*> and an empty host field match every client.
 B<nnrpd> warns when it encounters the empty form.
 
+=item *
+
+When both I<expiretombstone> and I<nnrpdcheckart> are set, B<nnrpd> no
+longer lists removed or cancelled articles as present when its reload of
+F<cancels.tombstone> reports an error opening or reading the file (for
+instance because of its permissions); it then checks the existence of
+articles in the storage manager.
+
 =back
 
 =head1 Changes in 2.7.5 (not yet released)
