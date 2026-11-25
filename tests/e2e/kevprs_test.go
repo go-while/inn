@@ -1,7 +1,8 @@
 package e2e
 
 // Checks for upstream PRs #412 (readers.conf layouts in nnrpd) and #413 (innd's Python
-// filter return values and INN.hashstring).
+// filter return values and INN.hashstring, innd's INN::addhist, and the strings nnrpd's
+// Python hooks return).
 
 import (
 	"bytes"
@@ -218,5 +219,150 @@ func TestKevPythonNonString(t *testing.T) {
 			t.Errorf("IHAVE: %d %q %v; want 335", code, line, err)
 		}
 		inndAlive(t, s)
+	})
+}
+
+// kevPerlAddhist is a Perl filter_art that, for an article with Subject "addhist", calls
+// INN::addhist with all five arguments for a Message-ID made from the article's own
+// ("<addhist." in front) and rejects the article with the result.
+const kevPerlAddhist = `sub filter_art {
+    return "" unless $hdr{'Subject'} eq 'addhist';
+    my $id = $hdr{'Message-ID'};
+    $id =~ s/^</<addhist./;
+    my $t = time;
+    return INN::addhist($id, $t, $t, $t, '') ? "addhist-ok" : "addhist-failed";
+}
+1;
+`
+
+// TestKevPerlAddhist (#413): INN::addhist with arrival, expiry and posting times and an
+// empty token adds the history entry, so that the Message-ID is then refused as a
+// duplicate.
+func TestKevPerlAddhist(t *testing.T) {
+	innd, err := os.ReadFile(filepath.Join(prefix(t), "bin", "innd"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Contains(innd, []byte("INN::addhist")) {
+		t.Skip("innd was built without Perl")
+	}
+	s := NewSite(t, SiteOptions{
+		InnConf: map[string]string{"pathfilter": "@etcdir@"},
+		Etc:     map[string]string{"filter_innd.pl": kevPerlAddhist},
+	})
+	id := msgID(t)
+	added := strings.Replace(id, "<", "<addhist.", 1)
+	p := s.Peer(t)
+	code, line, err := p.TryCmd("IHAVE %s", id)
+	if err != nil || code != 335 {
+		t.Fatalf("IHAVE %s: %d %q %v; want 335", id, code, line, err)
+	}
+	if err := p.Send(wire(newArticle(id, "e2e.test", "addhist", "body"))); err != nil {
+		t.Fatal(err)
+	}
+	code, line, err = p.ReadStatus()
+	if err != nil || code != 437 || !strings.Contains(line, "addhist-ok") {
+		t.Errorf("article: %d %q %v; want 437 addhist-ok", code, line, err)
+	}
+	code, line, err = p.TryCmd("IHAVE %s", added)
+	if err != nil || code != 435 {
+		t.Errorf("IHAVE %s after INN::addhist: %d %q %v; want 435", added, code, line, err)
+	}
+}
+
+// kevNnrpdHook is an nnrpd Python hook whose access, authenticate and dynamic methods
+// each return a string that cannot be encoded as UTF-8.
+const kevNnrpdHook = `from nnrpd import *
+class Hook:
+    def access(self, attributes):
+        return {"read": "*", "post": "\udcff"}
+    def authenticate(self, attributes):
+        return (481, "\udcff")
+    def dynamic(self, attributes):
+        return "\udcff"
+set_auth_hook(Hook())
+`
+
+// TestKevNnrpdPythonEncoding (#413): when nnrpd's Python access, authenticate or dynamic
+// method returns a string that cannot be encoded as UTF-8, the reader gets "400 Internal
+// error" instead of a connection closed without a reply.
+func TestKevNnrpdPythonEncoding(t *testing.T) {
+	nnrpd, err := os.ReadFile(filepath.Join(prefix(t), "bin", "nnrpd"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Contains(nnrpd, []byte("No script specified in python_access method")) {
+		t.Skip("nnrpd was built without Python")
+	}
+	site := func(t *testing.T, readers string) *Site {
+		return NewSite(t, SiteOptions{
+			InnConf: map[string]string{"pathfilter": "@etcdir@"},
+			Etc:     map[string]string{"nnrpd_kev.py": kevNnrpdHook},
+			Readers: readers,
+		})
+	}
+	t.Run("access", func(t *testing.T) {
+		s := site(t, `auth "local" {
+    hosts: "127.0.0.1, ::1, localhost"
+    default: "<local>"
+    python_access: "nnrpd_kev"
+}
+access "local" {
+    users: "<local>"
+    newsgroups: "*"
+    access: RPA
+}
+`)
+		c, err := tryReader(t, s)
+		if err != nil {
+			t.Fatalf("reader connection: %v; want a 400 greeting", err)
+		}
+		if code, _ := client.ParseCode(c.Greeting); code != 400 {
+			t.Errorf("greeting %q; want 400", c.Greeting)
+		}
+	})
+	t.Run("authenticate", func(t *testing.T) {
+		s := site(t, `auth "users" {
+    hosts: "127.0.0.1"
+    python_auth: "nnrpd_kev"
+}
+access "users" {
+    users: "e2e"
+    newsgroups: "*"
+    access: RPA
+}
+`)
+		c, err := tryReader(t, s)
+		if err != nil {
+			t.Fatalf("reader connection: %v", err)
+		}
+		if code, line, err := c.TryCmd("AUTHINFO USER e2e"); err != nil || code != 381 {
+			t.Fatalf("AUTHINFO USER: %d %q %v; want 381", code, line, err)
+		}
+		code, line, err := c.TryCmd("AUTHINFO PASS e2e-secret")
+		if err != nil || code != 400 {
+			t.Errorf("AUTHINFO PASS: %d %q %v; want 400", code, line, err)
+		}
+	})
+	t.Run("dynamic", func(t *testing.T) {
+		s := site(t, `auth "local" {
+    hosts: "127.0.0.1, ::1, localhost"
+    default: "<local>"
+    python_dynamic: "nnrpd_kev"
+}
+access "local" {
+    users: "<local>"
+    newsgroups: "*"
+    access: RPA
+}
+`)
+		c, err := tryReader(t, s)
+		if err != nil {
+			t.Fatalf("reader connection: %v", err)
+		}
+		code, line, err := c.TryCmd("GROUP e2e.test")
+		if err != nil || code != 400 {
+			t.Errorf("GROUP e2e.test: %d %q %v; want 400", code, line, err)
+		}
 	})
 }
