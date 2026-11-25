@@ -73,8 +73,9 @@ cache_add(const HASH h, const TOKEN t)
             list_addtail(&unused, &entry->node);
             ++msgcachecount;
         }
-        if (msgcachecount >= innconf->msgidcachesize) {
-            /* Need to throw away a node. */
+        if (msgcachecount > innconf->msgidcachesize) {
+            /* A new entry made the cache too large: throw away the oldest
+             * node, preferably one already retrieved. */
             entry = (struct cache_entry *) list_remhead(&used);
             if (entry == NULL)
                 entry = (struct cache_entry *) list_remhead(&unused);
@@ -82,6 +83,7 @@ cache_add(const HASH h, const TOKEN t)
                 tst_delete(msgidcache,
                            (unsigned char *) HashToText(entry->hash));
                 free(entry);
+                --msgcachecount;
             }
         }
     }

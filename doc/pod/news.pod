@@ -133,6 +133,16 @@ files behind after a failed creation, and the buffindexed overview method
 validates its F<group.index> file and no longer frees memory twice when
 mapping overview data fails.  Many thanks to Kevin Bowling for the patches.
 
+=item *
+
+Fixed the Message-ID cache of B<nnrpd>, whose size is set by the
+I<msgidcachesize> parameter in F<inn.conf>.  Once it had been filled, each
+article whose overview data was sent again to the news client, for instance
+when reading the same newsgroup twice, removed another entry instead of
+refreshing its own, so that the cache emptied and articles retrieved by
+Message-ID were looked up in the history database again.  A size of C<1>
+kept no entry at all.
+
 =back
 
 =head1 Changes in 2.7.5 (not yet released)
