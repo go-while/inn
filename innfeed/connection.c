@@ -241,11 +241,14 @@ static void connectionDone(EndPoint e, IoStatus i, Buffer *b, void *d);
 static void getBanner(EndPoint e, IoStatus i, Buffer *b, void *d);
 static void getAuthUserResponse(EndPoint e, IoStatus i, Buffer *b, void *d);
 static void getAuthPassResponse(EndPoint e, IoStatus i, Buffer *b, void *d);
+static void getCapabilitiesResponse(EndPoint e, IoStatus i, Buffer *b,
+                                    void *d);
 static void getModeResponse(EndPoint e, IoStatus i, Buffer *b, void *d);
 static void responseIsRead(EndPoint e, IoStatus i, Buffer *b, void *d);
 static void quitWritten(EndPoint e, IoStatus i, Buffer *b, void *d);
 static void ihaveBodyDone(EndPoint e, IoStatus i, Buffer *b, void *d);
 static void commandWriteDone(EndPoint e, IoStatus i, Buffer *b, void *d);
+static void capabilitiesCmdIssued(EndPoint e, IoStatus i, Buffer *b, void *d);
 static void modeCmdIssued(EndPoint e, IoStatus i, Buffer *b, void *d);
 static void authUserIssued(EndPoint e, IoStatus i, Buffer *b, void *d);
 static void authPassIssued(EndPoint e, IoStatus i, Buffer *b, void *d);
@@ -311,7 +314,9 @@ static bool writesNeeded(Connection cxn);
 static void validateConnection(Connection cxn);
 static const char *stateToString(CxnState state);
 
+static void issueCapabilities(EndPoint e, Connection cxn);
 static void issueModeStream(EndPoint e, Connection cxn);
+static void cxnSetupDone(Connection cxn, bool remoteStreams);
 static void issueAuthUser(EndPoint e, Connection cxn);
 static void issueAuthPass(EndPoint e, Connection cxn);
 
@@ -1358,7 +1363,7 @@ getBanner(EndPoint e, IoStatus i, Buffer *b, void *d)
                 && hostPassword(cxn->myHost) != NULL)
                 issueAuthUser(e, cxn);
             else
-                issueModeStream(e, cxn);
+                issueCapabilities(e, cxn);
         }
     }
     freeBufferArray(b);
@@ -1429,6 +1434,52 @@ issueAuthPass(EndPoint e, Connection cxn)
     readBuffers = makeBufferArray(bufferTakeRef(cxn->respBuffer), NULL);
 
     if (!prepareRead(e, readBuffers, getAuthPassResponse, cxn, 1)) {
+        warn("%s:%u cxnsleep prepare read failed", hostPeerName(cxn->myHost),
+             cxn->ident);
+        freeBufferArray(readBuffers);
+        cxnSleepOrDie(cxn);
+    }
+}
+
+
+/*
+ * Send CAPABILITIES (RFC 3977 section 5.2) once the banner has been read
+ * and, if configured, the authentication is done.  The capabilities may
+ * change after authentication (RFC 4643 section 2.2), so they are asked
+ * for only then.  See getCapabilitiesResponse() for what is done with the
+ * response.
+ */
+static void
+issueCapabilities(EndPoint e, Connection cxn)
+{
+    Buffer *capaCmdBuffers, *readBuffers;
+    Buffer capaBuffer;
+    char *p;
+
+#define CAPABILITIES_CMD "CAPABILITIES\r\n"
+
+    capaBuffer = newBuffer(strlen(CAPABILITIES_CMD) + 1);
+    p = bufferBase(capaBuffer);
+
+    d_printf(1, "%s:%u Issuing the CAPABILITIES command\n",
+             hostPeerName(cxn->myHost), cxn->ident);
+
+    strlcpy(p, CAPABILITIES_CMD, bufferSize(capaBuffer));
+    bufferSetDataSize(capaBuffer, strlen(p));
+
+    capaCmdBuffers = makeBufferArray(capaBuffer, NULL);
+
+    if (!prepareWriteWithTimeout(e, capaCmdBuffers, capabilitiesCmdIssued,
+                                 cxn)) {
+        die("%s:%u fatal prepare write for capabilities failed",
+            hostPeerName(cxn->myHost), cxn->ident);
+    }
+
+    bufferSetDataSize(cxn->respBuffer, 0);
+
+    readBuffers = makeBufferArray(bufferTakeRef(cxn->respBuffer), NULL);
+
+    if (!prepareRead(e, readBuffers, getCapabilitiesResponse, cxn, 1)) {
         warn("%s:%u cxnsleep prepare read failed", hostPeerName(cxn->myHost),
              cxn->ident);
         freeBufferArray(readBuffers);
@@ -1552,7 +1603,7 @@ getAuthUserResponse(EndPoint e, IoStatus i, Buffer *b, void *d)
                 warn("%s:%u cxnsleep response to AUTHINFO USER: %s", peerName,
                      cxn->ident, p);
                 cxn->authenticated = true;
-                issueModeStream(e, cxn);
+                issueCapabilities(e, cxn);
                 break;
             }
         }
@@ -1628,7 +1679,7 @@ getAuthPassResponse(EndPoint e, IoStatus i, Buffer *b, void *d)
             case 281:
                 notice("%s:%u authenticated", peerName, cxn->ident);
                 cxn->authenticated = true;
-                issueModeStream(e, cxn);
+                issueCapabilities(e, cxn);
                 break;
 
             default:
@@ -1639,6 +1690,123 @@ getAuthPassResponse(EndPoint e, IoStatus i, Buffer *b, void *d)
             }
         }
     }
+}
+
+
+/*
+ * Process the remote's response to our CAPABILITIES command, which may
+ * span several reads.
+ *
+ * If the remote lists its capabilities and STREAMING is not among them, it
+ * does not support CHECK and TAKETHIS (RFC 4644 section 2.1), so MODE
+ * STREAM is not sent and articles are offered with IHAVE.  Otherwise (the
+ * remote lists STREAMING, or it does not know CAPABILITIES and answers for
+ * instance 500 as servers predating RFC 3977 do), MODE STREAM is sent as
+ * before and its response decides.
+ */
+static void
+getCapabilitiesResponse(EndPoint e, IoStatus i, Buffer *b, void *d)
+{
+    Connection cxn = (Connection) d;
+    int code = 0;
+    char *p = bufferBase(b[0]);
+    char *line, *eol;
+    Buffer *buffers;
+    const char *peerName;
+    bool complete = false, streaming = false;
+
+    ASSERT(e == cxn->myEp);
+    ASSERT(b[0] == cxn->respBuffer);
+    ASSERT(b[1] == NULL); /* only ever one buffer on this read */
+    ASSERT(cxn->state == cxnConnectingS);
+    VALIDATE_CONNECTION(cxn);
+
+    peerName = hostPeerName(cxn->myHost);
+
+    bufferAddNullByte(b[0]);
+
+    if (i == IoDone && writeIsPending(cxn->myEp)) {
+        /* badness. should never happen */
+        warn("%s:%u cxnsleep capabilities command still pending", peerName,
+             cxn->ident);
+        cxnSleepOrDie(cxn);
+        freeBufferArray(b);
+        return;
+    } else if (i != IoDone) {
+        if (i != IoEOF) {
+            errno = endPointErrno(e);
+            syswarn("%s:%u cxnsleep can't read response", peerName,
+                    cxn->ident);
+        }
+        cxnSleepOrDie(cxn);
+        freeBufferArray(b);
+        return;
+    }
+
+    /* A response other than 101 is a single line.  A 101 response ends with
+       a line containing only a dot.  The capability label is the first word
+       of each line in between. */
+    if ((eol = strchr(p, '\n')) != NULL) {
+        if (!getNntpResponse(p, &code, NULL)) {
+            *eol = '\0';
+            warn("%s:%u cxnsleep response to CAPABILITIES: %s", peerName,
+                 cxn->ident, p);
+            cxnSleepOrDie(cxn);
+            freeBufferArray(b);
+            return;
+        }
+        if (code != 101)
+            complete = true;
+        for (line = eol + 1; !complete && (eol = strchr(line, '\n')) != NULL;
+             line = eol + 1) {
+            size_t len = eol - line;
+
+            if (len > 0 && line[len - 1] == '\r')
+                len--;
+            if (len == 1 && line[0] == '.')
+                complete = true;
+            else if (len >= 9 && strncasecmp(line, "STREAMING", 9) == 0
+                     && (len == 9 || ISWHITE(line[9])))
+                streaming = true;
+        }
+    }
+
+    if (!complete) {
+        /* Partial response: read more. */
+        if (bufferDataSize(b[0]) >= bufferSize(b[0])) {
+            if (bufferSize(b[0]) >= CAPABILITIES_MAX_SIZE) {
+                warn("%s:%u cxnsleep response to CAPABILITIES too long",
+                     peerName, cxn->ident);
+                cxnSleepOrDie(cxn);
+                freeBufferArray(b);
+                return;
+            }
+            expandBuffer(b[0], BUFFER_SIZE);
+        }
+
+        buffers = makeBufferArray(bufferTakeRef(b[0]), NULL);
+        if (!prepareRead(e, buffers, getCapabilitiesResponse, cxn, 1)) {
+            warn("%s:%u cxnsleep prepare read failed", peerName, cxn->ident);
+            freeBufferArray(buffers);
+            cxnSleepOrDie(cxn);
+        }
+        freeBufferArray(b);
+        return;
+    }
+
+    clearTimer(cxn->readBlockedTimerId);
+
+    if (code == 101 && !streaming) {
+        d_printf(1, "%s:%u Remote does not list STREAMING, using IHAVE\n",
+                 peerName, cxn->ident);
+        cxnSetupDone(cxn, false);
+    } else {
+        d_printf(1, "%s:%u CAPABILITIES response %d%s\n", peerName, cxn->ident,
+                 code, streaming ? " with STREAMING" : "");
+        issueModeStream(e, cxn);
+    }
+
+    freeBufferArray(b);
 }
 
 
@@ -1708,63 +1876,70 @@ getModeResponse(EndPoint e, IoStatus i, Buffer *b, void *d)
 
             cxnSleepOrDie(cxn);
         } else {
-            if (!cxn->authenticated)
-                notice("%s:%u connected", peerName, cxn->ident);
-
-            switch (code) {
-            case 203: /* will do streaming */
-                hostRemoteStreams(cxn->myHost, cxn, true);
-
-                if (hostWantsStreaming(cxn->myHost)) {
-                    cxn->doesStreaming = true;
-                    cxn->maxCheck = hostMaxChecks(cxn->myHost);
-                } else
-                    cxn->maxCheck = 1;
-
-                break;
-
-            default: /* won't do it */
-                hostRemoteStreams(cxn->myHost, cxn, false);
-                cxn->maxCheck = 1;
-                break;
-            }
-
-            /* now we consider ourselves completely connected. */
-            cxn->timeCon = theTime();
-            cxn->timeCon_checkpoint = theTime();
-
-            if (cxn->articleQTotal == 0)
-                cxnIdle(cxn);
-            else
-                cxn->state = cxnFeedingS;
-
-            /* one for the connection and one for the buffer array */
-            ASSERT(cxn->authenticated || bufferRefCount(cxn->respBuffer) == 2);
-
-            /* there was only one line in there, right? */
-            bufferSetDataSize(cxn->respBuffer, 0);
-            buffers = makeBufferArray(bufferTakeRef(cxn->respBuffer), NULL);
-
-            /* sleepTimeout get changed at each failed attempt, so reset. */
-            cxn->sleepTimeout = init_reconnect_period;
-
-            if (!prepareRead(cxn->myEp, buffers, responseIsRead, cxn, 1)) {
-                freeBufferArray(buffers);
-
-                cxnSleepOrDie(cxn);
-            } else {
-                /* now we wait for articles from our Host, or we have some
-                   articles already. On infrequently used connections, the
-                   network link is torn down and rebuilt as needed. So we may
-                   be rebuilding the connection here in which case we have an
-                   article to send. */
-                if (writesNeeded(cxn) || hostGimmeArticle(cxn->myHost, cxn))
-                    doSomeWrites(cxn);
-            }
+            /* 203: will do streaming; anything else: won't do it */
+            cxnSetupDone(cxn, code == 203);
         }
     }
 
     freeBufferArray(b);
+}
+
+
+/*
+ * The connection is set up: the banner has been read, and the
+ * authentication, CAPABILITIES and MODE STREAM commands (those that were
+ * sent) are done.  remoteStreams tells whether the remote accepts the
+ * streaming commands.  Start reading the responses to our commands and
+ * feeding articles.  The caller still holds a reference to the response
+ * buffer.
+ */
+static void
+cxnSetupDone(Connection cxn, bool remoteStreams)
+{
+    Buffer *buffers;
+
+    if (!cxn->authenticated)
+        notice("%s:%u connected", hostPeerName(cxn->myHost), cxn->ident);
+
+    hostRemoteStreams(cxn->myHost, cxn, remoteStreams);
+    if (remoteStreams && hostWantsStreaming(cxn->myHost)) {
+        cxn->doesStreaming = true;
+        cxn->maxCheck = hostMaxChecks(cxn->myHost);
+    } else
+        cxn->maxCheck = 1;
+
+    /* now we consider ourselves completely connected. */
+    cxn->timeCon = theTime();
+    cxn->timeCon_checkpoint = theTime();
+
+    if (cxn->articleQTotal == 0)
+        cxnIdle(cxn);
+    else
+        cxn->state = cxnFeedingS;
+
+    /* one for the connection and one for the buffer array */
+    ASSERT(cxn->authenticated || bufferRefCount(cxn->respBuffer) == 2);
+
+    /* there was only one response in there, right? */
+    bufferSetDataSize(cxn->respBuffer, 0);
+    buffers = makeBufferArray(bufferTakeRef(cxn->respBuffer), NULL);
+
+    /* sleepTimeout get changed at each failed attempt, so reset. */
+    cxn->sleepTimeout = init_reconnect_period;
+
+    if (!prepareRead(cxn->myEp, buffers, responseIsRead, cxn, 1)) {
+        freeBufferArray(buffers);
+
+        cxnSleepOrDie(cxn);
+    } else {
+        /* now we wait for articles from our Host, or we have some
+           articles already. On infrequently used connections, the
+           network link is torn down and rebuilt as needed. So we may
+           be rebuilding the connection here in which case we have an
+           article to send. */
+        if (writesNeeded(cxn) || hostGimmeArticle(cxn->myHost, cxn))
+            doSomeWrites(cxn);
+    }
 }
 
 
@@ -2201,6 +2376,32 @@ commandWriteDone(EndPoint e, IoStatus i, Buffer *b, void *d)
 /*
  * Called when the MODE STREAM command has been written down the pipe.
  */
+static void
+capabilitiesCmdIssued(EndPoint e, IoStatus i, Buffer *b, void *d)
+{
+    Connection cxn = (Connection) d;
+
+    ASSERT(e == cxn->myEp);
+
+    clearTimer(cxn->writeBlockedTimerId);
+
+    /* The command has been sent, so start the response timer */
+    initReadBlockedTimeout(cxn);
+
+    if (i != IoDone) {
+        d_printf(1, "%s:%u CAPABILITIES command failed to write\n",
+                 hostPeerName(cxn->myHost), cxn->ident);
+
+        syswarn("%s:%u cxnsleep can't write CAPABILITIES",
+                hostPeerName(cxn->myHost), cxn->ident);
+
+        cxnSleepOrDie(cxn);
+    }
+
+    freeBufferArray(b);
+}
+
+
 static void
 modeCmdIssued(EndPoint e, IoStatus i, Buffer *b, void *d)
 {
