@@ -3,7 +3,7 @@ package e2e
 // Mail that INN programs send, delivered for real: through the test host's MTA (sendmail) to
 // the test mail hub, and read back from the hub's mailbox with POP3 (pop3_test.go). Every
 // test puts a token of its own in a header field of the mail and looks for that. The tests
-// are skipped where the hub is not reachable (INN_E2E_MAILHUB).
+// are skipped unless INN_E2E_MAILHUB names a hub that answers.
 
 import (
 	"os"

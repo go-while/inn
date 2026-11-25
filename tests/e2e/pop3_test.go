@@ -18,8 +18,9 @@ import (
 )
 
 // EnvMailHub names the environment variable that holds the POP3 address (host:port) of the
-// test mail hub. When it is empty, DefaultMailHub is used; "none" skips the mail delivery
-// tests. EnvMailUser and EnvMailPass hold the mailbox login (default DefaultMailUser and
+// test mail hub; without it the mail delivery tests are skipped. There is no default: the
+// tests send a login in cleartext to that address, so it is only set on hosts of a test mail
+// network. EnvMailUser and EnvMailPass hold the mailbox login (default DefaultMailUser and
 // DefaultMailPass).
 const (
 	EnvMailHub  = "INN_E2E_MAILHUB"
@@ -27,10 +28,9 @@ const (
 	EnvMailPass = "INN_E2E_MAILPASS"
 )
 
-// The test mail network of the e2e test VMs: a throwaway mailbox on a private test net, with
-// a static test password that exists nowhere else.
+// The default login of the test mailbox: a throwaway mailbox with a static test password that
+// exists nowhere else.
 const (
-	DefaultMailHub  = "10.10.30.109:110"
 	DefaultMailUser = "e2e"
 	DefaultMailPass = "e2e-mail"
 )
@@ -265,20 +265,19 @@ type mailHub struct {
 	addr, user, pass string
 }
 
-// needMailHub returns the test mail hub, or skips the test when it is not reachable (the
-// tests do not run on a host of the test mail network) or EnvMailHub is "none". A hub that
-// answers but refuses the login fails the test.
+// needMailHub returns the test mail hub, or skips the test when EnvMailHub is not set or the
+// hub does not answer. A hub that answers but refuses the login fails the test.
 func needMailHub(tb testing.TB) *mailHub {
 	tb.Helper()
-	h := &mailHub{addr: or(os.Getenv(EnvMailHub), DefaultMailHub),
+	h := &mailHub{addr: os.Getenv(EnvMailHub),
 		user: or(os.Getenv(EnvMailUser), DefaultMailUser),
 		pass: or(os.Getenv(EnvMailPass), DefaultMailPass)}
-	if h.addr == "none" {
-		tb.Skipf("%s=none: mail delivery tests are off", EnvMailHub)
+	if h.addr == "" {
+		tb.Skipf("%s is not set: mail delivery tests need the POP3 address (host:port) of a test mail hub", EnvMailHub)
 	}
 	c, err := dialPOP3(h.addr, pop3DialTimeout)
 	if err != nil {
-		tb.Skipf("test mail hub %s not reachable (%v): mail delivery tests need a host of the test mail network; set %s to its POP3 address", h.addr, err, EnvMailHub)
+		tb.Skipf("test mail hub %s=%s not reachable: %v", EnvMailHub, h.addr, err)
 	}
 	defer c.Close()
 	if err := c.Login(h.user, h.pass); err != nil {

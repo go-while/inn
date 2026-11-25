@@ -91,11 +91,14 @@ are known but not fixed yet are skipped; `INN_E2E_KNOWN_ISSUES=1` runs them.
 
 The `TestMail*` tests deliver mail for real: through the host's MTA (`sendmail`)
 to a test mail hub that puts every recipient into one mailbox, which they read
-back with POP3, find by a token of their own and delete. `INN_E2E_MAILHUB`
-(default `10.10.30.109:110`, the test net of the e2e VMs) is the hub's POP3
-address, `INN_E2E_MAILUSER` and `INN_E2E_MAILPASS` the mailbox login (default
-`e2e` and its test password); the tests are skipped when the hub does not
-answer, or with `INN_E2E_MAILHUB=none`. The hub must not deliver anywhere else.
+back with POP3, find by a token of their own and delete. They run only when
+`INN_E2E_MAILHUB` holds the hub's POP3 address (`host:port`); there is no
+default, since the tests send the mailbox login in cleartext. Set it only on
+test hosts of a mail network built for this, where the hub delivers nowhere
+else. `INN_E2E_MAILUSER` and `INN_E2E_MAILPASS` are the mailbox login (default
+`e2e` and its test password). The tests are skipped when `INN_E2E_MAILHUB` is
+unset or the hub does not answer. `ci/e2e-distro` passes these three variables
+on to the e2e tests when they are set.
 
 The tests need a Linux or other Unix system where 127.0.0.2 can be used as a
 source address (Linux routes the whole 127.0.0.0/8 to the loopback interface).

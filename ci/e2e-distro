@@ -17,6 +17,10 @@
 ##  built and tested there as the news user, and installed into PREFIX
 ##  (default /opt/inn-e2e).  The exit status is non-zero when the build, make
 ##  check or the e2e tests failed.
+##
+##  INN_E2E_MAILHUB, INN_E2E_MAILUSER and INN_E2E_MAILPASS, when set, are
+##  passed on to the e2e tests (the mail delivery tests; see
+##  tests/e2e/README.md).
 
 set -eu
 
@@ -207,9 +211,20 @@ if [ "$build" = ok ]; then
     fi
     if [ -n "$E2EBIN" ]; then
         e2e=ok
+        # The mail hub settings of the caller, single-quoted for the news shell.
+        mailenv=
+        val=
+        for var in INN_E2E_MAILHUB INN_E2E_MAILUSER INN_E2E_MAILPASS; do
+            eval "val=\${$var:-}"
+            case "$val" in
+            '') ;;
+            *\'*) echo "$var contains a single quote, not passed on" ;;
+            *) mailenv="$mailenv $var='$val'" ;;
+            esac
+        done
         as_news "cd $BUILDDIR/home && INN_PREFIX=$PREFIX \
-                INN_E2E_SYSLOG=$INN_E2E_SYSLOG $E2EBIN -test.count=1 -test.v \
-                -test.timeout=20m" >"$BUILDDIR/e2e.log" 2>&1 || e2e=FAILED
+                INN_E2E_SYSLOG=$INN_E2E_SYSLOG$mailenv $E2EBIN -test.count=1 \
+                -test.v -test.timeout=20m" >"$BUILDDIR/e2e.log" 2>&1 || e2e=FAILED
         grep -E '^(--- (FAIL|SKIP)|FAIL|ok|PASS$)' "$BUILDDIR/e2e.log" || true
         echo "e2e: $(grep -c '^--- PASS' "$BUILDDIR/e2e.log") passed," \
             "$(grep -c '^--- SKIP' "$BUILDDIR/e2e.log") skipped," \
