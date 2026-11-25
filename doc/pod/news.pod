@@ -400,6 +400,19 @@ killing them, so far hard-coded to five seconds, can now be set with the new
 I<program_timeout> parameter of auth groups, to a number of seconds between
 1 and 86400.
 
+=item *
+
+B<innmail> no longer silently rewrites the addresses it is given by removing
+the characters it does not know, which could send the mail to another
+address.  It now accepts the ASCII characters allowed in an unquoted local
+part of an e-mail address (like C<=>, C</> or C<'>), as well as well-formed
+UTF-8 non-ASCII characters other than whitespace and controls for
+internationalized addresses (RFC 6531).  An address containing malformed
+UTF-8 or unsupported characters, or beginning with C<->, C<|> or C</>
+(which the MTA could take as an option, a program or a file), is refused with
+a warning; the mail is still sent to the other addresses, but B<innmail>
+then exits with status 1.
+
 =back
 
 =head1 Changes in 2.7.4 (2026-06-22)

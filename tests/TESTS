@@ -77,4 +77,5 @@ storage/sm
 util/convdate
 util/innbind
 util/inndf
+util/innmail
 util/innupgrade

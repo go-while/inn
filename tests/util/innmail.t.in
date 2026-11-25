@@ -1,0 +1,81 @@
+#!/usr/bin/perl
+#
+# Test address handling in innmail.
+
+use strict;
+use warnings;
+
+use IPC::Open3;
+
+if (!eval { require Test::More; Test::More->import(); 1 }) {
+    print "1..0 # SKIP Test::More required for test\n";
+    exit 0;
+}
+
+# Run the source script with a stub configuration and an MTA that echoes
+# its arguments and the message, without requiring an installed INN.
+my $setup = <<'PERL';
+my $script = shift @ARGV;
+$INN::Config::version = 'INN test';
+$INN::Config::mta = $^X . ' -e print(qq(Recipients:@ARGV\n),<STDIN>); -- %s';
+do $script;
+die($@ || $! || "innmail unexpectedly returned\n");
+PERL
+
+sub send_mail {
+    my ($in, $out);
+    local $ENV{PERL_UNICODE} = 0;
+    my $script = "$ENV{C_TAP_SOURCE}/../scripts/innmail.in";
+    my $pid = open3($in, $out, undef, $^X, '-e', $setup, '--', $script,
+        '-s', 'Test', '--', @_);
+    close($in);
+    my $output = '';
+    read($out, $output, 4096);
+    close($out);
+    waitpid($pid, 0);
+    return ($?, $output);
+}
+
+my @valid_utf8 = (
+    ['U+20AC (three-byte UTF-8)', "ok\xE2\x82\xAC\@example.com"],
+    ['U+1F600 (four-byte UTF-8)', "ok\xF0\x9F\x98\x80\@example.com"],
+    ['U+2010 (non-whitespace)', "ok\xE2\x80\x90\@example.com"],
+);
+my @invalid = (
+    ['truncated UTF-8', "bad\xC3\@example.com"],
+    ['overlong UTF-8', "bad\xC0\xAF\@example.com"],
+    ['surrogate', "bad\xED\xA0\x80\@example.com"],
+    ['above U+10FFFF', "bad\xF4\x90\x80\x80\@example.com"],
+    ['non-ASCII whitespace', "bad\xC2\xA0\@example.com"],
+    ['U+1680 whitespace', "bad\xE1\x9A\x80\@example.com"],
+    ['U+2028 whitespace', "bad\xE2\x80\xA8\@example.com"],
+    ['U+3000 whitespace', "bad\xE3\x80\x80\@example.com"],
+    ['non-ASCII control', "bad\xC2\x80\@example.com"],
+);
+plan(tests => 4 + @valid_utf8 + @invalid);
+alarm(15);
+
+my $valid = "jos\xC3\xA9\@example.com";
+my ($status, $output) = send_mail($valid);
+is($status, 0, 'UTF-8 local part accepted');
+is($output, "Recipients:$valid\nTo: $valid\nSubject: Test\n\n",
+    'UTF-8 address unchanged in the MTA arguments and the To header');
+
+for my $case (@valid_utf8) {
+    my ($label, $address) = @$case;
+    (undef, $output) = send_mail($address);
+    is($output, "Recipients:$address\nTo: $address\nSubject: Test\n\n",
+        "$label unchanged in the MTA arguments and the To header");
+}
+
+my $ascii = 'moderator@example.com';
+($status, $output) = send_mail($ascii, map { $_->[1] } @invalid);
+is($status, 1 << 8, 'mixed valid and invalid addresses exit with status 1');
+for my $case (@invalid) {
+    my ($label, $address) = @$case;
+    ok(index($output, "Refusing address with unsupported characters: $address\n")
+        >= 0, "$label refused with a warning");
+}
+my $message = "Recipients:$ascii\nTo: $ascii\nSubject: Test\n\n";
+like($output, qr/\Q$message\E\z/, 'only the valid address is sent to the MTA');
+alarm(0);
