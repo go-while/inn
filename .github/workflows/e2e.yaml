@@ -24,10 +24,10 @@ name: e2e
       inn_ref:
         description: Branch, tag or commit of INN to build and test
         required: false
-        default: integration
+        default: integration-next
 
 env:
-  INN_REF: ${{ inputs.inn_ref || 'integration' }}
+  INN_REF: ${{ inputs.inn_ref || 'integration-next' }}
 
 jobs:
   e2e:

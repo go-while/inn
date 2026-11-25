@@ -25,7 +25,7 @@ name: e2e-distro
       inn_ref:
         description: Branch, tag or commit of INN to build and test
         required: false
-        default: integration
+        default: integration-next
   schedule:
     - cron: "17 3 * * 1"
   push:
@@ -38,7 +38,7 @@ name: e2e-distro
       - .github/workflows/e2e-distro.yaml
 
 env:
-  INN_REF: ${{ inputs.inn_ref || 'integration' }}
+  INN_REF: ${{ inputs.inn_ref || 'integration-next' }}
 
 jobs:
   e2e-test:
