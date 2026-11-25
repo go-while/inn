@@ -30,11 +30,123 @@
 #include "inn/ov.h"
 #include "inn/overview.h"
 #include "inn/paths.h"
+#include "inn/qio.h"
 #include "inn/vector.h"
 #include "inn/wire.h"
 #include "ovinterface.h"
 #include "tdx-private.h"
 #include "tdx-structure.h"
+
+/* Check whether an active status field is a flag or a nonempty alias. */
+static bool
+valid_active_status(const char *status)
+{
+    if (status[0] == NF_FLAG_ALIAS)
+        return status[1] != '\0';
+    return status[0] != '\0' && status[1] == '\0'
+           && strchr(NF_FLAG_OK_STRING NF_FLAG_MODERATED_STRING
+                         NF_FLAG_NOLOCAL_STRING NF_FLAG_JUNK_STRING
+                         NF_FLAG_IGNORE_STRING,
+                     status[0])
+                  != NULL;
+}
+
+
+/*
+**  Check the active water marks against tradindexed.  The active high mark
+**  may be ahead of overview since it is also the last number ever assigned.
+*/
+static bool
+check_active(void)
+{
+    char *path, *line;
+    QIOSTATE *active;
+    struct cvector *fields = NULL;
+    struct group_index *index;
+    struct stat st;
+    unsigned long lineno = 0;
+    bool clean = true;
+
+    index = tdx_index_open(false);
+    if (index == NULL)
+        die("cannot open group index");
+    path = concatpath(innconf->pathdb, INN_PATH_ACTIVE);
+    active = QIOopen(path);
+    if (active == NULL) {
+        syswarn("cannot open %s", path);
+        free(path);
+        tdx_index_close(index);
+        return false;
+    }
+
+    while ((line = QIOread(active)) != NULL) {
+        const struct group_entry *entry;
+        const char *group;
+        ARTNUM high, low, expected_high, expected_low;
+
+        lineno++;
+        fields = cvector_split_space(line, fields);
+        if (fields->count != 4 || !IsValidArticleNumber(fields->strings[1])
+            || !IsValidArticleNumber(fields->strings[2])) {
+            warn("%s:%lu: invalid active entry", path, lineno);
+            clean = false;
+            continue;
+        }
+        if (!valid_active_status(fields->strings[3])) {
+            warn("%s:%lu: invalid active status", path, lineno);
+            clean = false;
+            continue;
+        }
+        if (fields->strings[3][0] == NF_FLAG_ALIAS)
+            continue;
+
+        group = fields->strings[0];
+        entry = tdx_index_entry(index, group);
+        if (entry == NULL) {
+            warn("%s: %s: no corresponding overview group", path, group);
+            clean = false;
+            continue;
+        }
+
+        high = strtoul(fields->strings[1], NULL, 10);
+        low = strtoul(fields->strings[2], NULL, 10);
+        expected_high = entry->high;
+        expected_low = entry->low;
+        if (entry->count == 0) {
+            /* Match the empty-group convention of ctlinnd renumber. */
+            if (expected_low < expected_high)
+                expected_low = expected_high;
+            if (expected_low == 0)
+                expected_low = 1;
+            expected_high = expected_low - 1;
+        }
+        if (high < expected_high || low != expected_low) {
+            warn("%s: %s: active high %lu low %lu; expected high at least "
+                 "%lu and low %lu", path, group, high, low, expected_high,
+                 expected_low);
+            clean = false;
+        }
+    }
+    if (QIOtoolong(active)) {
+        warn("%s:%lu: active entry too long", path, lineno + 1);
+        clean = false;
+    } else if (QIOerror(active)) {
+        syswarn("cannot read %s", path);
+        clean = false;
+    } else if (fstat(QIOfileno(active), &st) < 0) {
+        syswarn("cannot stat %s", path);
+        clean = false;
+    } else if (QIOtell(active) < st.st_size) {
+        warn("%s:%lu: active entry was not read completely", path, lineno + 1);
+        clean = false;
+    }
+    cvector_free(fields);
+    QIOclose(active);
+    free(path);
+    tdx_index_close(index);
+    return clean;
+}
+
 
 /*
 **  Dump the main index data, either all of it or that for a particular group
@@ -532,7 +644,7 @@ main(int argc, char *argv[])
 
     /* Parse options. */
     opterr = 0;
-    while ((option = getopt(argc, argv, "a:f:n:p:AFR:cgiOo")) != EOF) {
+    while ((option = getopt(argc, argv, "a:f:n:p:ACFR:cgiOo")) != EOF) {
         switch (option) {
         case 'a':
             if (!parse_range(optarg, &artlow, &arthigh))
@@ -545,12 +657,18 @@ main(int argc, char *argv[])
             newsgroup = optarg;
             break;
         case 'p':
+            free(innconf->pathoverview);
             innconf->pathoverview = xstrdup(optarg);
             break;
         case 'A':
             if (mode != '\0')
                 die("only one mode option allowed");
             mode = 'A';
+            break;
+        case 'C':
+            if (mode != '\0')
+                die("only one mode option allowed");
+            mode = 'C';
             break;
         case 'F':
             if (mode != '\0')
@@ -609,6 +727,8 @@ main(int argc, char *argv[])
     case 'A':
         tdx_index_audit(false);
         break;
+    case 'C':
+        return check_active() ? 0 : 1;
     case 'F':
         if (getenv(INN_ENV_TESTSUITE) == NULL)
             ensure_news_user_grp(true, true);

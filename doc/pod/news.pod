@@ -594,6 +594,11 @@ were kept.  The leftover snapshot is now kept until a run succeeds, and the
 live file is consumed by the following run.  A tombstone file that could
 not be read completely is no longer removed after a successful run.
 
+=item *
+
+B<tdx-util> B<-C> checks the water marks in F<active> against the
+tradindexed overview database.
+
 =back
 
 =head1 Changes in 2.7.5 (not yet released)
