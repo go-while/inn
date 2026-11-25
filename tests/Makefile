@@ -21,7 +21,7 @@ TESTS	= authprogs/ident.t expire/tombstone.t expire/tombstone-hisexpire.t \
 	lib/asprintf.t lib/bloom.t lib/bloom-hiswalk.t lib/buffer.t \
 	lib/canlock.t lib/concat.t lib/conffile.t \
 	lib/confparse.t lib/daemon.t lib/date.t \
-	lib/dispatch.t lib/fdflag.t \
+	lib/dbz.t lib/dispatch.t lib/fdflag.t \
 	lib/getaddrinfo.t lib/getnameinfo.t lib/hash.t \
 	lib/hashtab.t lib/headers.t lib/hex.t \
 	lib/hissqlite.t lib/hissqlite-convert.t \
@@ -166,6 +166,10 @@ lib/daemon.t: lib/daemon.o lib/daemon-t.o tap/basic.o $(LIBINN)
 
 lib/date.t: lib/date-t.o tap/basic.o tap/string.o $(LIBINN)
 	$(LINK) lib/date-t.o tap/basic.o tap/string.o $(LIBINN)
+
+lib/dbz.t: lib/dbz-t.o tap/basic.o tap/messages.o tap/string.o $(LIBINN)
+	$(LINK) lib/dbz-t.o tap/basic.o tap/messages.o tap/string.o \
+	    $(LIBINN) $(LIBS)
 
 lib/dispatch.t: lib/dispatch-t.o tap/basic.o $(LIBINN)
 	$(LINK) lib/dispatch-t.o tap/basic.o $(LIBINN)
