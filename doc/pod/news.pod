@@ -470,6 +470,18 @@ session only for a URL with the same server, port and login, and no longer
 after a failed transfer; when a transfer fails on a reused session, which
 may have timed out, it is tried once more on a new session.
 
+=item *
+
+B<fastrm> now exits with status 1 when it cannot remove a file, as its
+documentation says; it only reported the error.  As a consequence,
+B<expirerm> now notices such failures: it mails the newsmaster "Expire had
+problems removing articles", exits with status 1 and keeps the list of
+articles to remove, instead of moving it to F<expire.list> as if all of
+them had been removed.  When I<expiretombstone> is set in F<inn.conf>,
+B<expirerm> also no longer records these articles as removed in the
+tombstone log read by B<expire>, which then dropped their history entries
+although they were still on disk.
+
 =back
 
 =head1 Changes in 2.7.5 (not yet released)

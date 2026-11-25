@@ -376,6 +376,7 @@ unlink_file(const char *file)
             syswarn("can't unlink %s", file);
         else
             syswarn("can't unlink %s in %s", file, current_dir);
+        error_count++;
     }
 }
 
