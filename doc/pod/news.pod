@@ -413,6 +413,20 @@ UTF-8 or unsupported characters, or beginning with C<->, C<|> or C</>
 a warning; the mail is still sent to the other addresses, but B<innmail>
 then exits with status 1.
 
+=item *
+
+The B<-c> flag of B<procbatch> now checks the existence of articles with
+any storage method.  It used to look only for files in a tradspool article
+spool, so it dropped every entry given as a storage API token, even of
+articles still present.  B<procbatch> now asks B<sm> about all the tokens
+of a batchfile at once, and keeps the file check for entries giving a
+pathname.  An entry is dropped only when the storage manager reports that
+its article does not exist or that its token is malformed; entries are kept,
+with an error exit status, when it cannot tell because of a storage error.
+B<sm> has a new B<-e> flag to tell a missing article from a retrieval error.
+With B<-e>, B<procbatch> checks only the articles of the entries for that
+peer.
+
 =back
 
 =head1 Changes in 2.7.4 (2026-06-22)
