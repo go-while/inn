@@ -1147,3 +1147,4 @@ tests/util/inndf.t                    Tests for backends/inndf
 tests/util/innmail.t.in               Tests for scripts/innmail
 tests/util/innupgrade.t               Tests for scripts/innupgrade
 tests/util/ninpaths.t                 Tests for backends/ninpaths
+tests/util/simpleftp.t                Tests for scripts/simpleftp

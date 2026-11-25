@@ -461,6 +461,15 @@ non-zero status, B<delayer> now reports it, saves the lines which may not
 have reached it if possible, and exits with status 1, instead of dying of
 C<SIGPIPE> or exiting with status 0.
 
+=item *
+
+B<simpleftp> now accepts IPv6 addresses enclosed in square brackets in FTP
+URLs, optionally followed by a port, and no longer dies when an FTP URL
+follows an HTTP or HTTPS URL for the same host.  It also reuses an FTP
+session only for a URL with the same server, port and login, and no longer
+after a failed transfer; when a transfer fails on a reused session, which
+may have timed out, it is tried once more on a new session.
+
 =back
 
 =head1 Changes in 2.7.5 (not yet released)
