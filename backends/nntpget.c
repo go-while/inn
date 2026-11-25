@@ -10,6 +10,7 @@
 #include <errno.h>
 #include <sys/stat.h>
 #include <sys/uio.h>
+#include <utime.h>
 
 #ifdef HAVE_SYS_TIME_H
 #    include <sys/time.h>
@@ -27,6 +28,10 @@
 #include "inn/messages.h"
 #include "inn/nntp.h"
 #include "inn/paths.h"
+
+#ifndef PATH_MAX
+#    define PATH_MAX 4096
+#endif
 
 /*
 **  All information about a site we are connected to.
@@ -174,6 +179,30 @@ SITEquit(SITE *sp)
 }
 
 
+/*
+**  Get the current time of a site with DATE, so that the time recorded in the
+**  timestamp file is on the clock that NEWNEWS compares the arrival times
+**  with.  Fall back to the local clock when the site does not know the
+**  command.
+*/
+static time_t
+SITEdate(SITE *sp)
+{
+    char buff[NNTP_MAXLEN_COMMAND];
+    char day[9], hour[7];
+    time_t now, remote;
+
+    now = time(NULL);
+    if (!SITEwrite(sp, "DATE", 4) || !SITEread(sp, buff))
+        return now;
+    if (atoi(buff) != NNTP_INFO_DATE
+        || sscanf(buff, "%*d %8[0-9]%6[0-9]", day, hour) != 2)
+        return now;
+    remote = parsedate_nntp(day, hour, false);
+    return remote == (time_t) -1 ? now : remote;
+}
+
+
 static bool
 HIShaveit(char *mesgid)
 {
@@ -210,8 +239,11 @@ main(int ac, char *av[])
     FILE *F;
     bool Offer;
     bool Error;
+    bool Failed = false;
     bool Verbose = false;
     char *Update;
+    time_t Mark = (time_t) -1;
+    mode_t UpdateMode = 0644;
     char *p;
 
     /* First thing, set up our identity. */
@@ -242,6 +274,8 @@ main(int ac, char *av[])
                 Usage("only one of -f, -t, or -u may be given");
             if (stat(optarg, &Sb) < 0)
                 sysdie("cannot stat %s", optarg);
+            if (i == 'u')
+                UpdateMode = Sb.st_mode & 07777;
             gt = gmtime(&Sb.st_mtime);
             snprintf(tbuff, sizeof(tbuff), "%04d%02d%02d %02d%02d%02d GMT",
                      gt->tm_year + 1900, gt->tm_mon + 1, gt->tm_mday,
@@ -290,9 +324,14 @@ main(int ac, char *av[])
         if (Groups)
             Usage("-n flag not allowed when reading stdin");
     } else {
-        /* Ask the server for a list of what's new. */
+        /* Ask the server for a list of what's new.  The articles which
+         * arrive after the list is built are not in it: the next run has to
+         * ask for them, so the time for the timestamp file is taken before
+         * the list is built. */
         if (Groups == NULL)
             Groups = "*";
+        if (Update != NULL)
+            Mark = SITEdate(Remote);
         snprintf(buff, sizeof(buff), "NEWNEWS %s %s", Groups, Since);
         if (!SITEwrite(Remote, buff, (int) strlen(buff))
             || !SITEread(Remote, buff))
@@ -336,7 +375,12 @@ main(int ac, char *av[])
             SITEquit(Remote);
             exit(1);
         }
-        fseeko(F, 0, SEEK_SET);
+        if (fseeko(F, 0, SEEK_SET) < 0) {
+            syswarn("cannot rewind %s", msgidfile);
+            fclose(F);
+            SITEquit(Remote);
+            exit(1);
+        }
     }
 
     if (Offer) {
@@ -361,10 +405,21 @@ main(int ac, char *av[])
             if (!SITEwrite(Local, buff, (int) strlen(buff))
                 || !SITEread(Local, buff)) {
                 syswarn("cannot offer %s", mesgid);
+                printf("%s\n", mesgid);
+                Failed = true;
                 break;
             }
-            if (atoi(buff) != NNTP_CONT_IHAVE)
+            i = atoi(buff);
+            if (i == NNTP_FAIL_IHAVE_REFUSE)
                 continue;
+            if (i != NNTP_CONT_IHAVE) {
+                /* 436, 400 or another reply which is not "not wanted": the
+                 * article was not offered, try it again next time. */
+                syswarn("%s to IHAVE %s", buff, mesgid);
+                printf("%s\n", mesgid);
+                Failed = true;
+                break;
+            }
         }
 
         /* Try to get the article. */
@@ -373,16 +428,30 @@ main(int ac, char *av[])
             || !SITEread(Remote, buff)) {
             syswarn("cannot get %s", mesgid);
             printf("%s\n", mesgid);
+            Failed = true;
             break;
         }
-        if (atoi(buff) != NNTP_OK_ARTICLE) {
+        i = atoi(buff);
+        if (i != NNTP_OK_ARTICLE) {
+            /* Only "no such article" is final.  Any other reply, like 403
+             * or 400, may be temporary: keep the Message-ID. */
+            bool retry = (i != NNTP_FAIL_MSGID_NOTFOUND);
+
+            if (retry) {
+                syswarn("%s to ARTICLE %s", buff, mesgid);
+                printf("%s\n", mesgid);
+                Failed = true;
+            }
             if (Offer) {
                 SITEwrite(Local, ".", 1);
                 if (!SITEread(Local, buff)) {
                     syswarn("no reply after %s", mesgid);
+                    Failed = true;
                     break;
                 }
             }
+            if (retry)
+                break;
             continue;
         }
 
@@ -409,6 +478,7 @@ main(int ac, char *av[])
         }
         if (Error) {
             printf("%s\n", mesgid);
+            Failed = true;
             break;
         }
         STATsent++;
@@ -418,13 +488,17 @@ main(int ac, char *av[])
             if (!SITEread(Local, buff)) {
                 syswarn("no reply after %s", mesgid);
                 printf("%s\n", mesgid);
+                Failed = true;
                 break;
             }
             i = atoi(buff);
             if (i == NNTP_OK_IHAVE)
                 continue;
-            if (i == NNTP_FAIL_IHAVE_DEFER) {
+            if (i == NNTP_FAIL_IHAVE_DEFER
+                || (i / 100 == 4 && i != NNTP_FAIL_IHAVE_REJECT)) {
+                syswarn("%s to %s", buff, mesgid);
                 printf("%s\n", mesgid);
+                Failed = true;
                 break;
             }
             syswarn("%s to %s", buff, mesgid);
@@ -440,6 +514,10 @@ main(int ac, char *av[])
             printf("%s\n", mesgid);
             STATgot++;
         }
+    if (ferror(F)) {
+        syswarn("cannot read the list of Message-IDs");
+        Failed = true;
+    }
     fclose(F);
 
     /* Remove our temp file. */
@@ -451,14 +529,53 @@ main(int ac, char *av[])
     if (Offer)
         SITEquit(Local);
 
-    /* Update timestamp file? */
-    if (Update) {
-        if ((F = fopen(Update, "w")) == NULL)
+    /* Update timestamp file?  Not after a failure: the Message-IDs written to
+     * standard output are not yet fetched, and the next run must ask for
+     * them again.  The file gets the time taken before the list was asked
+     * for, not the time of its update: the articles which arrived in between
+     * are not in this list.  Build the new file apart, with that time, and
+     * put it in place only when it is complete, so that a failure never
+     * leaves the time of the end of the run. */
+    if (Update && !Failed) {
+        struct utimbuf times;
+        char real[PATH_MAX];
+        char *tmpname;
+        int fd;
+
+        /* The file may be a symbolic link: replace its target. */
+        if (realpath(Update, real) == NULL)
+            sysdie("cannot update %s", Update);
+        xasprintf(&tmpname, "%s.new.XXXXXX", real);
+        fd = mkstemp(tmpname);
+        if (fd < 0 || (F = fdopen(fd, "w")) == NULL)
             sysdie("cannot update %s", Update);
         fprintf(F, "got %lu offered %lu sent %lu rejected %lu\n", STATgot,
                 STAToffered, STATsent, STATrejected);
-        if (ferror(F) || fclose(F) == EOF)
+        if (ferror(F) || fclose(F) == EOF) {
+            unlink(tmpname);
             sysdie("cannot update %s", Update);
+        }
+        if (Mark != (time_t) -1) {
+            times.actime = Mark;
+            times.modtime = Mark;
+            if (utime(tmpname, &times) < 0) {
+                unlink(tmpname);
+                sysdie("cannot update the time of %s", Update);
+            }
+        }
+        /* Keep the permissions of the old file, or the old file itself; the
+         * owner cannot always be kept. */
+        if (chmod(tmpname, UpdateMode) < 0) {
+            unlink(tmpname);
+            sysdie("cannot set the permissions of the new %s, keeping the old"
+                   " one",
+                   Update);
+        }
+        if (rename(tmpname, real) < 0) {
+            unlink(tmpname);
+            sysdie("cannot update %s", Update);
+        }
+        free(tmpname);
     }
 
     exit(0);
