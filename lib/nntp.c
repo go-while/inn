@@ -147,16 +147,19 @@ nntp_read_data(struct nntp *nntp)
         buffer_resize(&nntp->in, size);
     }
 
-    /* Wait for activity. */
+    /* Wait for activity.  A timeout of 0 means wait forever. */
     do {
         fd_set mask;
-        struct timeval tv;
+        struct timeval tv, *tvp = NULL;
 
         FD_ZERO(&mask);
         FD_SET(nntp->in_fd, &mask);
-        tv.tv_sec = nntp->timeout;
-        tv.tv_usec = 0;
-        status = select(nntp->in_fd + 1, &mask, NULL, NULL, &tv);
+        if (nntp->timeout != 0) {
+            tv.tv_sec = nntp->timeout;
+            tv.tv_usec = 0;
+            tvp = &tv;
+        }
+        status = select(nntp->in_fd + 1, &mask, NULL, NULL, tvp);
         if (status == -1 && errno != EINTR)
             return NNTP_READ_ERROR;
     } while (status == -1);
@@ -271,11 +274,21 @@ nntp_read_multiline(struct nntp *nntp, char **data, size_t *length)
     enum nntp_status status = NNTP_READ_OK;
     size_t offset;
     size_t start = 0;
+    bool found;
 
     buffer_compact(in);
     while (status == NNTP_READ_OK) {
-        if (buffer_find_string(in, "\r\n.\r\n", start, &offset)) {
+        /* An empty block is only the terminating line, which then has no
+           line ending before it. */
+        found = false;
+        if (in->left >= 3 && memcmp(in->data + in->used, ".\r\n", 3) == 0) {
+            offset = 3;
+            found = true;
+        } else if (buffer_find_string(in, "\r\n.\r\n", start, &offset)) {
             offset += 5;
+            found = true;
+        }
+        if (found) {
             in->left -= offset;
             *length = offset;
             *data = in->data + in->used;
@@ -350,8 +363,9 @@ nntp_send_line(struct nntp *nntp, const char *format, ...)
 
 
 /*
-**  The same as nntp_send_line, but don't flush after sending the response.
-**  Used for accumulating multiline responses, mostly.
+**  The same as nntp_send_line, but only buffer the line; the caller flushes
+**  with nntp_flush.  Used for accumulating multiline responses, mostly.
+**  Always returns true, since nothing is written yet.
 */
 bool
 nntp_send_line_noflush(struct nntp *nntp, const char *format, ...)
@@ -362,7 +376,7 @@ nntp_send_line_noflush(struct nntp *nntp, const char *format, ...)
     buffer_append_vsprintf(&nntp->out, format, args);
     va_end(args);
     buffer_append(&nntp->out, "\r\n", 2);
-    return nntp_flush(nntp);
+    return true;
 }
 
 

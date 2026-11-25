@@ -256,6 +256,7 @@
 /tests/lib/network/addr-ipv6.t
 /tests/lib/network/client.t
 /tests/lib/network/server.t
+/tests/lib/nntp.t
 /tests/nnrpd/auth-ext.t
 /tests/nnrpd/auth-test
 /tests/overview/api.t
