@@ -423,6 +423,15 @@ F<expire.ctl> policy that applies.
 Setting C</remember/> to zero in F<expire.ctl> now purges remembered
 Message-IDs even when their posting or arrival time is in the future.
 
+=item *
+
+Check F<nnrpd.track> patterns when upgrading.  Plain hostnames and IPv4
+addresses now match exactly and hostnames are case-insensitive.  Use
+C<*.example.com> or C<.example.com> for a domain suffix, C<192.168.1.> for
+an address prefix, or a single C<*> between literal parts such as
+C<node*.cluster.test>.  Both C<*> and an empty host field match every client.
+B<nnrpd> warns when it encounters the empty form.
+
 =back
 
 =head1 Changes in 2.7.5 (not yet released)

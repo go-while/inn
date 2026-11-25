@@ -31,7 +31,7 @@ TESTS	= authprogs/ident.t expire/tombstone.t expire/tombstone-hisexpire.t \
 	lib/reservedfd.t lib/sequence.t lib/setenv.t lib/sqlite-helper.t \
 	lib/strlcat.t lib/strlcpy.t lib/timer.t lib/tst.t lib/uwildmat.t \
 	lib/vector.t lib/wire.t lib/xwrite.t nnrpd/auth-ext.t nnrpd/cache.t \
-	overview/api.t overview/buffindexed.t overview/build.t \
+	nnrpd/track.t overview/api.t overview/buffindexed.t overview/build.t \
 	overview/ovsqlite.t overview/tdx-group.t overview/tradindexed.t \
 	overview/xref.t storage/caf.t storage/cancel-tombstone.t \
 	storage/timecaf.t storage/tombstone.t util/innbind.t
@@ -359,6 +359,11 @@ nnrpd/auth-ext.t: nnrpd/auth-ext-t.o ../nnrpd/auth-ext.o tap/basic.o tap/message
 
 nnrpd/cache.t: nnrpd/cache-t.o ../nnrpd/cache.o tap/basic.o $(LIBINN)
 	$(LINK) nnrpd/cache-t.o ../nnrpd/cache.o tap/basic.o $(LIBINN) $(LIBS)
+
+nnrpd/track.t: nnrpd/track-t.o ../nnrpd/track.o tap/basic.o tap/messages.o \
+		tap/string.o $(LIBINN)
+	$(LINK) nnrpd/track-t.o ../nnrpd/track.o tap/basic.o tap/messages.o \
+	    tap/string.o $(LIBINN) $(LIBS)
 
 nnrpd/auth-test: nnrpd/auth-test.in $(FIXSCRIPT)
 	$(FIX) -i nnrpd/auth-test.in

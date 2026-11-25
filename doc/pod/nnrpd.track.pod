@@ -16,8 +16,18 @@ two fields, separated by a colon:
 
     host:identity
 
-The first field is either one of the FQDNs of a host, or a domain name
-(in the form C<*.domain.com>).
+The first matching line supplies the identity.  A hostname or IPv4 address
+matches the whole client name or address, without regard to case.  A single
+C<*> anywhere in the pattern matches zero or more characters.  For example,
+C<*.example.com> matches hosts below that domain, C<node*.cluster.test>
+matches names beginning with C<node> and ending with C<.cluster.test>, and
+C<*> matches every client.
+
+Without a wildcard, a leading dot matches a suffix (C<.example.com>) and
+a trailing dot matches a prefix (C<192.168.1.>).  An empty host field also
+matches every client.  Use C<*> for an intentional catch-all.  On the
+first empty-host match, B<nnrpd> logs a warning and creates
+F<nnrpd.track.warned> in I<pathrun> to suppress repeats across connections.
 
 The second field is simply a segment of text which may be used to
 more easily identify the client, typically an e-mail address or

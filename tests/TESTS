@@ -70,6 +70,7 @@ lib/xwrite
 nnrpd/auth-ext
 nnrpd/cache
 nnrpd/capabilities
+nnrpd/track
 overview/api
 overview/buffindexed
 overview/build
