@@ -321,6 +321,10 @@ a signal, instead of reporting a false end of file or leaving part of a
 request on the connection.  Its SQL error messages now also include the
 status and message returned by SQLite, which were lost.
 
+=item *
+
+Corrected several manual pages to match the code.
+
 =back
 
 =head1 Changes in 2.7.5 (not yet released)

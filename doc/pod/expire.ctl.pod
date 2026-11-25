@@ -16,8 +16,11 @@ self-expiring (such as CNFS), all lines except the C</remember/> setting
 to B<expire> or B<expireover>.
 
 Blank lines and lines beginning with a number sign (C<#>) are ignored.
-All other lines should be in one of two formats.  The order of the file is
-significant, and the last matching entry will be used.
+All other lines should be in one of two formats.  For newsgroup-based
+expiry, the last matching entry is used.  For storage-class expiry, an
+explicit class entry takes precedence over C<*> regardless of order.  The
+last entry for the same explicit class wins.  A second C<*> class entry
+is rejected.
 
 The first format specifies how long to keep history entries for articles
 that aren't present in the news spool.  These are articles that have
@@ -63,9 +66,9 @@ if I<groupbaseexpiry> is true in F<inn.conf> (the default), and otherwise:
 
     <classnum>:<min>:<default>:<max>
 
-All lines must be in the correct format given the current setting of
-I<groupbaseexpiry>, and therefore the two formats cannot co-exist in the
-same file.
+Use the format for the current setting of I<groupbaseexpiry>.  For
+storage-class expiry, B<expire> ignores five-field newsgroup rules.
+For newsgroup-based expiry, B<expireover> rejects four-field class rules.
 
 Normally, a rule matches a newsgroup through the combination of the
 <pattern> and <flag> fields.  <pattern> is a I<uwildmat>-style pattern,
@@ -133,9 +136,8 @@ this is considered an error and will result in a warning.  There should
 always be a default line (a line with a <pattern> of C<*> and <flag> of
 C<A>, or a line with a <classnum> of C<*>), which can explicitly state
 that articles should never expire by default if that's the desired
-configuration.  The default line should generally be the first line of the
-file (except for C</remember/>) so that other expiration rules can
-override it.
+configuration.  For newsgroup-based expiry, put the default before more
+specific group rules so that they can override it.
 
 It is often useful to honour the Expires header field in articles, especially
 those in moderated groups.  To do this, set <min> to zero, <default> to

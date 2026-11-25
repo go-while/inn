@@ -84,7 +84,7 @@ default; the same format applies to any file specified with C<nnrpd -c>.)
 There are two types of entries in F<readers.conf>: parameter/value pairs
 and configuration groups.  Blank lines and anything after a number sign
 (C<#>) are ignored, unless the character C<#> is escaped with C<\>.  The
-maximum number of characters on each line is 8,191.
+maximum line length is 8,189 bytes before the terminating newline.
 
 Parameter/value pairs consist of a keyword immediately followed by a
 colon, at least one whitespace character, and a value.  The case of the
@@ -348,7 +348,8 @@ group will not match the connection and is ignored.
 Note that if you have a large number of patterns that can't be merged into
 broader patterns (such as a large number of individual systems scattered
 around the net that should have access), the I<hosts> parameter may exceed
-the maximum line length of 8,191 characters.  In that case, you'll need to
+the maximum line length of 8,189 bytes before the terminating newline.
+In that case, you'll need to
 break that auth group into multiple auth groups, each with a portion of
 the hosts listed in its I<hosts> parameter, and each assigning the same user
 identity.
@@ -620,10 +621,11 @@ expiry process by B<expireover> (run by B<news.daily>), and is updated
 when new articles arrive but not necessarily when articles are cancelled or
 overwritten in self-expiring storage methods like CNFS.
 
-When the estimated count of articles is strictly smaller than
+When the estimated count of articles is positive and strictly smaller than
 I<groupexactcount>, B<nnrpd> will recount the number of still existing
 articles, and report the exact value.  If I<groupexactcount> is set to C<0>,
-B<nnrpd> will always recount.  If set to C<1>, it will never recount.
+B<nnrpd> will recount every positive estimate.  If set to C<1>, it will
+never recount.
 
 Though exact article counts are not required, they may be useful to
 distinguish empty newsgroups by reporting an exact count of C<0> instead of an
