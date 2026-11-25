@@ -26,11 +26,11 @@ TESTS	= authprogs/ident.t expire/tombstone.t expire/tombstone-hisexpire.t \
 	lib/inet_ntoa.t lib/inet_ntop.t lib/innconf.t lib/list.t lib/md5.t \
 	lib/messageid.t lib/messages.t lib/mkstemp.t lib/mmap.t \
 	lib/network/addr-ipv4.t lib/network/addr-ipv6.t lib/network/client.t \
-	lib/network/server.t lib/pread.t lib/pwrite.t lib/qio.t lib/readin.t \
-	lib/reallocarray.t lib/reservedfd.t lib/sequence.t lib/setenv.t \
-	lib/sqlite-helper.t lib/strlcat.t lib/strlcpy.t lib/timer.t \
-	lib/tst.t lib/uwildmat.t lib/vector.t lib/wire.t lib/xwrite.t \
-	nnrpd/auth-ext.t overview/api.t overview/buffindexed.t \
+	lib/network/server.t lib/nntp.t lib/pread.t lib/pwrite.t lib/qio.t \
+	lib/readin.t lib/reallocarray.t lib/reservedfd.t lib/sequence.t \
+	lib/setenv.t lib/sqlite-helper.t lib/strlcat.t lib/strlcpy.t \
+	lib/timer.t lib/tst.t lib/uwildmat.t lib/vector.t lib/wire.t \
+	lib/xwrite.t nnrpd/auth-ext.t overview/api.t overview/buffindexed.t \
 	overview/build.t overview/ovsqlite.t overview/tdx-group.t \
 	overview/tradindexed.t overview/xref.t storage/caf.t \
 	storage/cancel-tombstone.t storage/timecaf.t storage/tombstone.t \
@@ -265,6 +265,9 @@ lib/network/client.t: lib/network/client-t.o tap/basic.o tap/messages.o tap/stri
 lib/network/server.t: lib/network/server-t.o tap/basic.o tap/messages.o tap/string.o $(LIBINN)
 	$(LINK) lib/network/server-t.o tap/basic.o tap/messages.o \
 	    tap/string.o $(LIBINN) $(LIBS)
+
+lib/nntp.t: lib/nntp-t.o tap/basic.o $(LIBINN)
+	$(LINK) lib/nntp-t.o tap/basic.o $(LIBINN) $(LIBS)
 
 lib/pread.o: ../lib/pread.c
 	$(CC) $(CFLAGS) -DTESTING -c -o $@ ../lib/pread.c
