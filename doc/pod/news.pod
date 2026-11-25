@@ -313,6 +313,14 @@ the problem, purges nothing and exits with status 1.
 C<tdx-util -F> no longer reports that it is unable to repair each index
 entry it has just repaired in a tradindexed overview.
 
+=item *
+
+The INN::ovsqlite_client Perl module now copes with partial reads and writes
+on its connection to B<ovsqlite-server> and with system calls interrupted by
+a signal, instead of reporting a false end of file or leaving part of a
+request on the connection.  Its SQL error messages now also include the
+status and message returned by SQLite, which were lost.
+
 =back
 
 =head1 Changes in 2.7.5 (not yet released)

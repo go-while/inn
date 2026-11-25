@@ -77,6 +77,7 @@ overview/tdx-group
 overview/tradindexed
 overview/xref
 perl/minimum-version
+perl/ovsqlite-client
 storage/archive
 storage/caf
 storage/cancel-tombstone

@@ -20,6 +20,7 @@ BEGIN {
 }
 
 use Carp qw(croak);
+use Errno qw(EINTR);
 use Socket;
 
 use constant HAVE_PF_UNIX => defined(&PF_UNIX);
@@ -260,9 +261,61 @@ sub argparser {
     );
 }
 
+##  Write all of $buf to the server.  A stream socket may accept only part of
+##  it in one call, and a signal may interrupt the call.  After an error, the
+##  connection is closed if part of the request has already been sent, since
+##  the server would then take the next request for the rest of this one.
+sub write_all {
+    my ($self, $buf) = @_;
+    my ($len, $off, $got, $err);
+
+    $len = length($buf);
+    $off = 0;
+    while ($off < $len) {
+        $got = syswrite($self, $buf, $len - $off, $off);
+        if (!defined($got)) {
+            next if $! == EINTR;
+            $err = "write: $!";
+        } elsif ($got == 0) {
+            $err = "write: no progress";
+        } else {
+            $off += $got;
+            next;
+        }
+        close($self)
+          if $off > 0;
+        croak $err;
+    }
+}
+
+##  Read exactly $len bytes from the server and append them to $_[1].  A
+##  stream socket may return fewer bytes than asked for in one call, and a
+##  signal may interrupt the call.  The connection is closed on an error or an
+##  end of file: what is left of the response could not be told apart from
+##  the next one.
+sub read_exactly {
+    my ($self, undef, $len) = @_;
+    my ($got, $err);
+
+    while ($len > 0) {
+        $got = sysread($self, $_[1], $len, length($_[1]));
+        if (!defined($got)) {
+            next if $! == EINTR;
+            $err = "read: $!";
+        } elsif ($got == 0) {
+            $err = "Unexpected EOF from server";
+        } else {
+            $len -= $got;
+            next;
+        }
+        close($self);
+        croak $err;
+    }
+}
+
 sub send_request {
     my ($self, $pack) = splice(@_, 0, 2);
-    my ($buf, $len, $got);
+    my ($buf, $len);
 
     $buf = pack($pack, @_);
     $len = length($buf);
@@ -271,40 +324,22 @@ sub send_request {
     } elsif ($len > 0xFFFFFFFB) {
         croak "Oversized request";
     }
-    $got = syswrite($self, pack("L", $len + 4));
-    defined($got)
-      or croak "write: $!";
-    $got == 4
-      or croak "Short write?!";
-    $got = syswrite($self, $buf);
-    defined($got)
-      or croak "write: $!";
-    $got == $len
-      or croak "Short write?!";
+    $self->write_all(pack("L", $len + 4) . $buf);
 }
 
 sub receive_response($$$) {
     my $self = $_[0];
-    my ($buf, $got, $len, $code, $errmsg);
+    my ($buf, $len, $code, $errmsg);
 
-    $got = sysread($self, $buf, 4);
-    defined($got)
-      or croak "read: $!";
-    $got == 4
-      or croak "Unexpected EOF from server";
+    $buf = "";
+    $self->read_exactly($buf, 4);
     $len = unpack("L", $buf) - 4;
-    $len >= 1
-      or croak "Invalid response length from server";
-    $_[1] = "";
-
-    while ($len > 0) {
-        $got = sysread($self, $_[1], $len, length($_[1]));
-        defined($got)
-          or croak "read: $!";
-        $got
-          or croak "Unexpected EOF from server";
-        $len -= $got;
+    if ($len < 1) {
+        close($self);
+        croak "Invalid response length from server";
     }
+    $_[1] = "";
+    $self->read_exactly($_[1], $len);
 
     $code = unpack("C", $_[1]);
     if ($code >= response_fatal) {
@@ -319,9 +354,17 @@ sub receive_response($$$) {
             $errmsg = sprintf("Unrecognised error 0x%.2X", $code);
         }
         if ($code == response_sql_error) {
-            my ($status, $msg);
+            my ($status, $msglen, $msg);
 
-            ($status, $msg) = unpack("x l L/a", $_[0]);
+            # The SQLite status (int32) and the length (uint32) and text of
+            # its error message follow the response code.
+            if (length($_[1]) >= 9) {
+                ($status, $msglen) = unpack("x l L", $_[1]);
+            }
+            if (!defined($msglen) || length($_[1]) - 9 < $msglen) {
+                croak "Truncated SQL error response from server";
+            }
+            $msg = substr($_[1], 9, $msglen);
             $errmsg .= sprintf(": (%d) %s", $status, $msg);
         }
     }
