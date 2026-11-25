@@ -19,6 +19,7 @@ lib/conffile
 lib/confparse
 lib/date
 lib/daemon
+lib/defdist
 lib/dispatch
 lib/fdflag
 lib/fdlimit

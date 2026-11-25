@@ -1042,6 +1042,7 @@ tests/lib/conffile-t.c                Tests for lib/conffile.c
 tests/lib/confparse-t.c               Tests for lib/confparse.c
 tests/lib/daemon-t.c                  Tests for lib/daemon.c
 tests/lib/date-t.c                    Tests for lib/date.c
+tests/lib/defdist-t.c                 Tests for lib/defdist.c
 tests/lib/dispatch-t.c                Tests for lib/dispatch.c
 tests/lib/fakewrite.c                 Helper functions for xwrite tests
 tests/lib/fakewrite.h                 Header file for xwrite helper functions

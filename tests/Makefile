@@ -20,21 +20,21 @@ TESTS	= authprogs/ident.t expire/tombstone.t expire/tombstone-hisexpire.t \
 	innd/artparse.t innd/chan.t lib/artnumber.t lib/asprintf.t \
 	lib/bloom.t lib/bloom-hiswalk.t lib/buffer.t lib/canlock.t \
 	lib/concat.t lib/conffile.t lib/confparse.t lib/daemon.t lib/date.t \
-	lib/dispatch.t lib/fdflag.t lib/fdlimit.t lib/getaddrinfo.t \
-	lib/getnameinfo.t lib/hash.t lib/hashtab.t lib/headers.t lib/hex.t \
-	lib/hissqlite.t lib/hissqlite-convert.t lib/inet_aton.t \
-	lib/inet_ntoa.t lib/inet_ntop.t lib/innconf.t lib/list.t lib/md5.t \
-	lib/messageid.t lib/messages.t lib/mkstemp.t lib/mmap.t \
-	lib/network/addr-ipv4.t lib/network/addr-ipv6.t lib/network/client.t \
-	lib/network/server.t lib/nntp.t lib/pread.t lib/pwrite.t lib/qio.t \
-	lib/readin.t lib/reallocarray.t lib/reservedfd.t lib/sequence.t \
-	lib/setenv.t lib/sqlite-helper.t lib/strlcat.t lib/strlcpy.t \
-	lib/timer.t lib/tst.t lib/uwildmat.t lib/vector.t lib/wire.t \
-	lib/xwrite.t nnrpd/auth-ext.t overview/api.t overview/buffindexed.t \
-	overview/build.t overview/ovsqlite.t overview/tdx-group.t \
-	overview/tradindexed.t overview/xref.t storage/caf.t \
-	storage/cancel-tombstone.t storage/timecaf.t storage/tombstone.t \
-	util/innbind.t
+	lib/defdist.t lib/dispatch.t lib/fdflag.t lib/fdlimit.t \
+	lib/getaddrinfo.t lib/getnameinfo.t lib/hash.t lib/hashtab.t \
+	lib/headers.t lib/hex.t lib/hissqlite.t lib/hissqlite-convert.t \
+	lib/inet_aton.t lib/inet_ntoa.t lib/inet_ntop.t lib/innconf.t \
+	lib/list.t lib/md5.t lib/messageid.t lib/messages.t lib/mkstemp.t \
+	lib/mmap.t lib/network/addr-ipv4.t lib/network/addr-ipv6.t \
+	lib/network/client.t lib/network/server.t lib/nntp.t lib/pread.t \
+	lib/pwrite.t lib/qio.t lib/readin.t lib/reallocarray.t \
+	lib/reservedfd.t lib/sequence.t lib/setenv.t lib/sqlite-helper.t \
+	lib/strlcat.t lib/strlcpy.t lib/timer.t lib/tst.t lib/uwildmat.t \
+	lib/vector.t lib/wire.t lib/xwrite.t nnrpd/auth-ext.t overview/api.t \
+	overview/buffindexed.t overview/build.t overview/ovsqlite.t \
+	overview/tdx-group.t overview/tradindexed.t overview/xref.t \
+	storage/caf.t storage/cancel-tombstone.t storage/timecaf.t \
+	storage/tombstone.t util/innbind.t
 
 ##  Extra stuff that needs to be built before tests can be run.
 
@@ -163,6 +163,9 @@ lib/daemon.t: lib/daemon.o lib/daemon-t.o tap/basic.o $(LIBINN)
 
 lib/date.t: lib/date-t.o tap/basic.o tap/string.o $(LIBINN)
 	$(LINK) lib/date-t.o tap/basic.o tap/string.o $(LIBINN)
+
+lib/defdist.t: lib/defdist-t.o tap/basic.o $(LIBINN)
+	$(LINK) lib/defdist-t.o tap/basic.o $(LIBINN) $(LIBS)
 
 lib/dispatch.t: lib/dispatch-t.o tap/basic.o $(LIBINN)
 	$(LINK) lib/dispatch-t.o tap/basic.o $(LIBINN)
