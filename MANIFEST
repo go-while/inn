@@ -1077,3 +1077,5 @@ tests/util/convdate.t                 Tests for expire/convdate
 tests/util/innbind-t.c                Tests for backends/innbind
 tests/util/inndf.t                    Tests for backends/inndf
 tests/util/innupgrade.t               Tests for scripts/innupgrade
+tests/util/innxmit-t.c                Tests for backends/innxmit
+tests/util/news2mail.t                Tests for backends/news2mail

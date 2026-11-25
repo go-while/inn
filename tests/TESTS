@@ -78,3 +78,5 @@ util/convdate
 util/innbind
 util/inndf
 util/innupgrade
+util/innxmit
+util/news2mail

@@ -9,6 +9,21 @@
 #endif
 #include <sys/wait.h>
 
+/* Make socket() fail in innbind with a seccomp filter, where available. */
+#if defined(__linux__) && defined(__has_include)
+#    if __has_include(<linux/seccomp.h>) && __has_include(<linux/filter.h>)
+#        include <linux/filter.h>
+#        include <linux/seccomp.h>
+#        include <stddef.h>
+#        include <sys/prctl.h>
+#        include <sys/syscall.h>
+#        if defined(__NR_socket) && defined(PR_SET_NO_NEW_PRIVS) \
+            && defined(SECCOMP_MODE_FILTER)
+#            define HAVE_SOCKET_FILTER 1
+#        endif
+#    endif
+#endif
+
 #include "inn/messages.h"
 #include "tap/basic.h"
 
@@ -305,9 +320,103 @@ static int
 test_sendfd(int n)
 {
     skip_block(n, 5, "SENDFD not supported");
-    return n;
+    return n + 5;
 }
 #endif /* !HAVE_INET6 */
+
+/* Test that innbind reports a failure of socket() as such.  With -p, innbind
+   creates a new socket; a seccomp filter in the child makes socket() fail
+   for AF_INET with EMFILE.  innbind must then die with "cannot create socket"
+   rather than go on and use the invalid descriptor (which would make it die
+   later with another message, such as "cannot mark socket reusable"). */
+#ifdef HAVE_SOCKET_FILTER
+#    if __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
+#        define ARG0_LOW (offsetof(struct seccomp_data, args[0]) + 4)
+#    else
+#        define ARG0_LOW (offsetof(struct seccomp_data, args[0]))
+#    endif
+static int
+test_socket_failure(int n)
+{
+    struct sock_filter filter[] = {
+        BPF_STMT(BPF_LD | BPF_W | BPF_ABS, offsetof(struct seccomp_data, nr)),
+        BPF_JUMP(BPF_JMP | BPF_JEQ | BPF_K, __NR_socket, 0, 3),
+        BPF_STMT(BPF_LD | BPF_W | BPF_ABS, ARG0_LOW),
+        BPF_JUMP(BPF_JMP | BPF_JEQ | BPF_K, AF_INET, 0, 1),
+        BPF_STMT(BPF_RET | BPF_K, SECCOMP_RET_ERRNO | (EMFILE & SECCOMP_RET_DATA)),
+        BPF_STMT(BPF_RET | BPF_K, SECCOMP_RET_ALLOW),
+    };
+    struct sock_fprog prog;
+    int outfds[2], errfds[2], fd;
+    char buffer[128];
+    char errors[1024];
+    size_t got;
+    ssize_t status;
+    pid_t child, result;
+    int wstatus;
+
+    prog.len = (unsigned short) (sizeof(filter) / sizeof(filter[0]));
+    prog.filter = filter;
+    if (pipe(outfds) < 0 || pipe(errfds) < 0)
+        sysbail("cannot create pipe");
+    child = fork();
+    if (child < 0)
+        sysbail("cannot fork");
+    else if (child == 0) {
+        if (dup2(outfds[1], 1) < 0 || dup2(errfds[1], 2) < 0)
+            _exit(1);
+        close(outfds[0]);
+        close(outfds[1]);
+        close(errfds[0]);
+        close(errfds[1]);
+        if (prctl(PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0) < 0
+            || prctl(PR_SET_SECCOMP, SECCOMP_MODE_FILTER, &prog) < 0)
+            _exit(3);
+        fd = socket(AF_INET, SOCK_STREAM, IPPROTO_IP);
+        if (fd >= 0)
+            _exit(3);
+        snprintf(buffer, sizeof(buffer), "0,%d,127.0.0.1,11119", AF_INET);
+        execl(innbind, innbind, "-p", buffer, (char *) 0);
+        _exit(1);
+    }
+    close(outfds[1]);
+    close(errfds[1]);
+    status = read(outfds[0], buffer, 3);
+    if (status < 0)
+        status = 0;
+    buffer[status] = '\0';
+    got = 0;
+    while (got < sizeof(errors) - 1) {
+        status = read(errfds[0], errors + got, sizeof(errors) - 1 - got);
+        if (status <= 0)
+            break;
+        got += (size_t) status;
+    }
+    errors[got] = '\0';
+    close(outfds[0]);
+    close(errfds[0]);
+    result = waitpid(child, &wstatus, 0);
+    if (result != child)
+        sysbail("cannot wait for innbind");
+    if (WIFEXITED(wstatus) && WEXITSTATUS(wstatus) == 3) {
+        skip_block(n, 3, "cannot make socket() fail with seccomp");
+        return n + 3;
+    }
+    ok_string(n++, "no\n", buffer);
+    ok(n++, WIFEXITED(wstatus) && WEXITSTATUS(wstatus) != 0);
+    if (strstr(errors, "cannot create socket for") == NULL)
+        diag("innbind said: %s", errors);
+    ok(n++, strstr(errors, "cannot create socket for") != NULL);
+    return n;
+}
+#else  /* !HAVE_SOCKET_FILTER */
+static int
+test_socket_failure(int n)
+{
+    skip_block(n, 3, "cannot make socket() fail on this system");
+    return n + 3;
+}
+#endif /* !HAVE_SOCKET_FILTER */
 
 int
 main(void)
@@ -319,11 +428,12 @@ main(void)
             if (chdir("util") < 0)
                 sysbail("cannot chdir to util");
 
-    test_init(15);
+    test_init(18);
 
-    n = test_ipv4(1); /* Tests  1-5.  */
-    n = test_ipv6(n); /* Tests  6-10. */
-    test_sendfd(n);   /* Tests 11-15. */
+    n = test_ipv4(1);          /* Tests  1-5.  */
+    n = test_ipv6(n);          /* Tests  6-10. */
+    n = test_sendfd(n);        /* Tests 11-15. */
+    test_socket_failure(n);    /* Tests 16-18. */
 
     return 0;
 }
