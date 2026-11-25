@@ -1,3 +1,10 @@
+=begin man
+
+.SH NAME
+inn\-install \- Installation instructions for INN
+
+=end man
+
 =head1 Welcome to S<INN 2.8>!
 
 Please read this document thoroughly before trying to install INN.  You'll

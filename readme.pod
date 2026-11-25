@@ -1,5 +1,12 @@
 =encoding utf-8
 
+=begin man
+
+.SH NAME
+inn\-readme \- Introduction to the InterNetNews project
+
+=end man
+
 =head1 Welcome to the InterNetNews project!
 
 =head2 INN 2.8

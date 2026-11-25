@@ -61,7 +61,14 @@ MAN8	= ../man/actmerge.8 ../man/actsync.8 ../man/archive.8 \
 	../man/tally.control.8 ../man/tdx-util.8 \
 	../man/tinyleaf.8 ../man/writelog.8
 
-ALL	= $(TEXT) $(MAN1) $(MAN3) $(MAN5) $(MAN8)
+##  Man pages generated from the POD sources of the text documentation.
+##  Their NAME section is in a "man" region of the POD sources, so that it
+##  does not appear in the text versions.
+MAN7	= ../man/inn-checklist.7 ../man/inn-external-auth.7 \
+	../man/inn-hacking.7 ../man/inn-hook-perl.7 \
+	../man/inn-hook-python.7 ../man/inn-install.7 ../man/inn-readme.7
+
+ALL	= $(TEXT) $(MAN1) $(MAN3) $(MAN5) $(MAN7) $(MAN8)
 
 all bootstrap: $(ALL)
 
@@ -140,6 +147,14 @@ maintclean: distclean
 ../man/readers.conf.5:	readers.conf.pod	; $(POD2MAN) -s 5 $? > $@
 ../man/storage.conf.5:	storage.conf.pod	; $(POD2MAN) -s 5 $? > $@
 ../man/subscriptions.5:	subscriptions.pod	; $(POD2MAN) -s 5 $? > $@
+
+../man/inn-checklist.7:	checklist.pod		; $(POD2MAN) -s 7 -n "INN-CHECKLIST" $? > $@
+../man/inn-external-auth.7: external-auth.pod	; $(POD2MAN) -s 7 -n "INN-EXTERNAL-AUTH" $? > $@
+../man/inn-hacking.7:	hacking.pod		; $(POD2MAN) -s 7 -n "INN-HACKING" $? > $@
+../man/inn-hook-perl.7:	hook-perl.pod		; $(POD2MAN) -s 7 -n "INN-HOOK-PERL" $? > $@
+../man/inn-hook-python.7: hook-python.pod	; $(POD2MAN) -s 7 -n "INN-HOOK-PYTHON" $? > $@
+../man/inn-install.7:	install.pod		; $(POD2MAN) -s 7 -n "INN-INSTALL" $? > $@
+../man/inn-readme.7:	../../readme.pod	; $(POD2MAN) -s 7 -n "INN-README" $? > $@
 
 ../man/actmerge.8:	actmerge.pod		; $(POD2MAN) -s 8 $? > $@
 ../man/actsync.8:	actsync.pod		; $(POD2MAN) -s 8 $? > $@

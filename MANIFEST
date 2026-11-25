@@ -170,7 +170,14 @@ doc/man/history.5                     Manpage for history database
 doc/man/ident.8                       Manpage for ident resolver
 doc/man/incoming.conf.5               Manpage for incoming.conf config file
 doc/man/inews.1                       Manpage for inews frontend
+doc/man/inn-checklist.7               Manpage for installation checklist
+doc/man/inn-external-auth.7           Manpage for external authentication notes
+doc/man/inn-hacking.7                 Manpage for notes about modifying INN
+doc/man/inn-hook-perl.7               Manpage for Perl hook notes
+doc/man/inn-hook-python.7             Manpage for Python hook notes
+doc/man/inn-install.7                 Manpage for installation instructions
 doc/man/inn-radius.conf.5             Manpage for inn-radius.conf config file
+doc/man/inn-readme.7                  Manpage for introduction to INN
 doc/man/inn-secrets.conf.5            Manpage for inn-secrets.conf
 doc/man/inn.1                         Manpage for INN documentation index
 doc/man/inn.conf.5                    Manpage for inn.conf config file

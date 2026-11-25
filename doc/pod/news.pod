@@ -175,6 +175,13 @@ current time, no longer limited to the range of a C<%d> integer, and C<%%>
 gives a single C<%>.  Other C<%> sequences are kept as is, and an expanded name
 longer than 1023 bytes is reported instead of being silently truncated.
 
+=item *
+
+The text documentation which was only installed as plain text files is now
+also installed as man pages in section 7: inn-checklist(7),
+inn-external-auth(7), inn-hacking(7), inn-hook-perl(7), inn-hook-python(7),
+inn-install(7) and inn-readme(7).  The plain text files are still installed.
+
 =back
 
 =head1 Changes in 2.7.5 (not yet released)

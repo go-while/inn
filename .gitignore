@@ -89,6 +89,7 @@
 /doc/man/*.3
 /doc/man/*.3pm
 /doc/man/*.5
+/doc/man/*.7
 /doc/man/*.8
 /expire/convdate
 /expire/expire
