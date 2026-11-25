@@ -93,6 +93,7 @@ use Net::NNTP 2.18;   # With libnet 1.0606 (10-Dec-1998) because older versions
 use Getopt::Std;
 use IO::Handle;
 use POSIX qw(ceil floor);
+use Cwd qw(realpath);
 
 $0 =~ s!.*/!!;
 $pathdb = $INN::Config::pathdb
@@ -422,9 +423,6 @@ my %info = (
 if ($rnews) {
     if ($no_op) {
         print "Would write to rnews file $rnews\n";
-    } else {
-        open(RNEWS, ">$rnews")
-          || die "can't open rnews-format output: $rnews: $!\n";
     }
     $info{'rnews'}{bytes} = 0;
     $info{'rnews'}{fed} = 0;
@@ -464,6 +462,21 @@ if ($use_inn_shlock) {
 # Now that a lock file has been created, ensure we release it when this process
 # ends or is stopped.
 $runEndBlock = 1;
+
+# The output is opened once the config file is locked, and without truncating
+# it, so that a run which overlaps another one cannot destroy a batch which was
+# written and counted as done in the config file.
+if ($rnews and not $no_op) {
+    sysopen(RNEWS, $rnews, O_WRONLY | O_CREAT, 0666)
+      or die "can't open rnews-format output: $rnews: $!\n";
+
+    # A batch which was not handled is kept: after a failed run, the config
+    # file counts its articles as done.
+    if (-f RNEWS and -s RNEWS) {
+        die "rnews-format output $rnews already exists and is not empty;"
+          . " feed it to rnews and remove it first\n";
+    }
+}
 
 print LOG scalar(localtime(time)), " start\n\n" unless $quiet;
 
@@ -713,13 +726,15 @@ foreach my $server (@servers) {
     %groupsStarted = ();
 }
 
+# The rnews output has to be complete before the progress is recorded.
+if ($rnews and not $no_op) {
+    close(RNEWS) or die "cannot close $rnews: $!\n";
+}
+
 saveConfig();
 stats() unless $quiet;
 
 if ($rnews) {
-    if (not $no_op and not close RNEWS) {
-        print LOG "\nRNEWS close failure: $!";
-    }
     unlink $rnews if -f $rnews and not -s $rnews;
 }
 
@@ -793,34 +808,85 @@ sub stats {
     } sort keys %{$pulled};
 }
 
+# Write the rnews output to the file, and die if it did not work: the progress
+# must not be recorded for articles which are not in the output.
+sub flushRnews {
+    return unless $rnews and not $no_op and defined fileno(RNEWS);
+
+    my $fh = \*RNEWS;
+    $fh->flush() and not $fh->error()
+      or die "cannot write $rnews: $!\n";
+}
+
 sub saveConfig {
     return if $no_op;
 
     local $SIG{INT} = 'IGNORE';
     local $SIG{QUIT} = 'IGNORE';
 
-    open(FILE, ">$groupFile") || die "can't open $groupFile: $!\n";
+    # What is saved says which articles are done.
+    flushRnews();
+
+    # Write a new file, and replace the old one only when it is complete:
+    # it holds the credentials and the progress of every server.
+    my $target = $groupFile;
+    $target = realpath($groupFile) || $groupFile if -l $groupFile;
+    my $tmpFile = "$target.new.$$";
+    my ($mode, $uid, $gid) = (stat($target))[2, 4, 5];
+
+    sysopen(my $out, $tmpFile, O_WRONLY | O_CREAT | O_EXCL, 0600)
+      or die "can't open $tmpFile: $!\n";
 
     print LOG "\nSaving config\n" unless $quiet;
-    print FILE "# Format: (date is epoch seconds)\n";
-    print FILE "# hostname[:port][_tlsmode] [username password]\n";
-    print FILE "#     group date high\n";
+    my $ok = 1;
+    $ok &&= print {$out} "# Format: (date is epoch seconds)\n";
+    $ok &&= print {$out} "# hostname[:port][_tlsmode] [username password]\n";
+    $ok &&= print {$out} "#     group date high\n";
     foreach my $server (
         sort { $servers->{$a}{_order} <=> $servers->{$b}{_order} }
         keys %$servers
     ) {
-        print FILE "$server";
+        $ok &&= print {$out} "$server";
         if (defined $passwd{$server}) {
-            printf FILE " %s %s", $passwd{$server}[0], $passwd{$server}[1];
+            $ok &&= printf {$out} " %s %s", $passwd{$server}[0],
+              $passwd{$server}[1];
         }
-        print FILE "\n";
+        $ok &&= print {$out} "\n";
         foreach my $group (sort keys %{ $servers->{$server} }) {
             next if $group eq '_order';
             my ($date, $high) = @{ $servers->{$server}{$group} };
-            printf FILE "    %s %d %d\n", $group, $date, $high;
+            $ok &&= printf {$out} "    %s %d %d\n", $group, $date, $high;
         }
     }
-    close FILE;
+    my $closed = close($out);
+    if (not $ok or not $closed) {
+        my $err = $!;
+        unlink $tmpFile;
+        die "can't write $tmpFile: $err\n";
+    }
+
+    # Give the new file the owner and the permissions of the old one (the
+    # owner first, as it can clear bits of the mode), and make sure that it
+    # worked: it must not be a file that the next user cannot read or write.
+    if (defined $mode) {
+        chown($uid, $gid, $tmpFile);    # may be refused: checked below
+        chmod($mode & 07777, $tmpFile);
+        my ($newmode, $newuid, $newgid) = (stat($tmpFile))[2, 4, 5];
+        if (   not defined $newmode
+            or ($newmode & 07777) != ($mode & 07777)
+            or $newuid != $uid
+            or $newgid != $gid)
+        {
+            unlink $tmpFile;
+            die "can't give the owner and permissions of $target to "
+              . "$tmpFile\n";
+        }
+    }
+    if (not rename($tmpFile, $target)) {
+        my $err = $!;
+        unlink $tmpFile;
+        die "can't replace $target: $err\n";
+    }
 }
 
 sub outtaHere {
@@ -1228,8 +1294,10 @@ sub crossFeedGroup {
                     $line =~ s/\r\n$/\n/;
                     $artwithoutCR .= $line;
                 }
-                printf RNEWS "#! rnews %d\n", length($artwithoutCR);
-                print RNEWS $artwithoutCR;
+                printf RNEWS "#! rnews %d\n", length($artwithoutCR)
+                  or die "cannot write $rnews: $!\n";
+                print RNEWS $artwithoutCR
+                  or die "cannot write $rnews: $!\n";
                 print LOG "+" unless $quiet;
                 $fed{$group}++;
                 $info{'rnews'}{fed}++;
