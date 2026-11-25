@@ -100,7 +100,11 @@ enum {
      * value untouched) if no estimate can be made; callers should fall back
      * to their own default sizing.  expireover(8) uses this to size its
      * Bloom filter before walking the history database. */
-    HISCTLG_ENTRYESTIMATE
+    HISCTLG_ENTRYESTIMATE,
+
+    /* (bool) Drop every tokenless entry during expiry, regardless of its
+     * posting or arrival time.  The default is false. */
+    HISCTLS_EXPIRE_REMEMBERED
 };
 
 struct history *HISopen(const char *, const char *, int);

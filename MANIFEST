@@ -1023,6 +1023,7 @@ tests/data/upgrade/sasl.conf          Obsolete sasl.conf config file
 tests/docs                            Test suite for documentation (Directory)
 tests/docs/pod.t.in                   Tests for POD formatting
 tests/expire                          Test suite for expire (Directory)
+tests/expire/remember-zero.t          Tests for zero-day history retention
 tests/expire/tombstone-e2e.t          End-to-end tests for tombstone log
 tests/expire/tombstone-hisexpire-t.c  HISexpire integration test for tombstone
 tests/expire/tombstone-t.c            Tests for tombstone library

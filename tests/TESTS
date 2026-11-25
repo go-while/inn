@@ -3,6 +3,7 @@ authprogs/domain
 authprogs/ident
 clients/getlist
 docs/pod
+expire/remember-zero
 expire/tombstone
 expire/tombstone-e2e
 expire/tombstone-hisexpire

@@ -42,6 +42,7 @@ static FILE *EXPunlinkfile;
 static EXPIRECLASS EXPclasses[NUM_STORAGE_CLASSES + 1];
 static char *EXPreason;
 static time_t EXPremember;
+static bool EXPforgetall;
 static time_t Now;
 static time_t RealNow;
 
@@ -132,18 +133,20 @@ EXPsplit(char *p, char sep, char **argv, int count)
 **  on error.
 */
 static bool
-EXPgetnum(int line, char *word, time_t *v, const char *name)
+EXPgetnum(int line, char *word, time_t *v, const char *name, bool *zero)
 {
-    char *p;
+    char *p, *end;
     bool SawDot;
     double d;
 
+    if (zero != NULL)
+        *zero = false;
     if (strcasecmp(word, "never") == 0) {
         *v = (time_t) 0;
         return true;
     }
 
-    /* Check the number.  We don't have strtod yet. */
+    /* Only signed decimal numbers are accepted here. */
     for (p = word; ISWHITE(*p); p++)
         ;
     if (*p == '+' || *p == '-')
@@ -159,7 +162,11 @@ EXPgetnum(int line, char *word, time_t *v, const char *name)
         warn("bad '%c' character in %s field on line %d", *p, name, line);
         return false;
     }
-    d = atof(word);
+    errno = 0;
+    d = strtod(word, &end);
+    /* A nonzero fraction can underflow before conversion to seconds. */
+    if (zero != NULL)
+        *zero = (end != word && d == 0.0 && errno != ERANGE);
     if (d > MAGIC_TIME)
         *v = (time_t) 0;
     else
@@ -226,7 +233,8 @@ EXPreadfile(FILE *F)
                 warn("duplicate /remember/ on line %d", i);
                 return false;
             }
-            if (!EXPgetnum(i, fields[1], &EXPremember, "remember"))
+            if (!EXPgetnum(i, fields[1], &EXPremember, "remember",
+                           &EXPforgetall))
                 return false;
             continue;
         }
@@ -252,9 +260,11 @@ EXPreadfile(FILE *F)
                 j = storage_class;
             }
 
-            if (!EXPgetnum(i, fields[1], &EXPclasses[j].Keep, "keep")
-                || !EXPgetnum(i, fields[2], &EXPclasses[j].Default, "default")
-                || !EXPgetnum(i, fields[3], &EXPclasses[j].Purge, "purge"))
+            if (!EXPgetnum(i, fields[1], &EXPclasses[j].Keep, "keep", NULL)
+                || !EXPgetnum(i, fields[2], &EXPclasses[j].Default, "default",
+                              NULL)
+                || !EXPgetnum(i, fields[3], &EXPclasses[j].Purge, "purge",
+                              NULL))
                 return false;
             /* These were turned into offsets, so the test is the opposite
              * of what you think it should be.  If Purge isn't forever,
@@ -957,6 +967,13 @@ main(int ac, char *av[])
         HISctl(History, HISCTLS_IGNOREOLD, &IgnoreOld);
         if (Size != 0)
             HISctl(History, HISCTLS_NPAIRS, &Size);
+    }
+
+    if (EXPforgetall && !HISctl(History, HISCTLS_EXPIRE_REMEMBERED,
+                                &EXPforgetall)) {
+        warn("history method %s cannot purge remembered entries",
+             innconf->hismethod);
+        CleanupAndExit(Server, false, 1);
     }
 
     val = true;

@@ -867,7 +867,10 @@ hissqlite_expire(void *history, const char *path UNUSED,
         sqlite3_stmt *stmt = h->main.expire_remembered;
 
         do {
-            sqlite3_bind_int64(stmt, 1, (sqlite3_int64) threshold);
+            if (h->forgetall)
+                sqlite3_bind_null(stmt, 1);
+            else
+                sqlite3_bind_int64(stmt, 1, (sqlite3_int64) threshold);
             if (sqlite3_step(stmt) != SQLITE_DONE) {
                 hissqlite_seterror(h, "expire remembered");
                 ok = false;
@@ -884,6 +887,9 @@ hissqlite_ctl(void *history, int selector, void *val)
     struct hissqlite *h = history;
 
     switch (selector) {
+    case HISCTLS_EXPIRE_REMEMBERED:
+        h->forgetall = *(bool *) val;
+        return true;
     case HISCTLG_PATH:
         *(char **) val = h->path;
         return true;
