@@ -278,6 +278,14 @@ modifiers, the removal of spaces from the value of a variable, and the 1 MB
 limit.  It no longer reports a variable that is set again from its previous
 value, like C<$LOCALGROUPS=$LOCALGROUPS,example.*>, as a malformed line.
 
+=item *
+
+The output of C<inncheck -f --perm> is now always valid input for a shell.
+Syntax problems found in the checked files, as well as the messages of the
+B<-v> flag, were not prefixed with a hash sign like the other messages.
+The file names in the generated B<chown>, B<chgrp> and B<chmod> commands are
+now quoted, so that names containing spaces or quotes work.
+
 =back
 
 =head1 Changes in 2.7.4 (2026-06-22)
