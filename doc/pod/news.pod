@@ -267,6 +267,12 @@ count of the group are now updated only after the new files are renamed,
 and the previous inode and base of the index are restored in the group
 entry if the renaming fails.
 
+=item *
+
+B<ovsqlite-util -g> now reports the overview length for records stored
+verbatim in a compression-enabled database.  It previously reported zero
+for those records.
+
 =back
 
 =head1 Changes in 2.7.5 (not yet released)

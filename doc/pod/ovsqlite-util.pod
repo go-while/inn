@@ -96,6 +96,9 @@ in order, the article number, the length of the overview data, the time
 header field (or 0 if there is no Expires header field), and the storage API
 token of the article.
 
+The length is the uncompressed overview length in bytes, including the
+terminating CRLF and excluding any storage-format prefix.
+
 If this option is given, the B<-n> option must also be given to specify
 the newsgroup on which to act.
 

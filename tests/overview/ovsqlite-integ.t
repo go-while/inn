@@ -366,5 +366,33 @@ else
     fi
 fi
 
+# Test 24: In a compressed database the server prefixes a literal overview
+# record with a zero byte when deflate does not save any space.
+if ! grep -q '^#define HAVE_ZLIB' ../include/config.h \
+    || ! perl -MDBI -MDBD::SQLite -MCompress::Zlib -e 1 >/dev/null 2>&1; then
+    printcount "ok" "# skip compression or ovsqlite-util dependencies unavailable"
+else
+    length=$(perl -MDBI -e '
+        my $db = DBI->connect("dbi:SQLite:dbname=$ARGV[0]", "", "",
+                              { RaiseError => 1 });
+        my $row = "1\tSubject\tFrom\tDate\t<id\@example.com>\t\t1\t1\r\n";
+        my $changed = $db->do(q{
+            update artinfo set overview = cast(? as blob)
+            where artnum = 1 and groupid =
+                (select groupid from groupinfo
+                 where cast(groupname as text) = ? and deleted = 0)
+        }, undef, "\0$row", "news.groups");
+        die "missing fixture" unless $changed == 1;
+        print length($row);
+    ' "$tmpdir/ovsqlite.db") || exit 1
+    row=$(perl "$util_source" -g -n news.groups -a 1 -p "$tmpdir")
+    if [ $? -eq 0 ] && [ "$(echo "$row" | awk '{print $2}')" = "$length" ]; then
+        printcount "ok" "# length of a stored literal excludes its marker"
+    else
+        echo "# expected overview length $length, got: $row"
+        printcount "not ok" "# length of a stored literal excludes its marker"
+    fi
+fi
+
 # Clean up.
 rm -rf "$tmpdir"
