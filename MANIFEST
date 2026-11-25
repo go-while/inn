@@ -990,6 +990,7 @@ tests/e2e/history_test.go             Tests of the history file
 tests/e2e/inject_test.go              Tests of rnews and inews
 tests/e2e/inncheck_test.go            Tests of inncheck
 tests/e2e/innmail_test.go             Tests of innmail
+tests/e2e/kevprs_test.go              Tests of readers.conf layouts and innd Python hooks
 tests/e2e/logs_test.go                Tests of scanlogs and innreport
 tests/e2e/makehistory_test.go         Tests of makehistory and overchan
 tests/e2e/methods_test.go             Tests of every storage, overview and history method
