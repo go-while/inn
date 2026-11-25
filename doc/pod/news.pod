@@ -283,6 +283,12 @@ longer leaves an empty database file that prevents server initialization.
 B<ovsqlite-util -F> now preserves a valid high water mark when repairing
 an unrelated article count or low water mark for the same group.
 
+=item *
+
+Fixed NEWNEWS in B<nnrpd> when the server name in the Xref header field is
+only one character long.  Articles posted to a single newsgroup were left
+out of the reply.
+
 =back
 
 =head1 Changes in 2.7.5 (not yet released)
