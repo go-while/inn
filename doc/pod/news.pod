@@ -47,6 +47,15 @@ If the I<tlsprotocols> parameter in F<inn.conf> lists only some of them,
 B<nnrpd> refuses to initiate TLS: add C<TLSv1.2> and C<TLSv1.3> to it, or
 remove the parameter to use the default value.
 
+=item *
+
+When B<inews> cannot set up the connection to the server, it now saves
+the article to F<dead.article> in rnews(1) batch format, prefixed with
+its byte count.  An existing
+F<dead.article> written by an older B<inews> holds unframed articles:
+move it aside before using the new B<inews>, as rnews(1) cannot read
+a file mixing both formats.
+
 =back
 
 If you are upgrading from a version prior to S<INN 2.7>, see also
@@ -130,6 +139,14 @@ metadata in their preferred format (C<:bytes> and C<:lines>) to news clients
 which have previously sent a CAPABILITIES command.  Other news clients still
 get the legacy C<Bytes:> and C<Lines:> format, as some of them do not support
 the new one.
+
+=item *
+
+B<inews> now prefixes each article saved to F<dead.article> with its
+byte count in rnews(1) batch format, so multiple saved articles can be
+replayed as a batch.  Move an existing F<dead.article> aside before
+upgrading, as it holds unframed articles; see L<Upgrading from 2.7 to
+2.8>.
 
 =item *
 

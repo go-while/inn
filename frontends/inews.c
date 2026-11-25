@@ -16,6 +16,7 @@
 #endif
 #include <time.h>
 
+#include "inn/buffer.h"
 #include "inn/innconf.h"
 #include "inn/libinn.h"
 #include "inn/messages.h"
@@ -718,39 +719,106 @@ OfferArticle(char *buff, bool Authorized)
 
 
 /*
-**  Spool article to temp file.
+**  Append the article to dead.article as an rnews batch entry.
 */
 static void
-Spoolit(char *article, size_t Length, char *deadfile)
+Spoolit(const char *article, size_t Length, const char *deadfile)
 {
-    HEADER *hp;
-    FILE *F;
-    int i;
+    /* rnews reads the count as an int and reserves two bytes; also leave
+       room for the batch line, so the whole entry fits one ssize_t write. */
+    const size_t max_length = INT_MAX - 2 - 64;
+    const HEADER *hp;
+    struct buffer *headers, *entry;
+    struct stat st;
+    char command[64];
+    off_t start = 0;
+    mode_t mode = 0;
+    size_t body;
+    bool final_newline, locked;
+    int fd, i, len, error;
 
-    /* Try to write to the deadfile. */
     if (deadfile == NULL)
         return;
-    F = xfopena(deadfile);
-    if (F == NULL)
+
+    /* Serialize the headers once, using the same bytes for counting and
+       writing.  Keep the article body in its original buffer. */
+    headers = buffer_new();
+    for (hp = Table; hp < ARRAY_END(Table); hp++) {
+        if (hp->Value != NULL) {
+            buffer_append(headers, hp->Name, hp->Size);
+            buffer_append(headers, ": ", 2);
+            buffer_append(headers, hp->Value, strlen(hp->Value));
+            buffer_append(headers, "\n", 1);
+        }
+    }
+    for (i = 0; i < OtherCount; i++) {
+        buffer_append(headers, OtherHeaders[i], strlen(OtherHeaders[i]));
+        buffer_append(headers, "\n", 1);
+    }
+    buffer_append(headers, "\n", 1);
+
+    /* A body read from a named file may lack a final newline.  Posting adds
+       the line ending (NNTPsendarticle) and rnews adds a missing one itself
+       (rnews.c), so add and count it here too: the saved entry then matches
+       what posting sends. */
+    if (Length > max_length)
+        die("article too large to spool as an rnews batch");
+    final_newline = (Length > 0 && article[Length - 1] != '\n');
+    body = Length + (final_newline ? 1 : 0);
+
+    /* rnews reads the count as an int and reserves two additional bytes. */
+    if (body > max_length || headers->left > max_length - body)
+        die("article too large to spool as an rnews batch");
+    len = snprintf(command, sizeof(command), "#! rnews %lu\n",
+                   (unsigned long) (headers->left + body));
+    if (len < 0 || (size_t) len >= sizeof(command))
+        die("cannot format rnews batch line");
+
+    fd = open(deadfile, O_WRONLY | O_APPEND | O_CREAT, 0666);
+    if (fd < 0)
         sysdie("cannot create spool file");
 
-    /* Write the headers and a blank line. */
-    for (hp = Table; hp < ARRAY_END(Table); hp++)
-        if (hp->Value)
-            fprintf(F, "%s: %s\n", hp->Name, hp->Value);
-    for (i = 0; i < OtherCount; i++)
-        fprintf(F, "%s\n", OtherHeaders[i]);
-    fprintf(F, "\n");
-    if (FLUSH_ERROR(F))
-        sysdie("cannot write headers");
+    /* Keep the batch line and its counted bytes together across writers.
+       Some file systems (NFS without a lock daemon, for instance) cannot
+       lock; append without the lock then rather than lose the article. */
+    locked = inn_lock_file(fd, INN_LOCK_WRITE, true);
+    if (!locked)
+        syswarn("cannot lock spool file, appending without a lock");
+    else {
+        if (fstat(fd, &st) < 0)
+            sysdie("cannot stat spool file");
+        start = st.st_size;
+        mode = st.st_mode;
+    }
 
-    /* Write the article and exit. */
-    if (fwrite(article, 1, Length, F) != Length)
-        sysdie("cannot write article");
-    if (FLUSH_ERROR(F))
-        sysdie("cannot write article");
-    if (fclose(F) == EOF)
+    /* Build the whole entry first and write it with one call, so that
+       concurrent writers that could not lock do not interleave the pieces
+       of their entries in the O_APPEND file.  Without the lock this is only
+       as safe as the system makes one write to an O_APPEND file: a short
+       write would let another writer's entry in between. */
+    entry = buffer_new();
+    buffer_resize(entry, len + headers->left + body);
+    buffer_append(entry, command, len);
+    buffer_append(entry, headers->data, headers->left);
+    buffer_append(entry, article, Length);
+    if (final_newline)
+        buffer_append(entry, "\n", 1);
+
+    if (xwrite(fd, entry->data, entry->left) < 0) {
+        error = errno;
+        /* Without the lock, other writers may have appended since; leave
+           the file alone then. */
+        if (!locked)
+            warn("spool file may end with an incomplete entry");
+        else if (S_ISREG(mode) && ftruncate(fd, start) < 0)
+            syswarn("cannot remove incomplete entry from spool file");
+        errno = error;
+        sysdie("cannot write article to spool file");
+    }
+    if (close(fd) < 0)
         sysdie("cannot close spool file");
+    buffer_free(entry);
+    buffer_free(headers);
 }
 
 
