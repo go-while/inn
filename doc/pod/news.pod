@@ -343,6 +343,14 @@ Message-ID, even after the spool was readable again.  The history entry is
 now kept and checked again during the next run, and B<expire> reports how
 many articles it could not check.
 
+=item *
+
+When I<expiretombstone> is set in F<inn.conf>, a cancellation recorded by
+B<innd> or B<sm> while B<expire> was taking its snapshot of
+F<cancels.tombstone> could be written to the snapshot after B<expire> had
+read it, and was then lost when the snapshot was removed.  The writers now
+check that the file they locked is still the live one.
+
 =back
 
 =head1 Changes in 2.7.5 (not yet released)
