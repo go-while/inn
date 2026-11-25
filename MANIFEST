@@ -975,6 +975,7 @@ tests/docs                            Test suite for documentation (Directory)
 tests/docs/pod.t.in                   Tests for POD formatting
 tests/e2e                             End-to-end protocol tests in Go (Directory)
 tests/e2e/README.md                   Documentation for the end-to-end tests
+tests/e2e/anyincoming_test.go         Tests of innd -a with an unlisted peer
 tests/e2e/article_test.go             Article and reply helpers
 tests/e2e/auth_test.go                Tests of AUTHINFO with nnrpd and ckpasswd
 tests/e2e/client_test.go              Tests of innxmit, innfeed, getlist, pullnews
