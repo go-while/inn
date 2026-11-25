@@ -18,11 +18,18 @@ typedef struct _SITEVARIABLES {
 } SITEVARIABLES;
 
 /* The character which introduces a variable assignment or reference. */
-#define VARIABLE_CHAR '$'
+#define VARIABLE_CHAR  '$'
+
+/* The maximum length of the value of a variable or of an entry, once the
+   variables it refers to are expanded.  Self-referencing variables would
+   otherwise double their length on each line. */
+#define SITE_MAXEXPAND (1024 * 1024)
 
 static SITE SITEnull;
 static char *SITEfeedspath = NULL;
 static SITEVARIABLES *SITEvariables = NULL;
+
+static char *SITEexpandvariables(char *site);
 
 
 /*
@@ -50,7 +57,7 @@ SITEcopystrings(char **av)
 static bool
 SITEaddvariable(char *line)
 {
-    char *p, *q;
+    char *p, *q, *raw, *value;
     SITEVARIABLES *v, *w;
 
     if (*line != VARIABLE_CHAR)
@@ -76,6 +83,29 @@ SITEaddvariable(char *line)
     if (*p == '\0')
         return false;
 
+    /* Copy the contents without whitespace, and expand the variables they
+       refer to, with their values at this point of the file. */
+    for (q = raw = xmalloc(strlen(p) + 1); *p != '\0'; p++)
+        if (*p != ' ' && *p != '\t')
+            *q++ = *p;
+    *q = '\0';
+    value = raw;
+    if (strchr(raw, VARIABLE_CHAR) != NULL)
+        value = SITEexpandvariables(raw);
+    if (value == NULL || strlen(value) > SITE_MAXEXPAND) {
+        syslog(L_FATAL,
+               "%s bad_newsfeeds variable $%s=%s longer than %d bytes once "
+               "expanded",
+               LogName, line + 1, MaxLength(raw, raw), SITE_MAXEXPAND);
+        if (value != raw)
+            free(value);
+        free(raw);
+        SITEreaderrors++;
+        return true;
+    }
+    if (value != raw)
+        free(raw);
+
     /* Is variable already defined?  Free and reassign. */
     w = NULL;
     v = SITEvariables;
@@ -96,14 +126,11 @@ SITEaddvariable(char *line)
     }
 
     /* Add variable's contents. */
+    v->Value = value;
     v->Elements = 1;
-    for (q = v->Value = xmalloc(strlen(p) + 1); *p != '\0'; p++) {
-        if (*p != ' ' && *p != '\t')
-            *q++ = *p;
-        if (*p == ',')
+    for (q = value; *q != '\0'; q++)
+        if (*q == ',')
             v->Elements++;
-    }
-    *q = '\0';
     return true;
 }
 
@@ -139,15 +166,19 @@ SITEexpandvariables(char *site)
 {
     char *p, *r, *s;
     char *q = NULL;
-    int c = 0;
+    size_t c = 0;
     char modifier;
     char varname[64];
     SITEVARIABLES *v;
 
-    /* Count characters. */
+    /* Count characters, the trailing nul included.  Stop as soon as the
+       expanded string is too long; values of variables are at most
+       SITE_MAXEXPAND long, so c cannot wrap. */
     *varname = '\0';
     modifier = '\0';
     for (p = site; p <= site + strlen(site); p++) {
+        if (c > SITE_MAXEXPAND)
+            return NULL;
         /* In variable name. */
         if (*varname) {
             if (isalnum((unsigned char) *p)) {
@@ -203,6 +234,9 @@ SITEexpandvariables(char *site)
             c++;
         }
     }
+
+    if (c > SITE_MAXEXPAND + 1)
+        return NULL;
 
     /* Copy contents. */
     s = r = xmalloc(c + 1);
@@ -304,6 +338,7 @@ SITEreadfile(const bool ReadOnly)
     old_mtime = Sb.st_mtime;
     old_ino = Sb.st_ino;
     old_size = Sb.st_size;
+    SITEreaderrors = 0;
 
     /* Get a gross count of the number of sites. */
     for (p = data, i = 0; (p = strchr(p, '\n')) != NULL; p++, i++)
@@ -344,9 +379,20 @@ SITEreadfile(const bool ReadOnly)
         if (strspn(site, " \t") == strlen(site))
             continue;
         if (SITEvariables)
-            old_strings[i++] = SITEexpandvariables(site);
+            old_strings[i] = SITEexpandvariables(site);
+        else if (strlen(site) <= SITE_MAXEXPAND)
+            old_strings[i] = xstrdup(site);
         else
-            old_strings[i++] = xstrdup(site);
+            old_strings[i] = NULL;
+        if (old_strings[i] != NULL)
+            i++;
+        else {
+            syslog(L_FATAL,
+                   "%s bad_newsfeeds longer than %d bytes once variables are "
+                   "expanded",
+                   MaxLength(site, site), SITE_MAXEXPAND);
+            SITEreaderrors++;
+        }
     }
     old_strings[i] = NULL;
 
@@ -928,7 +974,8 @@ SITEparsefile(bool StartSite)
         false;
 
     ME.Prev = 0; /* Used as a flag to ensure exactly one ME entry */
-    for (sp = Sites, errors = 0, setuperrors = 0, i = 0; i < nSites; i++) {
+    errors = SITEreaderrors;
+    for (sp = Sites, setuperrors = 0, i = 0; i < nSites; i++) {
         p = strings[i];
         if (p[0] == 'M' && p[1] == 'E'
             && ((p[2] == NF_FIELD_SEP) || (p[2] == NF_SUBFIELD_SEP))) {

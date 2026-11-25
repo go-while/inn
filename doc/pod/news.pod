@@ -266,6 +266,18 @@ when F<inn.conf> has been modified since it started: changes to that file
 are not taken into account by a reload and require restarting B<innd>.
 It also says so when it cannot verify whether the file has been modified.
 
+=item *
+
+Variables used in the value of another variable in F<newsfeeds> are now
+expanded by B<innd>.  They were previously kept as is, so a pattern like
+C<@$LOCALGROUPS> in a variable did not exclude the groups of
+C<$LOCALGROUPS> from the feeds using that variable.  The value of a
+variable and an entry are now limited to S<1 MB> once expanded.
+B<inncheck> now expands variables like B<innd>, including the C<!> and C<@>
+modifiers, the removal of spaces from the value of a variable, and the 1 MB
+limit.  It no longer reports a variable that is set again from its previous
+value, like C<$LOCALGROUPS=$LOCALGROUPS,example.*>, as a malformed line.
+
 =back
 
 =head1 Changes in 2.7.4 (2026-06-22)
