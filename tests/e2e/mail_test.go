@@ -77,6 +77,44 @@ func TestMailModeratedPost(t *testing.T) {
 	expect(t, c, 205, "QUIT")
 }
 
+func TestMailModeratedUTF8Post(t *testing.T) {
+	const group = "e2e.moderated.δοκιμή"
+	const recipient = "josé@moderators.example.org"
+	hub := needMailHub(t)
+	s := NewSite(t, SiteOptions{
+		Groups:  []Group{{Name: group, Flag: "m"}},
+		InnConf: map[string]string{"mta": realMTA(t)},
+		Etc:     map[string]string{"moderators": group + ":" + recipient + "\n"},
+	})
+	token := mailToken(t)
+	id := msgID(t)
+	subject := "moderated UTF-8 " + token
+	body := "token " + token
+
+	c := s.Reader(t)
+	expect(t, c, 340, "POST")
+	send(t, c, wire(newArticle(id, group, subject, body)))
+	status(t, c, 240, "POST to "+group)
+	if got := expect(t, c, 211, "GROUP %s", group); field(got, 1) != "0" {
+		t.Errorf("GROUP %s: %q, want no article (it went to the moderator)", group, got)
+	}
+	expect(t, c, 205, "QUIT")
+
+	m := hub.Wait(t, token, mailWait)
+	// The hub's Postfix records the original envelope recipient before rewriting it
+	// to the shared mailbox address for local delivery.
+	checkFields(t, m, map[string]string{
+		"To":            recipient,
+		"X-Original-To": recipient,
+		"Newsgroups":    group,
+		"Subject":       subject,
+		"Message-ID":    id,
+	})
+	if !slices.Contains(m.Body, body) {
+		t.Errorf("mail body %q lacks the article's body", m.Body)
+	}
+}
+
 // TestMailInnmail: a mail sent with innmail, with a subject and an added header field,
 // reaches its recipient with them and the body read from standard input.
 func TestMailInnmail(t *testing.T) {
