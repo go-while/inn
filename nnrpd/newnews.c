@@ -160,9 +160,9 @@ process_newnews(char *group, bool AllGroups, time_t date)
         return;
     if (!OVgroupstats(group, &low, &high, &count, NULL))
         return;
-    ARTlow = low;
-    ARThigh = high;
-    if ((handle = OVopensearch(group, ARTlow, ARThigh)) != NULL) {
+    /* Do not touch ARTlow and ARThigh: they belong to the group the reader
+     * has selected, which is not necessarily the group scanned here. */
+    if ((handle = OVopensearch(group, low, high)) != NULL) {
         ARTNUM artnum;
         unsigned long artcount = 0;
         struct cvector *vector = NULL;

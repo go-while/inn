@@ -233,6 +233,15 @@ attempt starts without the files of the previous one, NNTP retries keep
 the port given with the host, and there is no longer a 6-minute wait
 after the last attempt.
 
+=item *
+
+Fixed B<nnrpd> changing the low and high article numbers of the newsgroup
+selected by a news client when the client used NEWNEWS on other newsgroups.
+Until the client selected its newsgroup again, NEXT, LAST, and ARTICLE,
+HEAD, BODY or STAT without an argument could then wrongly report that there
+was no such article, and range commands like OVER or HDR could leave out
+articles.
+
 =back
 
 =head1 Changes in 2.7.5 (not yet released)
