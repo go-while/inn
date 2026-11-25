@@ -491,6 +491,12 @@ looks for a file to read.  A F<I<peer>.input> file which exists is now also
 adopted when it is not open, instead of being overwritten by the
 F<I<peer>.output> file.
 
+=item *
+
+Fixed a memory leak in B<batcher>: the memory used to convert each article
+to its native format was never released, so that the memory used grew with
+the total size of the articles batched in a run.
+
 =back
 
 =head1 Changes in 2.7.5 (not yet released)
