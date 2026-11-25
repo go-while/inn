@@ -321,6 +321,7 @@ tests/lib/md5.t
 tests/lib/messageid.t
 tests/lib/messages.t
 tests/lib/mkstemp.t
+tests/lib/mmap.t
 tests/lib/network/addr-ipv4.t
 tests/lib/network/addr-ipv6.t
 tests/lib/network/client.t
@@ -331,9 +332,12 @@ tests/lib/qio.t
 tests/lib/readin.t
 tests/lib/reallocarray.t
 tests/lib/reservedfd.t
+tests/lib/sequence.t
 tests/lib/setenv.t
+tests/lib/sqlite-helper.t
 tests/lib/strlcat.t
 tests/lib/strlcpy.t
+tests/lib/timer.t
 tests/lib/tst.t
 tests/lib/uwildmat.t
 tests/lib/vector.t
@@ -355,5 +359,6 @@ tests/perl/minimum-version.t
 tests/storage/caf.t
 tests/storage/cancel-tombstone.t
 tests/storage/timecaf.t
+tests/storage/tombstone.t
 tests/util/innbind.t
 tests/util/innmail.t

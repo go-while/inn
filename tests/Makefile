@@ -24,15 +24,17 @@ TESTS	= authprogs/ident.t expire/tombstone.t expire/tombstone-hisexpire.t \
 	lib/getnameinfo.t lib/hash.t lib/hashtab.t lib/headers.t lib/hex.t \
 	lib/hissqlite.t lib/hissqlite-convert.t lib/inet_aton.t \
 	lib/inet_ntoa.t lib/inet_ntop.t lib/innconf.t lib/list.t lib/md5.t \
-	lib/messageid.t lib/messages.t lib/mkstemp.t lib/network/addr-ipv4.t \
-	lib/network/addr-ipv6.t lib/network/client.t lib/network/server.t \
-	lib/pread.t lib/pwrite.t lib/qio.t lib/readin.t lib/reallocarray.t \
-	lib/reservedfd.t lib/setenv.t lib/strlcat.t lib/strlcpy.t lib/tst.t \
-	lib/uwildmat.t lib/vector.t lib/wire.t lib/xwrite.t nnrpd/auth-ext.t \
-	overview/api.t overview/buffindexed.t overview/build.t \
-	overview/ovsqlite.t overview/tdx-group.t overview/tradindexed.t \
-	overview/xref.t storage/caf.t storage/cancel-tombstone.t \
-	storage/timecaf.t util/innbind.t
+	lib/messageid.t lib/messages.t lib/mkstemp.t lib/mmap.t \
+	lib/network/addr-ipv4.t lib/network/addr-ipv6.t lib/network/client.t \
+	lib/network/server.t lib/pread.t lib/pwrite.t lib/qio.t lib/readin.t \
+	lib/reallocarray.t lib/reservedfd.t lib/sequence.t lib/setenv.t \
+	lib/sqlite-helper.t lib/strlcat.t lib/strlcpy.t lib/timer.t \
+	lib/tst.t lib/uwildmat.t lib/vector.t lib/wire.t lib/xwrite.t \
+	nnrpd/auth-ext.t overview/api.t overview/buffindexed.t \
+	overview/build.t overview/ovsqlite.t overview/tdx-group.t \
+	overview/tradindexed.t overview/xref.t storage/caf.t \
+	storage/cancel-tombstone.t storage/timecaf.t storage/tombstone.t \
+	util/innbind.t
 
 ##  Extra stuff that needs to be built before tests can be run.
 
@@ -247,6 +249,9 @@ lib/mkstemp.o: ../lib/mkstemp.c
 lib/mkstemp.t: lib/mkstemp.o lib/mkstemp-t.o tap/basic.o $(LIBINN)
 	$(LINK) lib/mkstemp.o lib/mkstemp-t.o tap/basic.o $(LIBINN)
 
+lib/mmap.t: lib/mmap-t.o tap/basic.o $(LIBINN)
+	$(LINK) lib/mmap-t.o tap/basic.o $(LIBINN) $(LIBS)
+
 lib/network/addr-ipv4.t: lib/network/addr-ipv4-t.o tap/basic.o $(LIBINN)
 	$(LINK) lib/network/addr-ipv4-t.o tap/basic.o $(LIBINN) $(LIBS)
 
@@ -288,11 +293,18 @@ lib/reallocarray.t: lib/reallocarray.o lib/reallocarray-t.o tap/basic.o $(LIBINN
 lib/reservedfd.t: lib/reservedfd-t.o tap/basic.o $(LIBINN)
 	$(LINK) lib/reservedfd-t.o tap/basic.o $(LIBINN) $(LIBS)
 
+lib/sequence.t: lib/sequence-t.o tap/basic.o $(LIBINN)
+	$(LINK) lib/sequence-t.o tap/basic.o $(LIBINN) $(LIBS)
+
 lib/setenv.o: ../lib/setenv.c
 	$(CC) $(CFLAGS) -DTESTING -c -o $@ ../lib/setenv.c
 
 lib/setenv.t: lib/setenv.o lib/setenv-t.o tap/basic.o $(LIBINN)
 	$(LINK) lib/setenv.o lib/setenv-t.o tap/basic.o $(LIBINN)
+
+lib/sqlite-helper.t: lib/sqlite-helper-t.o tap/basic.o $(LIBINN)
+	$(LINKDEPS) lib/sqlite-helper-t.o tap/basic.o $(LIBINN) \
+	    $(SQLITE3_LDFLAGS) $(SQLITE3_LIBS) $(LIBS)
 
 lib/strlcat.o: ../lib/strlcat.c
 	$(CC) $(CFLAGS) -DTESTING -c -o $@ ../lib/strlcat.c
@@ -305,6 +317,9 @@ lib/strlcpy.o: ../lib/strlcpy.c
 
 lib/strlcpy.t: lib/strlcpy.o lib/strlcpy-t.o tap/basic.o $(LIBINN)
 	$(LINK) lib/strlcpy.o lib/strlcpy-t.o tap/basic.o $(LIBINN)
+
+lib/timer.t: lib/timer-t.o tap/basic.o $(LIBINN)
+	$(LINK) lib/timer-t.o tap/basic.o $(LIBINN) $(LIBS)
 
 lib/tst.t: lib/tst-t.o tap/basic.o $(LIBINN)
 	$(LINK) lib/tst-t.o tap/basic.o $(LIBINN)
@@ -385,6 +400,9 @@ storage/timecaf-t.o: storage/timecaf-t.c
 
 storage/timecaf.t: storage/timecaf-t.o tap/basic.o $(STORAGEDEPS)
 	$(LINKDEPS) storage/timecaf-t.o tap/basic.o $(STORAGELIBS) $(LIBS)
+
+storage/tombstone.t: storage/tombstone-t.o tap/basic.o $(STORAGEDEPS)
+	$(LINKDEPS) storage/tombstone-t.o tap/basic.o $(STORAGELIBS) $(LIBS)
 
 util/innbind.t: util/innbind-t.o tap/basic.o $(LIBINN)
 	$(LINK) util/innbind-t.o tap/basic.o $(LIBINN) $(LIBS)

@@ -40,6 +40,7 @@ lib/md5
 lib/messageid
 lib/messages
 lib/mkstemp
+lib/mmap
 lib/network/addr-ipv4
 lib/network/addr-ipv6
 lib/network/client
@@ -50,9 +51,12 @@ lib/qio
 lib/readin
 lib/reallocarray
 lib/reservedfd
+lib/sequence
 lib/setenv
+lib/sqlite-helper
 lib/strlcat
 lib/strlcpy
+lib/timer
 lib/tst
 lib/uwildmat
 lib/vector
@@ -76,6 +80,7 @@ storage/cancel-tombstone
 storage/makehistory
 storage/sm
 storage/timecaf
+storage/tombstone
 util/convdate
 util/innbind
 util/inndf
