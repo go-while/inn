@@ -36,15 +36,23 @@ sub send_mail {
     return ($?, $output);
 }
 
+my @valid_utf8 = (
+    ['U+20AC (three-byte UTF-8)', "ok\xE2\x82\xAC\@example.com"],
+    ['U+1F600 (four-byte UTF-8)', "ok\xF0\x9F\x98\x80\@example.com"],
+    ['U+2010 (non-whitespace)', "ok\xE2\x80\x90\@example.com"],
+);
 my @invalid = (
     ['truncated UTF-8', "bad\xC3\@example.com"],
     ['overlong UTF-8', "bad\xC0\xAF\@example.com"],
     ['surrogate', "bad\xED\xA0\x80\@example.com"],
     ['above U+10FFFF', "bad\xF4\x90\x80\x80\@example.com"],
     ['non-ASCII whitespace', "bad\xC2\xA0\@example.com"],
+    ['U+1680 whitespace', "bad\xE1\x9A\x80\@example.com"],
+    ['U+2028 whitespace', "bad\xE2\x80\xA8\@example.com"],
+    ['U+3000 whitespace', "bad\xE3\x80\x80\@example.com"],
     ['non-ASCII control', "bad\xC2\x80\@example.com"],
 );
-plan(tests => 4 + @invalid);
+plan(tests => 4 + @valid_utf8 + @invalid);
 alarm(15);
 
 my $valid = "jos\xC3\xA9\@example.com";
@@ -52,6 +60,13 @@ my ($status, $output) = send_mail($valid);
 is($status, 0, 'UTF-8 local part accepted');
 is($output, "Recipients:$valid\nTo: $valid\nSubject: Test\n\n",
     'UTF-8 address unchanged in the MTA arguments and the To header');
+
+for my $case (@valid_utf8) {
+    my ($label, $address) = @$case;
+    (undef, $output) = send_mail($address);
+    is($output, "Recipients:$address\nTo: $address\nSubject: Test\n\n",
+        "$label unchanged in the MTA arguments and the To header");
+}
 
 my $ascii = 'moderator@example.com';
 ($status, $output) = send_mail($ascii, map { $_->[1] } @invalid);

@@ -269,6 +269,7 @@
 /tests/storage/caf.t
 /tests/storage/cancel-tombstone.t
 /tests/util/innbind.t
+/tests/util/innmail.t
 **/.libs/
 **/.pure/
 *.a
