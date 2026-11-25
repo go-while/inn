@@ -1006,6 +1006,7 @@ tests/lib/hissqlite-convert-t.c       Tests for the hissqlite-convert tool
 tests/lib/hissqlite-t.c               Tests for the hissqlite history method
 tests/lib/hissqlite-util.t            Smoke tests for hissqlite-util
 tests/lib/history-bench.c             Benchmark for the history backends
+tests/lib/hisv6-walk-t.c              Tests for the hisv6 history traversal
 tests/lib/inet_aton-t.c               Tests for lib/inet_aton.c
 tests/lib/inet_ntoa-t.c               Tests for lib/inet_ntoa.c
 tests/lib/inet_ntop-t.c               Tests for lib/inet_ntop.c

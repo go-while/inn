@@ -134,13 +134,23 @@ his_cachelookup(struct history *h, HASH MessageID)
 void
 his_seterror(struct history *h, const char *s)
 {
+    his_seterror_quiet(h, s);
+    if (s != NULL)
+        warn("%s", s);
+}
+
+/*
+**  the same, without reporting it:  the caller decides whether HISerror is
+**  worth printing
+*/
+void
+his_seterror_quiet(struct history *h, const char *s)
+{
     if (h != NULL) {
         if (h->error)
             free((void *) h->error);
         h->error = s;
     }
-    if (s != NULL)
-        warn("%s", s);
 }
 
 struct history *

@@ -41,6 +41,7 @@ typedef struct hismethod {
 
 /* subordinate history manager private methods */
 void his_seterror(struct history *, const char *);
+void his_seterror_quiet(struct history *, const char *);
 
 enum {
     S_HIScacheadd,
