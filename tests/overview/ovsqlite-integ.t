@@ -69,7 +69,7 @@ for prog in "$server" "$writer" "$reader"; do
     fi
 done
 
-echo 24
+echo 26
 
 # Set up temp directory with config files.  Use absolute paths because
 # the C test programs chdir to the test data directory before reading
