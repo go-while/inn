@@ -888,8 +888,10 @@ tests/authprogs/domain.t              Tests for authprogs/domain
 tests/authprogs/ident-t.c             Tests for authprogs/ident
 tests/clients                         Test suite for NNTP clients (Directory)
 tests/clients/getlist.t               Tests for frontends/getlist
+tests/clients/pullnews.t              Tests for frontends/pullnews
 tests/clients/server-list.in          Dummy server for getlist testing
 tests/control                         Test suite for control message handlers (Directory)
+tests/control/controlchan.t           Tests for ctlinnd failures in controlchan
 tests/control/sendme.t                Tests for control/modules/sendme.pl
 tests/data                            Data for the test suite (Directory)
 tests/data/articles                   Testing news articles (Directory)
