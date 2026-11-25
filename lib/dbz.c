@@ -1071,7 +1071,7 @@ dbzstore(const HASH key, off_t data)
     off_t existing;
 #else
     erec evalue;
-    bool exists;
+    bool duplicate;
 #endif
 
     if (!opendb) {
@@ -1119,9 +1119,9 @@ dbzstore(const HASH key, off_t data)
 
     /* find the place, exploiting previous search if possible */
     start(&srch, key, prevp);
-    exists = search(&srch);
+    duplicate = search(&srch);
     prevp = FRESH;
-    if (exists)
+    if (duplicate)
         return DBZSTORE_EXISTS;
     if (srch.aborted)
         return DBZSTORE_ERROR;
