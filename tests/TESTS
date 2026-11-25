@@ -87,6 +87,7 @@ storage/caf
 storage/cancel-tombstone
 storage/makehistory
 storage/sm
+storage/sm-path
 storage/timecaf
 storage/tombstone
 util/convdate
