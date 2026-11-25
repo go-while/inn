@@ -273,6 +273,11 @@ B<ovsqlite-util -g> now reports the overview length for records stored
 verbatim in a compression-enabled database.  It previously reported zero
 for those records.
 
+=item *
+
+Running B<ovsqlite-util> before the first start of B<ovsqlite-server> no
+longer leaves an empty database file that prevents server initialization.
+
 =back
 
 =head1 Changes in 2.7.5 (not yet released)
