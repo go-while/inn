@@ -286,7 +286,9 @@ Optionally, you may set the I<tlsciphers>, I<tlsciphers13>,
 I<tlscompression>, I<tlseccurve>, I<tlspreferserverciphers>, and
 I<tlsprotocols> parameters in F<inn.conf> to fine-tune the behaviour
 of the TLS/SSL negotiation whenever a new attack on the TLS protocol
-or some supported cipher suite is discovered.
+or some supported cipher suite is discovered.  The I<tlsloglevel>
+parameter in F<inn.conf> makes B<nnrpd> log more details about TLS/SSL
+connections, which may help when debugging them.
 
 =head1 BLOCKLISTD SUPPORT
 
