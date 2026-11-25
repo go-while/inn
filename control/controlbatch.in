@@ -75,16 +75,92 @@ cd "${BATCH}" || {
     exit 1
 }
 
+# The batch file set aside as batchfile.work is handed over to the file of
+# the control articles to process, batchfile.doit, in several steps:
+#   1. batchfile.new is written, with batchfile.doit followed by
+#      batchfile.work (staging);
+#   2. batchfile.work is renamed to batchfile.work.merged, which records that
+#      batchfile.new is complete and has to replace batchfile.doit;
+#   3. batchfile.new is renamed to batchfile.doit (replacement);
+#   4. batchfile.work.merged is removed.
+# Nothing is lost when a step fails or when the run is interrupted, and
+# batchfile.work is never merged twice:  recoverwork finishes the handoff
+# at the beginning of the next run.
+handofffailed() {
+    echo "${0}: cannot add ${BATCH}/${batchfile}.work to" \
+        "${BATCH}/${batchfile}.doit" >&2
+}
+
+recoverwork() {
+    if [ -e "${batchfile}.work.merged" ]; then
+        if [ -f "${batchfile}.new" ]; then
+            # The rename of batchfile.work was done, so batchfile.new is
+            # complete:  publish it.
+            mv -f "${batchfile}.new" "${batchfile}.doit" || return 1
+        else
+            # batchfile.new was published.  Make sure that batchfile.doit
+            # does end with batchfile.work.merged before removing it.
+            size=$(wc -c <"${batchfile}.work.merged" | tr -d ' ')
+            tail -c "${size}" "${batchfile}.doit" 2>/dev/null \
+                | cmp -s - "${batchfile}.work.merged" || return 1
+        fi
+        rm -f "${batchfile}.work.merged"
+    else
+        # Step 1 was interrupted, or nothing was in progress.
+        rm -f "${batchfile}.new"
+    fi
+    return 0
+}
+
+addwork() {
+    rm -f "${batchfile}.new"
+    if [ -s "${batchfile}.doit" ]; then
+        cat "${batchfile}.doit" "${batchfile}.work" >"${batchfile}.new"
+    else
+        cat "${batchfile}.work" >"${batchfile}.new"
+    fi || {
+        rm -f "${batchfile}.new"
+        handofffailed
+        return 1
+    }
+    # From the rename on, batchfile.new may be the only complete copy:  it is
+    # kept when something fails, and the next run decides from the files
+    # which are there.  batchfile.doit must not be processed meanwhile.
+    mv -f "${batchfile}.work" "${batchfile}.work.merged" \
+        && mv -f "${batchfile}.new" "${batchfile}.doit" || {
+        handofffailed
+        rm -f "${batchlock}"
+        exit 1
+    }
+    rm -f "${batchfile}.work.merged"
+    return 0
+}
+
+recoverwork || {
+    echo "${0}: cannot finish adding ${BATCH}/${batchfile}.work to" \
+        "${BATCH}/${batchfile}.doit; ${batchfile}.work.merged and" \
+        "${batchfile}.new are kept, see controlbatch(8)" >&2
+    rm -f "${batchlock}"
+    exit 1
+}
+
+# A batch file left as batchfile.work was set aside by a previous run which
+# could not flush the file feed:  innd may still append control articles to
+# it.  It is only taken into account when innd has switched to a new file,
+# which is the case when the flush is successful now.  Otherwise, it is left
+# in place, as well as the batch file, for the next run.
+work=true
 if [ -s "${batchfile}.work" ]; then
-    cat "${batchfile}.work" >>"${batchfile}.doit"
-    rm -f "${batchfile}.work"
+    work=false
+    if "${PATHBIN}/ctlinnd" -s -t30 flush "${feedsite}"; then
+        addwork && work=true
+    fi
 fi
 
-if [ -s "${batchfile}" ]; then
+if ${work} && [ -s "${batchfile}" ]; then
     mv "${batchfile}" "${batchfile}.work"
     if "${PATHBIN}/ctlinnd" -s -t30 flush "${feedsite}"; then
-        cat "${batchfile}.work" >>"${batchfile}.doit"
-        rm -f "${batchfile}.work"
+        addwork
     fi
 fi
 

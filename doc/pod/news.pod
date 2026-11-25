@@ -389,6 +389,17 @@ that a pause made by someone else is not released, and the lock is released
 as before.  When the server cannot be resumed, B<scanlogs> reports it and
 exits with a non-zero status.
 
+=item *
+
+B<controlbatch> no longer loses control articles when its flush of the file
+feed fails or when the control articles cannot be merged into the file of
+the articles to process (for instance because the disk is full).  The batch
+set aside is only merged once B<innd> has switched to a new batch file, and
+the merge is done by staging and replacement, so that nothing is lost or
+processed twice when it is interrupted.  A batch which cannot be flushed
+stays in place; controlbatch(8) tells how to drain it by hand when B<innd>
+is stopped for good.
+
 =back
 
 =head1 Changes in 2.7.5 (not yet released)
