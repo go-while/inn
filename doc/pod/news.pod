@@ -133,6 +133,14 @@ files behind after a failed creation, and the buffindexed overview method
 validates its F<group.index> file and no longer frees memory twice when
 mapping overview data fails.  Many thanks to Kevin Bowling for the patches.
 
+=item *
+
+The INN::ovsqlite_client Perl module now copes with partial reads and writes
+on its connection to B<ovsqlite-server> and with system calls interrupted by
+a signal, instead of reporting a false end of file or leaving part of a
+request on the connection.  Its SQL error messages now also include the
+status and message returned by SQLite, which were lost.
+
 =back
 
 =head1 Changes in 2.7.5 (not yet released)
