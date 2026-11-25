@@ -14,7 +14,10 @@
 use strict;
 use warnings;
 
+use File::Basename qw(basename dirname);
+use File::Temp qw(tempfile);
 use Getopt::Long;
+use IO::Handle;
 use Storable;
 
 (@ARGV >= 2) || die "usage: $0 delay prog-n-args\n";
@@ -43,10 +46,103 @@ if (!$buffered) {
     select(STDOUT);
 }
 
+# The queue: lines with the time when they are due ("time:line").
 my @queue;
-if ($store) {
-    eval { @queue = @{ retrieve($store) } };
-    unlink($store);
+
+# Lines already written to the program, but maybe still in the output buffer
+# only:  they are saved again if writing to the program fails.
+my @pending;
+
+# Set when a store which cannot be read back cannot be moved aside either:
+# it is then left untouched, and the queue is not saved.
+my $keep = 0;
+
+# A failed write to the program is reported, instead of killing delayer.
+$SIG{PIPE} = 'IGNORE';
+
+# Move a store which cannot be read back aside, without replacing an earlier
+# one moved aside:  the first free name among file.bad, file.bad.1, etc.
+# link() does not replace an existing file.  Returns the new name, or undef
+# if the file could not be moved (it is then left in place).
+sub keep_aside {
+    my ($file) = @_;
+
+    for my $n (0 .. 99) {
+        my $bad = $n ? "$file.bad.$n" : "$file.bad";
+        next if -e $bad;
+        if (link($file, $bad)) {
+            return $bad if unlink($file);
+            unlink($bad);
+            return;
+        }
+        return if !$!{EEXIST};
+    }
+    return;
+}
+
+# Save the given lines to the store, through a new file created in the same
+# directory and renamed, so that an interrupted save leaves no truncated
+# store and no other file is overwritten.  Returns true on success.
+sub save_queue {
+    my @lines = @_;
+    my ($fh, $tmp);
+
+    my $saved = eval {
+        ($fh, $tmp)
+          = tempfile(basename($store) . '.XXXXXX', DIR => dirname($store));
+        chmod(0666 & ~umask(), $tmp);
+        Storable::store_fd(\@lines, $fh) or die "cannot write $tmp\n";
+        close($fh) or die "cannot write $tmp: $!\n";
+        rename($tmp, $store) or die "cannot rename $tmp to $store: $!\n";
+        1;
+    };
+    return 1 if $saved;
+    warn "$0: cannot save the queue to $store: $@";
+    unlink($tmp) if defined $tmp;
+    return 0;
+}
+
+# Writing to the program failed:  save the lines which may not have reached
+# it and the queued ones if possible, report it, and exit with status 1.
+sub output_failed {
+    my $error = $! ? "$!" : "exit status " . ($? >> 8);
+    my @lines = (@pending, @queue);
+
+    warn "$0: cannot write to $ARGV[0]: $error\n";
+    if (@lines) {
+        if ($store && !$keep && save_queue(@lines)) {
+            warn "$0: " . scalar(@lines) . " lines saved to $store\n";
+        } else {
+            warn "$0: " . scalar(@lines) . " queued lines lost\n";
+        }
+    }
+    exit 1;
+}
+
+my $restored = 0;
+if ($store && -e $store) {
+    my $saved = eval { retrieve($store) };
+    if (ref($saved) eq 'ARRAY') {
+        # The store is kept until the next save replaces it, or until its
+        # lines have been written out, so that they are not lost if delayer
+        # dies in between (they may then be sent twice).
+        @queue = @{$saved};
+        $restored = 1;
+    } else {
+        # Do not remove a store which cannot be read back: it may be the only
+        # copy of the queued lines.  Keep it aside so that the next save does
+        # not overwrite it either.
+        my $error = $@ || "not a saved queue\n";
+        my $bad = keep_aside($store);
+        if (defined($bad)) {
+            warn "$0: cannot restore the queue from $store, kept as $bad:"
+              . " $error";
+        } else {
+            warn "$0: cannot restore the queue from $store: $error"
+              . "$0: cannot move it aside, leaving it untouched\n";
+            $keep = 1;
+        }
+    }
 }
 
 my $rin = '';
@@ -61,16 +157,27 @@ while (1) {
     if (vec($rout, fileno(STDIN), 1)) {
         my $line = <STDIN>;
         if (!defined $line) {    # exit NOW!
-            if ($store) {
-                eval { store(\@queue, $store); };
-            } else {
-                foreach (@queue) {
-                    s/^[^:]+://g;
-                    print OUT;
+            if ($store && !$keep) {
+                # Save first the lines which may not have reached the program
+                # yet with the queued ones, so that none is lost if it fails;
+                # once it has exited successfully, save the queued ones only
+                # (if that fails, the others may be sent twice).
+                if (save_queue(@pending, @queue)) {
+                    close(OUT) or output_failed();
+                    @pending = ();
+                    save_queue(@queue);
+                    exit;
                 }
-                close(OUT);
-                sleep(1);
+                warn "$0: writing out the queued lines now\n";
             }
+            foreach (@queue) {
+                my $out = $_;
+                $out =~ s/^[^:]+://;
+                print(OUT $out) or output_failed();
+            }
+            close(OUT) or output_failed();
+            unlink($store) if $store && !$keep && $restored;
+            sleep(1);
             exit;
         }
         push(@queue, "$exp:$line");
@@ -83,8 +190,14 @@ while (1) {
             $timeout = $first - $now;
             last;
         }
-        print OUT $line;
-        shift(@queue);
+        print(OUT $line) or output_failed();
+        push(@pending, shift(@queue));
+    }
+    # Once flushed, the lines are in the pipe to the program.  Buffered
+    # output is flushed every 1000 lines at least, to bound @pending.
+    if (@pending && (!$buffered || @pending >= 1000)) {
+        OUT->flush() or output_failed();
+        @pending = ();
     }
 }
 
@@ -235,6 +348,24 @@ the configured delay has not been reached yet.
 
 When this flag is used, these lines will be written to the given file instead,
 to be used upon next startup.  Using an absolute path name is recommended.
+
+The file is written under a temporary name in the same directory and then
+renamed, and the file read upon startup is only replaced by the next save,
+so that an interruption does not lose the lines (they may then be sent
+twice).  The lines written to I<some-other-program> but which may still be
+in the output buffer are saved too, until I<some-other-program> has exited
+successfully.  If the lines cannot be written to that file (for instance
+because the disk is full), they are written out as without this flag, and an
+error is reported on standard error.  If the file cannot be read back upon
+startup, it is renamed with a F<.bad> suffix (or F<.bad.1>, F<.bad.2>, etc.
+if that name is already taken) and an error is reported, so that the lines
+it holds are not lost; if it cannot be renamed, it is left untouched and the
+lines are not saved.
+
+Whether this flag is used or not, if writing to I<some-other-program> fails
+or it exits with a non-zero status, an error is reported, the lines which
+may not have reached it are saved if possible, and B<delayer> exits with
+status 1.
 
 =item B<--> I<some-other-program> [I<args> ...]
 
