@@ -537,6 +537,14 @@ or a C<\> when its B<-i> option is given, instead of building a malformed
 Kerberos principal with several instances (or with an escaped C</>) and
 letting the authentication fail with an obscure error.
 
+=item *
+
+When a reply of B<nnrpd> is longer than its 2047-byte buffer, for
+instance a very long error message returned by a Perl or Python
+authentication hook, the truncated line now still ends with CRLF.
+Previously, the reply had no line ending and the client read the next
+reply as part of it.
+
 =back
 
 =head1 Changes in 2.7.4 (2026-06-22)

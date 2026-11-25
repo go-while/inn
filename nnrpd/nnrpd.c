@@ -811,8 +811,18 @@ VPrintf(const char *fmt, va_list args, int dotrace)
     len = vsnprintf(buff, sizeof(buff), fmt, args);
     if (len < 0)
         len = 0;
-    else if ((size_t) len >= sizeof(buff))
+    else if ((size_t) len >= sizeof(buff)) {
+        size_t fmtlen = strlen(fmt);
+
+        /* The line was cut; keep its CRLF end so that the client does not
+         * read the next reply as part of this one. */
         len = sizeof(buff) - 1;
+        if (fmtlen >= 2 && fmt[fmtlen - 2] == '\r'
+            && fmt[fmtlen - 1] == '\n') {
+            buff[len - 2] = '\r';
+            buff[len - 1] = '\n';
+        }
+    }
     write_buffer(buff, len);
 
     if (dotrace && Tracing) {
