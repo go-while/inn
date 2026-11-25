@@ -1,6 +1,16 @@
 ##  Workflow building INN and running make check and tests/e2e on several
 ##  Linux distributions, each in a container of its image (see ci/e2e-distro).
 ##
+##  What is built: INN from the ref in INN_REF (default "integration", the
+##  branch of this fork with upstream main and all its open pull requests
+##  merged), checked out into inn-int/ and given to the container as /src.
+##  What runs: make check of that tree, and the tests in tests/e2e of the
+##  commit that triggered the workflow (normally the e2e branch), with
+##  ci/e2e-distro of that commit.  Why: built from the e2e branch itself
+##  (upstream main), the tests of fixes that are still open pull requests fail
+##  by design; see e2e.yaml.  To test another ref, run the workflow by hand
+##  with the inn_ref input.
+##
 ##  It takes a while, so it runs weekly, on demand, and when ci/e2e-distro or
 ##  this file changes.  The e2e test binary is built once and shared, so that
 ##  Go is not needed in the containers.  The containers are started with
@@ -11,6 +21,11 @@ name: e2e-distro
 
 "on":
   workflow_dispatch:
+    inputs:
+      inn_ref:
+        description: Branch, tag or commit of INN to build and test
+        required: false
+        default: integration
   schedule:
     - cron: "17 3 * * 1"
   push:
@@ -21,6 +36,9 @@ name: e2e-distro
     paths:
       - ci/e2e-distro
       - .github/workflows/e2e-distro.yaml
+
+env:
+  INN_REF: ${{ inputs.inn_ref || 'integration' }}
 
 jobs:
   e2e-test:
@@ -77,8 +95,13 @@ jobs:
     name: ${{ matrix.image }}
 
     steps:
-      - name: checkout
+      - name: checkout tests
         uses: actions/checkout@v6
+      - name: checkout INN ${{ env.INN_REF }}
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ env.INN_REF }}
+          path: inn-int
       - name: download
         uses: actions/download-artifact@v8
         with:
@@ -88,8 +111,11 @@ jobs:
         env:
           IMAGE: ${{ matrix.image }}
         run: |
+          echo "INN built from $INN_REF at $(git -C inn-int log -1 --format='%H %s')" \
+              | tee -a "$GITHUB_STEP_SUMMARY"
           mkdir -p "$RUNNER_TEMP/work"
-          set -- --rm -v "$PWD:/src:ro" -v "$RUNNER_TEMP/e2e:/e2e:ro" \
+          set -- --rm -v "$PWD/inn-int:/src:ro" -v "$PWD/ci:/ci:ro" \
+              -v "$RUNNER_TEMP/e2e:/e2e:ro" \
               -v "$RUNNER_TEMP/work:/work" -w /src \
               -e BUILDDIR=/work/build -e PREFIX=/opt/inn-e2e
           case "$IMAGE" in
@@ -99,7 +125,7 @@ jobs:
               set -- "$@" --volumes-from portage
               ;;
           esac
-          docker run "$@" "$IMAGE" sh ci/e2e-distro /e2e/e2e.test
+          docker run "$@" "$IMAGE" sh /ci/e2e-distro /e2e/e2e.test
       - name: logs
         if: failure()
         uses: actions/upload-artifact@v7

@@ -1,25 +1,59 @@
 ##  Workflow for the end-to-end protocol tests in tests/e2e.
+##
+##  What is built: INN from the ref in INN_REF (default "integration", the
+##  branch of this fork with upstream main and all its open pull requests
+##  merged), checked out into inn-int/.  What runs: the tests in tests/e2e of
+##  the commit that triggered the workflow (normally the e2e branch), against
+##  that installation (INN_PREFIX).
+##
+##  Why: the e2e branch is upstream main plus the tests, and some tests check
+##  fixes that are still open pull requests.  Built from the e2e branch itself,
+##  those tests fail by design.  Built from integration, a failing test means
+##  that its fix is missing from integration or that something is broken.
+##
+##  To test another branch, tag or commit (for instance main), run the
+##  workflow by hand with the inn_ref input.
 
 name: e2e
 
-"on": [push, pull_request]
+"on":
+  push:
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      inn_ref:
+        description: Branch, tag or commit of INN to build and test
+        required: false
+        default: integration
+
+env:
+  INN_REF: ${{ inputs.inn_ref || 'integration' }}
 
 jobs:
   e2e:
     runs-on: ubuntu-latest
 
     steps:
-      - name: checkout
+      - name: checkout tests
         uses: actions/checkout@v6
+      - name: checkout INN ${{ env.INN_REF }}
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ env.INN_REF }}
+          path: inn-int
       - name: setup go
         uses: actions/setup-go@v6
         with:
           go-version-file: tests/e2e/go.mod
           cache-dependency-path: tests/e2e/go.sum
       - name: install
+        working-directory: inn-int
         run: sudo -E ci/install
       - name: build
+        working-directory: inn-int
         run: |
+          echo "INN built from $INN_REF at $(git log -1 --format='%H %s')" \
+              | tee -a "$GITHUB_STEP_SUMMARY"
           ./autogen
           ./configure --prefix="$RUNNER_TEMP/inn" \
               --with-news-user="$(id -un)" --with-news-group="$(id -gn)" \
