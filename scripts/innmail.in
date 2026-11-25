@@ -14,6 +14,7 @@
 use strict;
 use warnings;
 
+use bytes ();
 use Getopt::Std;
 
 # Define variables Getopt::Std uses for --help and --version.
@@ -64,27 +65,47 @@ if (!defined($opt{'s'})) {
 
 # Check the addresses.  They are given as arguments to the MTA (without
 # using a shell) and written in the To header field, so only the characters
-# of an unquoted local part (atext in RFC 5322), "." and "@" are accepted.
+# of an unquoted local part (atext in RFC 5322), "." and "@", and well-formed
+# UTF-8 non-ASCII characters other than whitespace and controls are accepted.
 # An address is never rewritten: one with other characters (whitespace,
-# quotes, angle brackets, control characters...) is refused with a warning,
-# and so is one beginning with "-", "|" or "/", which the MTA could take as
-# an option, a program or a file (these characters are only refused at the
-# beginning).  The mail is still sent to the other addresses, but innmail
-# then exits with status 1.
+# quotes, angle brackets, control characters...) or malformed UTF-8 is
+# refused with a warning, and so is one beginning with "-", "|" or "/",
+# which the MTA could take as an option, a program or a file (these
+# characters are only refused at the beginning).  The mail is still sent to
+# the other addresses, but innmail then exits with status 1.
 my $addrchar = qr{[a-zA-Z0-9!#\$%&'*+/=?^_`\{|\}~.\@-]};
+
+# Match RFC 3629 byte sequences, excluding C1 controls and non-ASCII
+# characters with the Unicode White_Space property.
+my $utf8char = qr{
+    (?! \xC2[\x80-\xA0] | \xE1\x9A\x80 | \xE2\x80[\x80-\x8A\xA8\xA9\xAF]
+      | \xE2\x81\x9F | \xE3\x80\x80 )
+    (?:
+        [\xC2-\xDF][\x80-\xBF]
+      | \xE0[\xA0-\xBF][\x80-\xBF]
+      | [\xE1-\xEC\xEE-\xEF][\x80-\xBF]{2}
+      | \xED[\x80-\x9F][\x80-\xBF]
+      | \xF0[\x90-\xBF][\x80-\xBF]{2}
+      | [\xF1-\xF3][\x80-\xBF]{3}
+      | \xF4[\x80-\x8F][\x80-\xBF]{2}
+    )
+}x;
+
 my %leading = ('-' => 'an option', '|' => 'a program', '/' => 'a file');
 my $refused = 0;
-foreach (@ARGV) {
-    next if ($_ eq "");
-    if (m{^([-|/])}) {
+foreach my $arg (@ARGV) {
+    # Work with the original octets, even if Perl marked @ARGV as UTF-8.
+    my $addr = bytes::substr($arg, 0);
+    next if ($addr eq "");
+    if ($addr =~ m{^([-|/])}) {
         warn "$0: Refusing address beginning with '$1'"
-          . " (the MTA could take it as $leading{$1}): $_\n";
+          . " (the MTA could take it as $leading{$1}): $addr\n";
         $refused = 1;
-    } elsif (!/^$addrchar+\z/) {
-        warn "$0: Refusing address with unsupported characters: $_\n";
+    } elsif ($addr !~ /\A(?:$addrchar|$utf8char)+\z/) {
+        warn "$0: Refusing address with unsupported characters: $addr\n";
         $refused = 1;
     } else {
-        push(@addrs, $_);
+        push(@addrs, $addr);
     }
 }
 

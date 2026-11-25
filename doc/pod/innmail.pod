@@ -18,17 +18,19 @@ F<inn.conf>.
 At least one address (formatted for the MTA specified in F<inn.conf>, if it
 matters) is required.  The addresses are given as arguments to the MTA and
 written in the To header field of the message as is, so B<innmail> only
-accepts addresses made of alphanumerics and the symbols
-C<!#$%&'*+-/=?^_`{|}~.@> (the characters allowed in an unquoted local part
-of an e-mail address, plus C<.> and C<@>).  An address containing any other
-character, like a quoted local part (C<"John Doe"@example.com>), an address
-between angle brackets, or a domain literal (C<joe@[192.0.2.1]>), is
-refused with a warning.  So is an address beginning with C<->, C<|> or
-C</>, which the MTA could take as an option, a program to run or a file to
-write to; these characters are accepted elsewhere in an address.  The
-message is still sent to the other addresses, but B<innmail> then exits
-with status 1.  B<innmail> fails without sending anything if no valid
-address remains.
+accepts addresses made of ASCII alphanumerics and the symbols
+C<!#$%&'*+-/=?^_`{|}~.@> (the ASCII characters allowed in an unquoted local
+part of an e-mail address, plus C<.> and C<@>), and well-formed UTF-8
+non-ASCII characters other than whitespace and controls.  Delivery to
+internationalized addresses requires an MTA that supports SMTPUTF8
+(RFC 6531).  An address containing malformed UTF-8 or any other character,
+like those in a quoted local part (C<"John Doe"@example.com>), an address
+between angle brackets, or a domain literal (C<joe@[192.0.2.1]>), is refused
+with a warning.  So is an address beginning with C<->, C<|> or C</>, which
+the MTA could take as an option, a program to run or a file to write to;
+these characters are accepted elsewhere in an address.  The message is still
+sent to the other addresses, but B<innmail> then exits with status 1.
+B<innmail> fails without sending anything if no valid address remains.
 
 B<innmail> was written to be suitable for the I<mailcmd> setting in
 F<inn.conf>.
