@@ -163,9 +163,12 @@ EXPgetnum(int line, char *word, time_t *v, const char *name, bool *zero)
     }
     errno = 0;
     d = strtod(word, &end);
-    /* A nonzero fraction can underflow before conversion to seconds. */
+    /* A nonzero fraction can underflow before conversion to seconds.  The
+       two comparisons are true only for zero (-0.0 included, NaN excluded),
+       like "d == 0.0" but without -Wfloat-equal, and without fpclassify()
+       that may need libm to link on some platforms. */
     if (zero != NULL)
-        *zero = (end != word && d == 0.0 && errno != ERANGE);
+        *zero = (end != word && d <= 0.0 && d >= 0.0 && errno != ERANGE);
     if (d > MAGIC_TIME)
         *v = (time_t) 0;
     else
