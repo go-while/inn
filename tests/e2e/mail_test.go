@@ -6,7 +6,9 @@ package e2e
 // are skipped unless INN_E2E_MAILHUB names a hub that answers.
 
 import (
+	"context"
 	"os"
+	"os/exec"
 	"slices"
 	"strings"
 	"testing"
@@ -27,6 +29,23 @@ func realMTA(tb testing.TB) string {
 	}
 	tb.Skip("no sendmail program (/usr/sbin/sendmail, /usr/lib/sendmail): mail delivery needs an MTA")
 	return ""
+}
+
+// needSMTPUTF8 skips delivery testing on satellites without SMTPUTF8-enabled Postfix.
+func needSMTPUTF8(tb testing.TB) {
+	tb.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	// Expand the setting because Postfix's default can depend on compatibility_level.
+	cmd := exec.CommandContext(ctx, "postconf", "-xh", "smtputf8_enable")
+	var out capped
+	cmd.Stdout = &out
+	if err := cmd.Run(); err != nil {
+		tb.Skipf("SMTPUTF8 delivery requires Postfix: postconf could not read smtputf8_enable: %v", err)
+	}
+	if enabled := strings.TrimSpace(out.String()); enabled != "yes" {
+		tb.Skipf("SMTPUTF8 delivery requires Postfix with smtputf8_enable=yes, got %q", enabled)
+	}
 }
 
 // checkFields fails the test for each header field of m whose value is not the wanted one.
@@ -77,9 +96,13 @@ func TestMailModeratedPost(t *testing.T) {
 	expect(t, c, 205, "QUIT")
 }
 
+// TestMailModeratedUTF8Post: an unapproved nnrpd post to a UTF-8 group is mailed
+// to its moderator. It checks that the To header and the non-ASCII SMTP envelope
+// recipient reach the hub intact. It does not check SMTPUTF8 negotiation itself.
 func TestMailModeratedUTF8Post(t *testing.T) {
 	const group = "e2e.moderated.δοκιμή"
 	const recipient = "josé@moderators.example.org"
+	needSMTPUTF8(t)
 	hub := needMailHub(t)
 	s := NewSite(t, SiteOptions{
 		Groups:  []Group{{Name: group, Flag: "m"}},

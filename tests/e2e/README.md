@@ -61,6 +61,7 @@ needs the Go standard library:
 | `TestNews2mailSenders` | innd, news2mail | a crosspost to groups gatewayed to several mailing-lists is mailed once per envelope-from address of `news2mail.cf`, to the lists using it (#116, #188) |
 | `TestNews2mailNoQueue` | innd, news2mail | `news2mail -n` does not give the MTA `-odq` (only queue the mail), `news2mail` alone does (#85) |
 | `TestMailModeratedPost` | innd, nnrpd, the host's MTA | a post to a moderated group without Approved is mailed to the address `moderators` gives for it, with the article's header fields, and arrives at the test mail hub (below); the group stays empty |
+| `TestMailModeratedUTF8Post` | innd, nnrpd, SMTPUTF8-enabled Postfix on the satellite, Postfix on the hub | an unapproved post to a UTF-8 group reaches the hub with the internationalized moderator address intact in `To` and `X-Original-To` (the original envelope recipient) |
 | `TestMailInnmail` | innmail, the host's MTA | a mail sent with innmail arrives at the test mail hub with its recipient, subject, added header field and body |
 | `TestMailNews2mail` | innd, news2mail, the host's MTA | an article gatewayed by news2mail arrives at the test mail hub, addressed to the list and sent from the envelope-from address of `news2mail.cf`, with and without `-n` |
 | `TestPullnews` | innd, pullnews | articles pulled from an upstream are fed to innd, and the mark is recorded |
