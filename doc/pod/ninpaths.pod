@@ -89,8 +89,13 @@ L<http://top1000.anthologeek.net/>.
 =item B<-d> I<dumpfile>
 
 Save dumps in I<dumpfile>.  Any C<%d> in I<dumpfile> will be replaced with
-the current system time when the dump is made.  This option should be used
-with B<-p>.  If I<dumpfile> is C<->, then stdout is used.
+the current system time (the number of seconds since the epoch, written as
+a decimal number) when the dump is made.  Any C<%%> will be replaced with a
+single C<%>, so that C<%%d> gives a literal C<%d> in the file name.  Any other
+C<%> is kept as is.  If the resulting file name is longer than 1023
+bytes, B<ninpaths> reports an error and does not write the dump.
+This option should be used with B<-p>.  If I<dumpfile> is C<->, then stdout
+is used.
 
 The format of these dump files is described below.
 
