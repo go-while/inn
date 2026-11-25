@@ -51,6 +51,7 @@ struct hisv6 {
     unsigned long nextcheck;
     struct history *history;
     time_t statinterval;
+    bool forgetall;
     size_t synccount;
     size_t dirty;
     ssize_t npairs;

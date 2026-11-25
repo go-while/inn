@@ -492,6 +492,7 @@ hisv6_new(const char *path, int flags, struct history *history)
     h->npairs = 0;
     h->dirty = 0;
     h->synccount = 0;
+    h->forgetall = false;
     h->st.st_ino = (ino_t) -1;
 /* FIXME - mips defines dev_t to be 64-bits whereas st_dev is 32-bits,
  * so we have an overflow when casting to dev_t.
@@ -1180,6 +1181,8 @@ hisv6_expirecb(struct hisv6 *h, void *cookie, const HASH *hash, time_t arrived,
          * threshold, as set by the /remember/ line in expire.ctl.
          * We keep the check for the arrival time because some entries
          * might not have one. */
+        if (t == NULL && h->forgetall)
+            return true;
         if (hiscookie->new
             && (t != NULL || posted >= hiscookie->threshold
                 || (posted <= 0 && arrived >= hiscookie->threshold))) {
@@ -1412,6 +1415,10 @@ hisv6_ctl(void *history, int selector, void *val)
     bool r = true;
 
     switch (selector) {
+    case HISCTLS_EXPIRE_REMEMBERED:
+        h->forgetall = *(bool *) val;
+        break;
+
     case HISCTLG_PATH:
         *(char **) val = h->histpath;
         break;

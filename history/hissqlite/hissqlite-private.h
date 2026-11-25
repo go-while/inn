@@ -77,6 +77,7 @@ struct hissqlite {
     size_t batch_size;    /* writes per transaction; 0 = autocommit. */
     size_t batch_pending; /* writes in the currently open batch. */
     bool batch_open;      /* an explicit batch transaction is open. */
+    bool forgetall;       /* Drop tokenless entries of any age during expiry. */
 
     /* Reader side (used when opened HIS_RDONLY in WAL mode). */
     hissqlite_read_t read;
