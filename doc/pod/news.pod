@@ -371,6 +371,15 @@ start, once the cause of the failure had been fixed, did not renumber
 F<active>.  B<innd> now removes the file itself once it has renumbered the
 F<active> file, and keeps it when overview is disabled with I<enableoverview>.
 
+=item *
+
+B<news.daily> no longer removes the lock file of another run when it receives
+a signal (for instance a C<SIGTERM> when the system is shut down) after it
+has released its own lock, which it does before removing the expired articles
+and renumbering the F<active> file, or while another run holds the lock.  A
+third run could then start expiring at the same time as the second one.  The
+lock is now only removed by the run whose process ID it contains.
+
 =back
 
 =head1 Changes in 2.7.5 (not yet released)
