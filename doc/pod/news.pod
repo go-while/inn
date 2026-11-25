@@ -556,6 +556,19 @@ is also left unchanged when its replacement cannot be written completely or
 when it cannot be read completely.  A retry no longer truncates the copies
 of an article which were linked to the first one.
 
+=item *
+
+When I<expiretombstone> is set in F<inn.conf>, B<expireover> no longer
+carries a cancellation entry of a previous run into the tombstone log read
+by B<expire> when it cannot check whether the article is gone, for instance
+after B<fastrm> failed to remove it and the spool is not readable.
+B<expire> then dropped the history entry of an article that could still be
+on disk.  Such entries are now kept in F<expireover.tombstone.retry> and
+checked again during the next run.  B<expireover> also no longer removes a
+recovered entry before it is saved elsewhere, stops without expiring
+anything when a tombstone file cannot be read completely, and publishes
+recovered entries itself when a delayed-removal run schedules no removal.
+
 =back
 
 =head1 Changes in 2.7.5 (not yet released)
