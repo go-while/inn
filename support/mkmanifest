@@ -354,3 +354,4 @@ tests/perl/minimum-version.t
 tests/storage/caf.t
 tests/storage/cancel-tombstone.t
 tests/util/innbind.t
+tests/util/innmail.t

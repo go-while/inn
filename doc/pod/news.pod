@@ -243,6 +243,19 @@ detection of malformed Xref records stored with tradspool and of corrupt
 history records.  The overview and storage backends also validate more
 structures before using them.  Many thanks to Kevin Bowling for the patches.
 
+=item *
+
+B<innmail> no longer silently rewrites the addresses it is given by removing
+the characters it does not know, which could send the mail to another
+address.  It now accepts the ASCII characters allowed in an unquoted local
+part of an e-mail address (like C<=>, C</> or C<'>), as well as well-formed
+UTF-8 non-ASCII characters other than whitespace and controls for
+internationalized addresses (RFC 6531).  An address containing malformed
+UTF-8 or unsupported characters, or beginning with C<->, C<|> or C</>
+(which the MTA could take as an option, a program or a file), is refused with
+a warning; the mail is still sent to the other addresses, but B<innmail>
+then exits with status 1.
+
 =back
 
 =head1 Changes in 2.7.4 (2026-06-22)

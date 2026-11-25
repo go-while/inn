@@ -43,7 +43,7 @@ TESTS	= authprogs/ident.t expire/tombstone.t expire/tombstone-hisexpire.t \
 
 EXTRA	= runtests clients/server-list docs/pod.t lib/xmalloc nnrpd/auth-test \
 	  overview/ovsqlite-read.t overview/ovsqlite-write.t \
-	  perl/minimum-version.t
+	  perl/minimum-version.t util/innmail.t
 
 BENCHMARKS = lib/history-bench
 
@@ -387,3 +387,6 @@ storage/cancel-tombstone.t: storage/cancel-tombstone-t.o tap/basic.o \
 
 util/innbind.t: util/innbind-t.o tap/basic.o $(LIBINN)
 	$(LINK) util/innbind-t.o tap/basic.o $(LIBINN) $(LIBS)
+
+util/innmail.t: util/innmail.t.in $(FIXSCRIPT)
+	$(FIX) -i util/innmail.t.in
