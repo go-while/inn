@@ -323,7 +323,8 @@ the news server.
 
 Note that their descriptions are removed from the F<newsgroups> file,
 as well as any other possible descriptions for obsolete newsgroups
-in foo.bar2.*.
+in foo.bar2.* (unless I<keepdescriptions> is set to true in F<inn.conf>,
+in which case these descriptions are kept).
 
 =item 5.
 

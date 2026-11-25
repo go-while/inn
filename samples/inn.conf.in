@@ -45,6 +45,7 @@ dontrejectfiltered:          false
 hiscachesize:                256
 ignorenewsgroups:            false
 immediatecancel:             false
+keepdescriptions:            false
 linecountfuzz:               0
 maxartsize:                  1000000
 maxconnections:              50

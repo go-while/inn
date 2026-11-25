@@ -2,7 +2,8 @@
 # fixscript will replace this line with code to load INN::Config
 
 # This script cleans the newsgroups file:
-#   * Groups no longer in the active file are removed.
+#   * Groups no longer in the active file are removed, unless keepdescriptions
+#     is true in inn.conf.
 #   * Duplicate entries are removed.  The last of a set of duplicates
 #     is the one retained.  That way, you could simply append the
 #     new/revised entries from a docheckgroups run and then this script
@@ -14,6 +15,10 @@ use warnings;
 
 $remove = '';
 # $remove='^alt\.';
+
+# Keep the descriptions of groups which are no longer in the active file?
+$keep = (defined $INN::Config::keepdescriptions
+        && $INN::Config::keepdescriptions =~ /^(?:true|on|yes)$/i);
 
 open ACT, $INN::Config::active or die "Can't open $INN::Config::active: $!\n";
 while (<ACT>) {
@@ -27,7 +32,10 @@ open NG, $INN::Config::newsgroups
 while (<NG>) {
     chomp;
     ($group, $desc) = split /\s+/, $_, 2;
-    next unless (defined $act{$group});
+    if (!defined $act{$group}) {
+        next unless $keep;
+        next if ($remove ne "" && $group =~ /$remove/o);
+    }
 
     next if (!defined $desc);
     next if ($desc =~ /^[?\s]*$/);
@@ -39,10 +47,8 @@ close NG;
 
 open NG, ">$INN::Config::newsgroups.new"
   or die "Can't open $INN::Config::newsgroups.new for write: $!\n";
-foreach my $grp (sort keys %act) {
-    if (defined $hist{$grp}) {
-        print NG "$grp\t$hist{$grp}\n" or die "Can't write: $!\n";
-    }
+foreach my $grp (sort keys %hist) {
+    print NG "$grp\t$hist{$grp}\n" or die "Can't write: $!\n";
 }
 close NG or die "Can't close: $!\n";
 
