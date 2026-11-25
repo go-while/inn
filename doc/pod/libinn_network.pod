@@ -1,0 +1,129 @@
+=head1 NAME
+
+network_bind_ipv4, network_bind_ipv6, network_bind_all, network_bind_all_free, network_wait_any, network_accept_any, network_connect, network_connect_host, network_client_create, network_set_freebind, network_set_reuseaddr, network_set_v6only, network_read, network_write, network_sockaddr_sprint, network_sockaddr_equal, network_sockaddr_port, network_addr_match - work with network sockets and addresses
+
+=head1 SYNOPSIS
+
+    #include <inn/network.h>
+
+    socket_type network_bind_ipv4(int type, const char *address,
+                                  unsigned short port);
+    socket_type network_bind_ipv6(int type, const char *address,
+                                  unsigned short port);
+    bool network_bind_all(int type, unsigned short port, socket_type **fds,
+                          unsigned int *count);
+    void network_bind_all_free(socket_type *fds);
+    socket_type network_wait_any(socket_type fds[], unsigned int count);
+    socket_type network_accept_any(socket_type fds[], unsigned int count,
+                                   struct sockaddr *addr, socklen_t *addrlen);
+
+    socket_type network_connect(const struct addrinfo *ai, const char *source,
+                                time_t timeout);
+    socket_type network_connect_host(const char *host, unsigned short port,
+                                     const char *source, time_t timeout);
+    socket_type network_client_create(int domain, int type,
+                                      const char *source);
+
+    void network_set_freebind(socket_type fd);
+    void network_set_reuseaddr(socket_type fd);
+    void network_set_v6only(socket_type fd);
+
+    bool network_read(socket_type fd, void *buffer, size_t total,
+                      time_t timeout);
+    bool network_write(socket_type fd, const void *buffer, size_t total,
+                       time_t timeout);
+
+    bool network_sockaddr_sprint(char *dst, socklen_t size,
+                                 const struct sockaddr *addr);
+    bool network_sockaddr_equal(const struct sockaddr *a,
+                                const struct sockaddr *b);
+    unsigned short network_sockaddr_port(const struct sockaddr *sa);
+    bool network_addr_match(const char *a, const char *b, const char *mask);
+
+=head1 DESCRIPTION
+
+The routines use C<socket_type> for sockets: it is C<int> on Unix systems
+and C<SOCKET> on Windows.  C<INVALID_SOCKET> is the value that marks an
+invalid socket, and is the failure value of the routines that return a
+socket; compare against it instead of -1.  The other routines report
+failure in their own way, for example by returning false.
+
+=head2 Binding and accepting
+
+B<network_bind_ipv4> and B<network_bind_ipv6> create a socket of I<type>
+bound to the numeric I<address> and I<port>.  Ports are in host byte order.
+Use C<any> or C<all> for a wildcard address.  They return the socket or
+C<INVALID_SOCKET> on error.  IPv6 requires IPv6 support.
+
+B<network_bind_all> attempts the applicable wildcard bindings and returns
+true if at least one succeeds.  It writes the socket count to I<count>
+and may allocate an array in I<fds> even if no binding succeeds.
+Initialize I<*fds> to NULL before the call so it is safe to pass to
+B<network_bind_all_free> after an early failure.  Close the sockets
+separately from releasing the array.
+
+B<network_wait_any> blocks until one of the I<count> sockets in I<fds>
+is ready to read and returns the first ready socket in array order.
+B<network_accept_any> accepts a connection on that socket and returns
+the accepted socket.  I<addr> and I<addrlen> are passed to accept(2).
+Both return C<INVALID_SOCKET> on failure, including EINTR if interrupted.
+Pass sockets suitable for select(2).
+
+=head2 Connecting
+
+B<network_connect> tries the addresses in the I<ai> list.
+B<network_connect_host> resolves I<host> and I<port> for a stream
+connection, then tries the resulting addresses.  Both return the connected
+socket or C<INVALID_SOCKET>.  A nonzero I<timeout> is in seconds and
+applies to each connection attempt.  A resolution failure may leave no
+useful socket error.
+
+B<network_client_create> creates a socket of I<domain> and I<type>, with
+the same source address rules, and returns it before connecting.
+For all three routines, C<any> or C<all> lets the OS choose the source.
+A NULL I<source> uses the corresponding configured I<sourceaddress> or
+I<sourceaddress6> when available.
+
+=head2 Socket options and I/O
+
+B<network_set_freebind>, B<network_set_reuseaddr> and B<network_set_v6only>
+set C<IP_FREEBIND>, C<SO_REUSEADDR> and C<IPV6_V6ONLY>, respectively, on
+I<fd> when available.  They log a warning if setting an available option
+fails.
+
+B<network_read> and B<network_write> transfer I<total> bytes between I<fd>
+and I<buffer>.  They return true on success and false with the socket
+error set on failure.  I<timeout> is in seconds, with zero disabling the
+timeout.  A timed write puts the socket in nonblocking mode and returns
+it to blocking mode afterward.
+
+=head2 Addresses
+
+B<network_sockaddr_sprint> formats I<addr> in I<dst>, a buffer of I<size>
+bytes.  The buffer should hold at least C<INET6_ADDRSTRLEN> characters.
+It returns true on success, and false if the formatting fails or the
+address family is not supported.  IPv4-mapped IPv6 addresses are
+formatted as IPv4 addresses.
+
+B<network_sockaddr_equal> compares the addresses I<a> and I<b>,
+ignoring port numbers.  IPv4-mapped addresses can equal IPv4 addresses.
+B<network_sockaddr_port> returns the port of I<sa> in host byte order,
+or zero for an unsupported address family.
+
+B<network_addr_match> compares numeric address strings I<a> and I<b>
+using I<mask>.  For IPv4, use a dotted-decimal mask or a decimal prefix
+length.  For IPv6, use a decimal prefix length.  Pass the prefix
+length without its slash, or NULL for a full address comparison.
+The function returns false on a mismatch or parse failure.
+
+=head1 HISTORY
+
+Written by Russ Allbery.  The code is derived from software contributed
+to the Internet Software Consortium by Rich Salz.  The canonical version
+is maintained in the rra-c-util package.
+
+=head1 SEE ALSO
+
+accept(2), inn.conf(5), libinn(3), select(2).
+
+=cut

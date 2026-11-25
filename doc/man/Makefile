@@ -7,12 +7,13 @@ SEC1	= convdate.1 fastrm.1 gencancel.1 getlist.1 \
 	innconfval.1 innmail.1 nntpget.1 pgpverify.1 pullnews.1 rnews.1 \
 	shrinkfile.1 simpleftp.1
 
-SEC3	= innshellvars.3 libinn.3 libinn_clientlib.3 libinn_dbz.3 \
-	libinn_dispatch.3 libinn_hashtab.3 libinn_inndcomm.3 libinn_list.3 \
-	libinn_md5.3 libinn_mmap.3 libinn_newsuser.3 libinn_qio.3 \
-	libinn_sequence.3 libinn_sqlite_helper.3 libinn_tombstone.3 \
-	libinn_tst.3 libinn_utility.3 libinn_uwildmat.3 libinnauth.3 \
-	libinnhist.3 libinnstorage.3 libinnstorage_overview.3
+SEC3	= innshellvars.3 libinn.3 libinn_bloom.3 libinn_buffer.3 \
+	libinn_clientlib.3 libinn_concat.3 libinn_dbz.3 libinn_dispatch.3 \
+	libinn_hashtab.3 libinn_inndcomm.3 libinn_list.3 libinn_md5.3 \
+	libinn_mmap.3 libinn_network.3 libinn_newsuser.3 libinn_nntp.3 \
+	libinn_qio.3 libinn_sequence.3 libinn_sqlite_helper.3 libinn_timer.3 \
+	libinn_tombstone.3 libinn_tst.3 libinn_utility.3 libinn_uwildmat.3 \
+	libinnauth.3 libinnhist.3 libinnstorage.3 libinnstorage_overview.3
 
 SEC3PM	= INN__Config.3pm \
 	INN__Utils__Shlock.3pm INN__ovsqlite_client.3pm

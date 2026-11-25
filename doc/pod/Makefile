@@ -22,7 +22,9 @@ MAN3	= ../man/libinn.3 ../man/libinn_clientlib.3 ../man/libinn_dbz.3 \
 	../man/innshellvars.3 ../man/libinn_mmap.3 ../man/libinn_sequence.3 \
 	../man/libinn_utility.3 ../man/libinn_dispatch.3 ../man/libinn_md5.3 \
 	../man/libinn_newsuser.3 ../man/libinn_tombstone.3 \
-	../man/libinn_sqlite_helper.3
+	../man/libinn_sqlite_helper.3 ../man/libinn_bloom.3 \
+	../man/libinn_buffer.3 ../man/libinn_concat.3 \
+	../man/libinn_network.3 ../man/libinn_nntp.3 ../man/libinn_timer.3
 
 MAN5	= ../man/active.5 ../man/active.times.5 ../man/buffindexed.conf.5 \
 	../man/control.ctl.5 ../man/cycbuff.conf.5 ../man/distrib.pats.5 \
@@ -110,7 +112,11 @@ maintclean: distclean
 ../man/libinnstorage.3:	libinnstorage.pod	; $(POD2MAN) -s 3 $? > $@
 ../man/libinnstorage_overview.3: libinnstorage_overview.pod
 	$(POD2MAN) -s 3 $? > $@
+
+../man/libinn_bloom.3: libinn_bloom.pod	; $(POD2MAN) -s 3 $? > $@
+../man/libinn_buffer.3: libinn_buffer.pod	; $(POD2MAN) -s 3 $? > $@
 ../man/libinn_clientlib.3: libinn_clientlib.pod	; $(POD2MAN) -s 3 $? > $@
+../man/libinn_concat.3: libinn_concat.pod	; $(POD2MAN) -s 3 $? > $@
 ../man/libinn_dbz.3:	libinn_dbz.pod		; $(POD2MAN) -s 3 $? > $@
 ../man/libinn_hashtab.3: libinn_hashtab.pod	; $(POD2MAN) -s 3 $? > $@
 
@@ -121,12 +127,17 @@ maintclean: distclean
 
 ../man/libinn_md5.3: libinn_md5.pod	; $(POD2MAN) -s 3 $? > $@
 ../man/libinn_newsuser.3: libinn_newsuser.pod	; $(POD2MAN) -s 3 $? > $@
+
+../man/libinn_network.3: libinn_network.pod	; $(POD2MAN) -s 3 $? > $@
+../man/libinn_nntp.3: libinn_nntp.pod	; $(POD2MAN) -s 3 $? > $@
 ../man/libinn_qio.3:	libinn_qio.pod		; $(POD2MAN) -s 3 $? > $@
 ../man/libinn_sequence.3: libinn_sequence.pod	; $(POD2MAN) -s 3 $? > $@
 
 ../man/libinn_tombstone.3: libinn_tombstone.pod	; $(POD2MAN) -s 3 $? > $@
 
 ../man/libinn_sqlite_helper.3: libinn_sqlite_helper.pod	; $(POD2MAN) -s 3 $? > $@
+
+../man/libinn_timer.3: libinn_timer.pod	; $(POD2MAN) -s 3 $? > $@
 ../man/libinn_tst.3:	libinn_tst.pod		; $(POD2MAN) -s 3 $? > $@
 ../man/libinn_utility.3: libinn_utility.pod	; $(POD2MAN) -s 3 $? > $@
 ../man/libinn_uwildmat.3: libinn_uwildmat.pod	; $(POD2MAN) -s 3 $? > $@
