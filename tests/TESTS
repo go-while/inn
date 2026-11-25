@@ -4,6 +4,7 @@ authprogs/ident
 clients/getlist
 clients/getlist-malformed
 docs/pod
+expire/fastrm-short
 expire/tombstone
 expire/tombstone-e2e
 expire/tombstone-hisexpire
