@@ -507,6 +507,18 @@ from the C<DATE> command of the remote server.  It is replaced only when it is
 complete, and it is no longer updated when the transfer fails, including when
 a server gives a temporary negative reply; the exit status is still zero.
 
+=item *
+
+Fixed B<batcher> losing articles when it spooled its input again after a
+batch failed.  When a batch processor exited with an error, or a write to it
+failed, the articles of the failed batch were removed from the retry file, and
+only the following ones were kept.  The retry file now starts at the first
+article of the failed batch, and B<batcher> exits with a non-zero status.  A
+batch which the processor always rejects therefore stays at the head of the
+retry file.  Articles already read from a pipe cannot be recovered.  The retry
+file also replaces the input file only when it has been completely written,
+for instance not when the disk is full.
+
 =back
 
 =head1 Changes in 2.7.5 (not yet released)

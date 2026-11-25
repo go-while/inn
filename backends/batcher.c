@@ -35,6 +35,12 @@ static size_t ArtsWritten;
 static int BATCHcount;
 static int MaxBatches;
 static int BATCHstatus;
+static off_t BatchStart = -1;
+static bool StartFailed;
+
+/* The input cannot be positioned (a pipe), so there is no offset to go back
+ * to. */
+#define NOSEEK ((off_t) -2)
 static size_t BytesInBatch = 60 * 1024;
 static size_t BytesWritten;
 static size_t MaxArts;
@@ -77,10 +83,19 @@ BATCHstart(void)
 static int
 BATCHclose(FILE *F)
 {
+    bool failed;
+    int status;
+
     BATCHopen = false;
+
+    /* A write error is not forgotten by a later successful flush or by a
+     * processor which exits with a zero status. */
+    failed = ferror(F);
     if (F == stdout)
-        return fflush(stdout) == EOF ? 1 : 0;
-    return pclose(F);
+        status = fflush(stdout) == EOF ? 1 : 0;
+    else
+        status = pclose(F);
+    return (status == 0 && failed) ? 1 : status;
 }
 
 
@@ -112,7 +127,7 @@ RequeueAndExit(off_t Cookie, char *line, long BytesInArt)
 
     /* Last batch exit okay? */
     if (BATCHstatus == 0) {
-        if (feof(stdin) && Cookie != -1) {
+        if (feof(stdin) && Cookie != -1 && line == NULL) {
             /* Yes, and we're all done -- remove input and exit. */
             fclose(stdin);
             if (Input)
@@ -131,7 +146,12 @@ RequeueAndExit(off_t Cookie, char *line, long BytesInArt)
 
     /* If we can back up to where the batch started, do so. */
     i = 0;
-    if (Cookie != -1 && fseeko(stdin, Cookie, SEEK_SET) == -1) {
+    if (Cookie == NOSEEK) {
+        warn("%s cannot seek in the input, the articles it gave already"
+             " cannot be requeued",
+             Host);
+        i = 1;
+    } else if (Cookie != -1 && fseeko(stdin, Cookie, SEEK_SET) == -1) {
         syswarn("%s cannot seek", Host);
         i = 1;
     }
@@ -150,19 +170,31 @@ RequeueAndExit(off_t Cookie, char *line, long BytesInArt)
             i = 1;
             break;
         }
+    if (ferror(stdin)) {
+        syswarn("%s cannot read %s", Host, Input != NULL ? Input : "input");
+        i = 1;
+    }
     if (fclose(F) == EOF) {
         syswarn("%s cannot close spool", Host);
         i = 1;
     }
 
-    /* If we had a named input file, try to rename the spool. */
-    if (Input != NULL && rename(spool, Input) < 0) {
-        syswarn("%s cannot rename spool", Host);
-        i = 1;
+    /* If we had a named input file, replace it with the spool, but only
+     * when the spool is complete.  Otherwise keep the input file as it is:
+     * it still holds every article not sent, and the ones sent already are
+     * rejected as duplicates by the next run. */
+    if (Input != NULL) {
+        if (i != 0) {
+            warn("%s keeping %s unchanged", Host, Input);
+            unlink(spool);
+        } else if (rename(spool, Input) < 0) {
+            syswarn("%s cannot rename spool", Host);
+            i = 1;
+        }
     }
 
     free(spool);
-    exit(i);
+    exit(i != 0 || BATCHstatus != 0 || StartFailed ? 1 : 0);
     /* NOTREACHED */
 }
 
@@ -198,6 +230,7 @@ main(int ac, char *av[])
     ARTHANDLE *art;
     char *artdata;
     size_t written;
+    bool Unsent = false;
 
     /* Set defaults. */
     openlog("batcher", L_OPENLOG_FLAGS | LOG_PID, LOG_INN_PROG);
@@ -289,7 +322,11 @@ main(int ac, char *av[])
         /* Record line length in case we do an ftello.  Not portable to
          * systems with non-Unix file formats. */
         length = strlen(line);
-        Cookie = ftello(stdin) - length;
+        Cookie = ftello(stdin);
+        if (Cookie >= 0)
+            Cookie -= length;
+        else
+            Cookie = NOSEEK;
 
         /* Get lines like "name size".  Note that we ignore size but accept
          * it for backward compatibility. */
@@ -316,6 +353,7 @@ main(int ac, char *av[])
             }
             artdata = wire_to_native(art->data, art->len, &BytesInArt);
             SMfreearticle(art);
+            Unsent = true;
         } else {
             warn("%s skipping %.40s: not token", Host, p);
             continue;
@@ -331,8 +369,10 @@ main(int ac, char *av[])
             }
             if ((F = BATCHstart()) == NULL) {
                 syswarn("%s cannot start batch %d", Host, BATCHcount);
+                StartFailed = true;
                 break;
             }
+            BatchStart = Cookie;
             if (InitialString && *InitialString) {
                 fprintf(F, "%s\n", InitialString);
                 BytesInCB += strlen(InitialString) + 1;
@@ -369,8 +409,10 @@ main(int ac, char *av[])
 
             if ((F = BATCHstart()) == NULL) {
                 syswarn("%s cannot start batch %d", Host, BATCHcount);
+                StartFailed = true;
                 break;
             }
+            BatchStart = Cookie;
         }
 
     SendIt:
@@ -398,6 +440,8 @@ main(int ac, char *av[])
         if (written != BytesInArt || ferror(F))
             break;
 
+        Unsent = false;
+
         /* Update the counts. */
         BytesInCB += BytesInArt;
         BytesWritten += BytesInArt;
@@ -405,15 +449,24 @@ main(int ac, char *av[])
         ArtsWritten++;
 
         if (GotInterrupt) {
-            Cookie = -1;
             BATCHstatus = BATCHclose(F);
-            RequeueAndExit(Cookie, line, BytesInArt);
+            /* If the batch was not accepted, start again from its first
+             * article. */
+            if (BATCHstatus != 0)
+                RequeueAndExit(BatchStart, line, BytesInArt);
+            RequeueAndExit(-1, line, BytesInArt);
         }
     }
 
     if (BATCHopen)
         BATCHstatus = BATCHclose(F);
-    RequeueAndExit(Cookie, NULL, 0);
+    /* A batch which failed to close was not accepted: none of its articles
+     * is done, and the input has to be read again from its first one. */
+    if (BATCHstatus != 0 && BatchStart != -1)
+        RequeueAndExit(BatchStart, BatchStart == NOSEEK && Unsent ? line : NULL,
+                       BytesInArt);
+    RequeueAndExit(Cookie, Cookie == NOSEEK && Unsent ? line : NULL,
+                   BytesInArt);
 
     /* NOTREACHED */
     return 0;
