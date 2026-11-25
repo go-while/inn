@@ -104,8 +104,11 @@ func TestMailInnmail(t *testing.T) {
 
 // TestMailNews2mail: an article in a group that newsfeeds gateways to a mailing-list with
 // news2mail reaches the list's address, sent from the envelope-from address of news2mail.cf,
-// with the article's header fields; the default command line (the MTA gets -odq, only queue
-// the mail) and -n (no -odq).
+// with the default command line (the MTA gets -odq, only queue the mail) and with -n (no
+// -odq). The mail has the article's header fields the way news2mail passes them on: From,
+// Subject, Message-ID and Date as they are, Newsgroups renamed to X-Newsgroups, To set to the
+// list's address; news2mail drops Path, Xref, Lines, NNTP-Posting-Host and -Date, X-* and the
+// article's To.
 func TestMailNews2mail(t *testing.T) {
 	hub := needMailHub(t)
 	mta := realMTA(t)
@@ -133,11 +136,17 @@ func TestMailNews2mail(t *testing.T) {
 
 			m := hub.Wait(t, token, mailWait)
 			checkFields(t, m, map[string]string{
-				"To":         "a@lists.example.org",
-				"Newsgroups": "e2e.a",
-				"Subject":    subject,
-				"Message-ID": id,
+				"To":           "a@lists.example.org",
+				"X-Newsgroups": "e2e.a",
+				"Subject":      subject,
+				"Message-ID":   id,
+				"From":         "E2E Test <e2e@example.invalid>",
 			})
+			for _, name := range []string{"Newsgroups", "Path"} {
+				if v := m.Get(name); v != "" {
+					t.Errorf("mail has %s %q, which news2mail does not pass on", name, v)
+				}
+			}
 			if rp := m.Get("Return-Path"); rp != "<sa@senders.example.org>" {
 				t.Errorf("Return-Path %q, want <sa@senders.example.org> (the envelope-from of news2mail.cf)", rp)
 			}
