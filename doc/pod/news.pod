@@ -599,6 +599,11 @@ not be read completely is no longer removed after a successful run.
 B<tdx-util> B<-C> checks the water marks in F<active> against the
 tradindexed overview database.
 
+=item *
+
+C<configure> now detects when the system C<crypt()> function or its
+declaration is missing and explains which build dependency to install.
+
 =back
 
 =head1 Changes in 2.7.5 (not yet released)
