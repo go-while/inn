@@ -91,6 +91,7 @@ libinn - InterNetNews library routines
        descriptors. */
     extern int getfdlimit(void);
     extern int setfdlimit(unsigned int limit);
+    extern int raisefdlimit(void);
     extern bool isvalidfd(unsigned int fd);
 
     /* Setting or clearing file descriptor flags. */
@@ -398,6 +399,22 @@ B<setfdlimit> sets the limit on open file descriptors to the given parameter
 I<limit>.  It uses the setrlimit(2) function when available.  It returns
 C<0> on success, and C<-1> on failure (when setrlimit(2) is not available or
 I<limit> is higher than select(2) can handle, checking against C<FD_SETSIZE>).
+
+B<raisefdlimit> raises the soft limit on open file descriptors to the
+existing hard limit, leaving the hard limit unchanged.  It never sets an
+unlimited soft limit: when the hard limit is unlimited, or setrlimit(2)
+rejects it as a soft limit with C<EINVAL>, the larger of C<OPEN_MAX>
+(where the system defines it) and a positive C<sysconf(_SC_OPEN_MAX)> is
+used instead, and the soft limit is never lowered.  As
+C<sysconf(_SC_OPEN_MAX)> usually returns the current soft limit, this is
+in practice C<OPEN_MAX>.  When the
+soft limit is already infinite, or no finite maximum is known,
+B<raisefdlimit> returns C<0> without changing anything.  It returns C<0>
+if the soft limit was raised or was already at that limit, and C<-1> on
+failure with errno set (C<ENOSYS> if the required resource limit
+interfaces are unavailable).  The new soft limit may exceed C<FD_SETSIZE>;
+programs that depend on select(2) should use B<setfdlimit> to respect
+C<FD_SETSIZE>.
 
 B<isvalidfd> returns true if I<fd> is not higher than the system supports, and
 false otherwise.

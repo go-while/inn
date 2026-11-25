@@ -28,6 +28,13 @@ By default, B<makehistory> will scan the entire spool, using the storage
 manager, and write a history line for every article.  To also generate
 overview information, use the B<-O> flag.
 
+Where supported, B<makehistory> attempts to raise its soft limit on open
+file descriptors to the hard limit (or to a finite system maximum when the
+hard limit is unlimited) before opening any database.  With B<-O> and the
+C<tradindexed> overview method, this can prevent a low inherited soft limit
+from reducing the overview cache below I<overcachesize> in F<inn.conf>,
+when the resulting limit is high enough for that cache.
+
 If a malformed article is found in the news spool, in a way which prevents its
 integration into the history or overview data, a log line will be output and
 the malformed article will just be skipped.

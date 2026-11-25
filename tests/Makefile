@@ -20,11 +20,11 @@ TESTS	= authprogs/ident.t expire/tombstone.t expire/tombstone-hisexpire.t \
 	innd/artparse.t innd/chan.t lib/artnumber.t lib/asprintf.t \
 	lib/bloom.t lib/bloom-hiswalk.t lib/buffer.t lib/canlock.t \
 	lib/concat.t lib/conffile.t lib/confparse.t lib/daemon.t lib/date.t \
-	lib/dispatch.t lib/fdflag.t lib/getaddrinfo.t lib/getnameinfo.t \
-	lib/hash.t lib/hashtab.t lib/headers.t lib/hex.t lib/hissqlite.t \
-	lib/hissqlite-convert.t lib/inet_aton.t lib/inet_ntoa.t \
-	lib/inet_ntop.t lib/innconf.t lib/list.t lib/md5.t lib/messageid.t \
-	lib/messages.t lib/mkstemp.t lib/network/addr-ipv4.t \
+	lib/dispatch.t lib/fdflag.t lib/fdlimit.t lib/getaddrinfo.t \
+	lib/getnameinfo.t lib/hash.t lib/hashtab.t lib/headers.t lib/hex.t \
+	lib/hissqlite.t lib/hissqlite-convert.t lib/inet_aton.t \
+	lib/inet_ntoa.t lib/inet_ntop.t lib/innconf.t lib/list.t lib/md5.t \
+	lib/messageid.t lib/messages.t lib/mkstemp.t lib/network/addr-ipv4.t \
 	lib/network/addr-ipv6.t lib/network/client.t lib/network/server.t \
 	lib/pread.t lib/pwrite.t lib/qio.t lib/readin.t lib/reallocarray.t \
 	lib/reservedfd.t lib/setenv.t lib/strlcat.t lib/strlcpy.t lib/tst.t \
@@ -167,6 +167,9 @@ lib/dispatch.t: lib/dispatch-t.o tap/basic.o $(LIBINN)
 
 lib/fdflag.t: lib/fdflag-t.o tap/basic.o $(LIBINN)
 	$(LINK) lib/fdflag-t.o tap/basic.o $(LIBINN) $(LIBS)
+
+lib/fdlimit.t: lib/fdlimit-t.o tap/basic.o $(LIBINN)
+	$(LINK) lib/fdlimit-t.o tap/basic.o $(LIBINN) $(LIBS)
 
 lib/getaddrinfo.o: ../lib/getaddrinfo.c
 	$(CC) $(CFLAGS) -DTESTING -c -o $@ ../lib/getaddrinfo.c

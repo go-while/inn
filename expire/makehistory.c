@@ -1027,6 +1027,13 @@ main(int argc, char **argv)
             ensure_news_user_grp(true, true);
     }
 
+    /* Raise the soft descriptor limit, so that a low inherited limit does
+       not shrink the tradindexed overview cache below overcachesize.  The
+       new limit may exceed FD_SETSIZE; the dbz history files, which dbz
+       may pass to select, are opened before the overview cache fills. */
+    if (raisefdlimit() < 0 && errno != ENOSYS)
+        syswarn("cannot raise the file descriptor limit");
+
     /* Read in the overview schema. */
     ARTreadschema(DoOverview);
 
