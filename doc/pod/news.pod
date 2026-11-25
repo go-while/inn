@@ -576,6 +576,14 @@ the article, the connection is also closed and the other articles are
 retried later.  The response is attributed to the oldest command still
 waiting for a reply, as B<innxmit> already does.
 
+=item *
+
+B<makehistory> no longer uses its temporary overview file after closing it
+when the number of overview lines it writes with the tradindexed, ovdb or
+ovsqlite overview method is a positive multiple of the batch size given with
+B<-l> (10000 by default).  The overview rebuild could then end with "cannot
+close temporary overview file" or a crash.
+
 =back
 
 =head1 Changes in 2.7.4 (2026-06-22)
