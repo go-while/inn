@@ -306,7 +306,7 @@ void write_buffer(const char *buff, ssize_t len);
 extern char *HandleHeaders(char *article);
 extern bool ARTinstorebytoken(TOKEN token);
 
-extern int TrackClient(char *client, char *user, size_t len);
+extern int TrackClient(const char *client, char *user, size_t len);
 
 #ifdef DO_PERL
 extern void loadPerl(void);
