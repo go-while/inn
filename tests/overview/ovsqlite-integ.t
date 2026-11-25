@@ -69,7 +69,7 @@ for prog in "$server" "$writer" "$reader"; do
     fi
 done
 
-echo 24
+echo 25
 
 # Set up temp directory with config files.  Use absolute paths because
 # the C test programs chdir to the test data directory before reading
@@ -146,6 +146,7 @@ if perl -MIO::Socket::UNIX -MSocket=SOCK_STREAM -e '
         Type => SOCK_STREAM,
         Peer => $ARGV[0],
     ) or exit 1;
+    alarm 10;
     syswrite($socket, pack("L", 3)) == 4 or exit 2;
     my $response = "";
     sysread($socket, $response, 5) == 5 or exit 3;
@@ -157,7 +158,34 @@ else
     printcount "not ok" "# malformed short request"
 fi
 
-# Tests 3-5: run the writer (3 TAP tests from inside).
+# Test 3: the length prefix arrives alone, then a body larger than the
+# initial 1 KiB request buffer arrives in a second write.
+if perl -MIO::Socket::UNIX -MSocket=SOCK_STREAM -MTime::HiRes=sleep -e '
+    my $socket = IO::Socket::UNIX->new(
+        Type => SOCK_STREAM,
+        Peer => $ARGV[0],
+    ) or exit 1;
+    alarm 10;
+    my $size = 0x2000;
+    syswrite($socket, pack("L", $size)) == 4 or exit 2;
+    sleep 0.5;
+    my $body = "\xff" x ($size - 4);
+    syswrite($socket, $body) == length($body) or exit 2;
+    my $response = "";
+    sysread($socket, $response, 5) == 5 or exit 3;
+    my ($length, $code) = unpack("LC", $response);
+    exit(($length == 5 && $code == 0xc1) ? 0 : 4);
+' "$tmpdir/ovsqlite.sock"; then
+    printcount "ok" "# length prefix and large body in separate writes"
+else
+    printcount "not ok" "# length prefix and large body in separate writes"
+    if ! kill -0 $server_pid 2>/dev/null; then
+        echo "# server exited, log:"
+        tail -40 "$tmpdir/server.log" | sed 's/^/# /'
+    fi
+fi
+
+# Tests 4-6: run the writer (3 TAP tests from inside).
 writer_output=$($writer 2>&1)
 writer_rc=$?
 writer_count=$(echo "$writer_output" | grep -c "^ok ")
