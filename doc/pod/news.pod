@@ -278,6 +278,11 @@ for those records.
 Running B<ovsqlite-util> before the first start of B<ovsqlite-server> no
 longer leaves an empty database file that prevents server initialization.
 
+=item *
+
+B<ovsqlite-util -F> now preserves a valid high water mark when repairing
+an unrelated article count or low water mark for the same group.
+
 =back
 
 =head1 Changes in 2.7.5 (not yet released)
