@@ -14,6 +14,7 @@
 
 #include "portable/system.h"
 
+#include "portable/mmap.h"
 #include <ctype.h>
 #include <dirent.h>
 #include <errno.h>
@@ -24,6 +25,7 @@
 #include "inn/innconf.h"
 #include "inn/libinn.h"
 #include "inn/messages.h"
+#include "inn/mmap.h"
 #include "inn/newsuser.h"
 #include "inn/ov.h"
 #include "inn/overview.h"
@@ -341,6 +343,8 @@ group_rebuild(const char *group, const char *path)
     struct group_entry *entry, info;
     struct article artdata;
     struct stat st;
+    ARTNUM old_base;
+    ino_t old_inode;
 
     /* Check that the directory can be read before anything is changed. */
     files = article_list(path);
@@ -438,12 +442,26 @@ group_rebuild(const char *group, const char *path)
     vector_free(files);
     vector_free(extra);
 
+    /* As in tdx_expire, record the inode and base of the new index while
+       the group is still locked, so that readers opening the new files once
+       they are renamed use the right base, and restore the old values if
+       the files cannot be renamed.  Only then update the rest of the group
+       entry and unlock it. */
     info.indexinode = data->indexinode;
     info.base = data->base;
+    old_inode = entry->indexinode;
+    old_base = entry->base;
+    entry->indexinode = info.indexinode;
+    entry->base = info.base;
+    inn_msync_page(entry, sizeof(*entry), MS_ASYNC);
+    if (!tdx_data_rebuild_finish(group)) {
+        entry->base = old_base;
+        entry->indexinode = old_inode;
+        inn_msync_page(entry, sizeof(*entry), MS_ASYNC);
+        die("cannot finish rebuilding data for group %s", group);
+    }
     if (!tdx_index_rebuild_finish(index, entry, &info))
         die("cannot update group index for %s", group);
-    if (!tdx_data_rebuild_finish(group))
-        die("cannot finish rebuilding data for group %s", group);
     tdx_data_close(data);
     HISclose(history);
     tdx_index_close(index);
