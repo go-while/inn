@@ -28,12 +28,13 @@ expire_empty(void)
     struct stat idx, dat, after;
     struct group_entry *entry;
     ARTNUM low = 0;
+    char overview_path[] = ".";
     char *tmp = test_tmpdir();
 
     if (chdir(tmp) < 0 || mkdir("expire-empty", 0700) < 0
         || chdir("expire-empty") < 0)
         sysbail("cannot create temporary overview directory");
-    config.pathoverview = ".";
+    config.pathoverview = overview_path;
     config.tradindexedmmap = true;
     innconf = &config;
     index = tdx_index_open(true);
