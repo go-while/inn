@@ -60,6 +60,9 @@ needs the Go standard library:
 | `TestGetlist` | getlist | LIST ACTIVE and LIST NEWSGROUPS of a remote server, with patterns |
 | `TestNews2mailSenders` | innd, news2mail | a crosspost to groups gatewayed to several mailing-lists is mailed once per envelope-from address of `news2mail.cf`, to the lists using it (#116, #188) |
 | `TestNews2mailNoQueue` | innd, news2mail | `news2mail -n` does not give the MTA `-odq` (only queue the mail), `news2mail` alone does (#85) |
+| `TestMailModeratedPost` | innd, nnrpd, the host's MTA | a post to a moderated group without Approved is mailed to the address `moderators` gives for it, with the article's header fields, and arrives at the test mail hub (below); the group stays empty |
+| `TestMailInnmail` | innmail, the host's MTA | a mail sent with innmail arrives at the test mail hub with its recipient, subject, added header field and body |
+| `TestMailNews2mail` | innd, news2mail, the host's MTA | an article gatewayed by news2mail arrives at the test mail hub, addressed to the list and sent from the envelope-from address of `news2mail.cf`, with and without `-n` |
 | `TestPullnews` | innd, pullnews | articles pulled from an upstream are fed to innd, and the mark is recorded |
 | `TestProcbatchCheck` | innd, procbatch, sm | `procbatch -c` keeps the storage tokens of articles still in the spool and drops a cancelled one, with tradspool and timehash, and still checks pathname entries for a file (#189) |
 | `TestMethodMatrix` | innd, nnrpd, ovsqlite-server, ovdb_init, ctlinnd, sm, grephistory, expireover, expire, makehistory | each storage method (tradspool, timehash, timecaf, cnfs, trash) with each overview method (tradindexed, buffindexed, ovsqlite, ovdb) and hisv6, and each storage method with hissqlite (all 40 combinations with `INN_E2E_MATRIX=full`): articles fed with IHAVE and TAKETHIS (crossposts, one of 330 KB) read back byte for byte by number and Message-ID, with GROUP, LISTGROUP, OVER and HDR, and with `sm`; duplicates refused; a cancel by ctlinnd and by control message; the same after restarting innd; expireover and expire; overview and history rebuilt by `makehistory -O`. ovdb is skipped without Berkeley DB |
@@ -85,6 +88,14 @@ it. `INN_E2E_MATRIX=full` makes `TestMethodMatrix` run all 40 combinations of
 storage, overview and history methods instead of 25. Tests of INN issues that
 are known but not fixed yet are skipped; `INN_E2E_KNOWN_ISSUES=1` runs them.
 `pullnews` needs the Perl module `Net::NNTP` (libnet).
+
+The `TestMail*` tests deliver mail for real: through the host's MTA (`sendmail`)
+to a test mail hub that puts every recipient into one mailbox, which they read
+back with POP3, find by a token of their own and delete. `INN_E2E_MAILHUB`
+(default `10.10.30.109:110`, the test net of the e2e VMs) is the hub's POP3
+address, `INN_E2E_MAILUSER` and `INN_E2E_MAILPASS` the mailbox login (default
+`e2e` and its test password); the tests are skipped when the hub does not
+answer, or with `INN_E2E_MAILHUB=none`. The hub must not deliver anywhere else.
 
 The tests need a Linux or other Unix system where 127.0.0.2 can be used as a
 source address (Linux routes the whole 127.0.0.0/8 to the loopback interface).

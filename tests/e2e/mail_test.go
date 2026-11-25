@@ -1,0 +1,149 @@
+package e2e
+
+// Mail that INN programs send, delivered for real: through the test host's MTA (sendmail) to
+// the test mail hub, and read back from the hub's mailbox with POP3 (pop3_test.go). Every
+// test puts a token of its own in a header field of the mail and looks for that. The tests
+// are skipped where the hub is not reachable (INN_E2E_MAILHUB).
+
+import (
+	"os"
+	"slices"
+	"strings"
+	"testing"
+	"time"
+)
+
+// mailWait bounds the wait for a mail at the hub.
+const mailWait = 30 * time.Second
+
+// realMTA returns an inn.conf mta value for the host's sendmail, as configure writes it, or
+// skips the test when there is none.
+func realMTA(tb testing.TB) string {
+	tb.Helper()
+	for _, p := range []string{"/usr/sbin/sendmail", "/usr/lib/sendmail"} {
+		if fi, err := os.Stat(p); err == nil && fi.Mode().IsRegular() && fi.Mode()&0o111 != 0 {
+			return `"` + p + ` -oi -oem %s"`
+		}
+	}
+	tb.Skip("no sendmail program (/usr/sbin/sendmail, /usr/lib/sendmail): mail delivery needs an MTA")
+	return ""
+}
+
+// checkFields fails the test for each header field of m whose value is not the wanted one.
+func checkFields(tb testing.TB, m *mailMessage, want map[string]string) {
+	tb.Helper()
+	for name, v := range want {
+		if got := m.Get(name); got != v {
+			tb.Errorf("mail header field %s: %q, want %q\nheader:\n%s", name, got, v, strings.Join(m.Header, "\n"))
+		}
+	}
+}
+
+// TestMailModeratedPost: an article posted through nnrpd to a moderated group without an
+// Approved header field is mailed to the group's moderator, the address that the moderators
+// file gives for it (with the dots of the group name turned into dashes), with the article's
+// header fields; it is not posted to the group.
+func TestMailModeratedPost(t *testing.T) {
+	hub := needMailHub(t)
+	s := NewSite(t, SiteOptions{
+		InnConf: map[string]string{"mta": realMTA(t)},
+		Etc:     map[string]string{"moderators": "*:%s@moderators.example.org\n"},
+	})
+	token := mailToken(t)
+	id := msgID(t)
+	subject := "moderated " + token
+	art := newArticle(id, "e2e.moderated", subject, "for the moderator", "token "+token)
+
+	c := s.Reader(t)
+	expect(t, c, 340, "POST")
+	send(t, c, wire(art))
+	t.Logf("POST: %s", status(t, c, 240, "POST to e2e.moderated"))
+
+	m := hub.Wait(t, token, mailWait)
+	checkFields(t, m, map[string]string{
+		"To":         "e2e-moderated@moderators.example.org",
+		"Newsgroups": "e2e.moderated",
+		"Subject":    subject,
+		"Message-ID": id,
+		"From":       "E2E Test <e2e@example.invalid>",
+	})
+	if !slices.Contains(m.Body, "token "+token) {
+		t.Errorf("mail body %q lacks the article's body", m.Body)
+	}
+
+	if got := expect(t, c, 211, "GROUP e2e.moderated"); field(got, 1) != "0" {
+		t.Errorf("GROUP e2e.moderated: %q, want no article (it went to the moderator)", got)
+	}
+	expect(t, c, 205, "QUIT")
+}
+
+// TestMailInnmail: a mail sent with innmail, with a subject and an added header field,
+// reaches its recipient with them and the body read from standard input.
+func TestMailInnmail(t *testing.T) {
+	hub := needMailHub(t)
+	s := NewSite(t, SiteOptions{InnConf: map[string]string{"mta": realMTA(t)}})
+	token := mailToken(t)
+	rcpt := "innmail-rcpt@mail.example.org"
+	subject := "innmail " + token
+	out := s.RunInput(t, "innmail body\ntoken "+token+"\n", "innmail",
+		"-s", subject, "-a", "X-E2E-Token: "+token, rcpt)
+	if out != "" {
+		t.Logf("innmail: %s", out)
+	}
+
+	m := hub.Wait(t, token, mailWait)
+	checkFields(t, m, map[string]string{
+		"To":          rcpt,
+		"Subject":     subject,
+		"X-E2E-Token": token,
+	})
+	if !slices.Equal(m.Body, []string{"innmail body", "token " + token}) {
+		t.Errorf("mail body %q, want the standard input of innmail", m.Body)
+	}
+}
+
+// TestMailNews2mail: an article in a group that newsfeeds gateways to a mailing-list with
+// news2mail reaches the list's address, sent from the envelope-from address of news2mail.cf,
+// with the article's header fields; the default command line (the MTA gets -odq, only queue
+// the mail) and -n (no -odq).
+func TestMailNews2mail(t *testing.T) {
+	hub := needMailHub(t)
+	mta := realMTA(t)
+	for _, tc := range []struct{ name, command string }{
+		{"default", "@bindir@/news2mail"},
+		{"-n", "@bindir@/news2mail -n"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			s := NewSite(t, SiteOptions{
+				Groups:  []Group{{Name: "e2e.a"}},
+				InnConf: map[string]string{"mta": mta},
+				Newsfeeds: "ME:*::\n" +
+					"news2mail!:!*:Ac,Tc,Wn*:" + tc.command + "\n" +
+					"list-a:!*,e2e.a:Ap,Tm:news2mail!\n",
+				Etc: map[string]string{"news2mail.cf": "list-a a@lists.example.org sa@senders.example.org\n"},
+			})
+			token := mailToken(t)
+			id := msgID(t)
+			subject := "news2mail " + token
+			p := s.Peer(t)
+			expect(t, p, 335, "IHAVE %s", id)
+			send(t, p, wire(newArticle(id, "e2e.a", subject, "gatewayed", "token "+token)))
+			status(t, p, 235, "IHAVE "+id)
+			expect(t, p, 205, "QUIT")
+
+			m := hub.Wait(t, token, mailWait)
+			checkFields(t, m, map[string]string{
+				"To":         "a@lists.example.org",
+				"Newsgroups": "e2e.a",
+				"Subject":    subject,
+				"Message-ID": id,
+			})
+			if rp := m.Get("Return-Path"); rp != "<sa@senders.example.org>" {
+				t.Errorf("Return-Path %q, want <sa@senders.example.org> (the envelope-from of news2mail.cf)", rp)
+			}
+			if !slices.Contains(m.Body, "token "+token) {
+				t.Errorf("mail body %q lacks the article's body", m.Body)
+			}
+		})
+	}
+}
