@@ -45,7 +45,10 @@ the backend regardless of F<expire.ctl>.  See B<-N>, however.
 
 By default, B<expireover> purges all overview information for newsgroups
 that have been removed from the server; this behavior is suppressed if
-B<-f> is given.
+B<-f> is given.  The purge only follows a complete read of the newsgroup
+list: if a read error or a line longer than 32 KB stops the read,
+B<expireover> processes the newsgroups listed before that point, leaves the
+other ones alone, purges nothing, and exits with status 1.
 
 To speed up the existence check for each article, B<expireover> builds a
 Bloom filter from the history database at startup.  This replaces, for the
