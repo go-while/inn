@@ -308,6 +308,11 @@ newsgroups listed after that point were taken for newsgroups removed from
 the server, and their overview data was deleted.  B<expireover> now reports
 the problem, purges nothing and exits with status 1.
 
+=item *
+
+C<tdx-util -F> no longer reports that it is unable to repair each index
+entry it has just repaired in a tradindexed overview.
+
 =back
 
 =head1 Changes in 2.7.5 (not yet released)

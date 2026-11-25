@@ -1065,8 +1065,8 @@ clear:
     new_entry.offset = 0;
     new_entry.length = 0;
     offset = (entry - data->index) * sizeof(struct index_entry);
-    if (xpwrite(data->indexfd, &new_entry, sizeof(new_entry), offset) != 0)
-        warn("tradindexed: unable to repair %s:%lu", group, article);
+    if (xpwrite(data->indexfd, &new_entry, sizeof(new_entry), offset) < 0)
+        syswarn("tradindexed: unable to repair %s:%lu", group, article);
 }
 
 
