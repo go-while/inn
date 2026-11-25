@@ -887,6 +887,7 @@ tests/authprogs/ckpasswd.t            Tests for authprogs/ckpasswd
 tests/authprogs/domain.t              Tests for authprogs/domain
 tests/authprogs/ident-t.c             Tests for authprogs/ident
 tests/clients                         Test suite for NNTP clients (Directory)
+tests/clients/getlist-malformed.t     Tests for getlist on malformed lines
 tests/clients/getlist.t               Tests for frontends/getlist
 tests/clients/server-list.in          Dummy server for getlist testing
 tests/data                            Data for the test suite (Directory)
@@ -980,6 +981,7 @@ tests/innd                            Test suite for innd (Directory)
 tests/innd/artparse-t.c               Tests for ARTparse in innd
 tests/innd/chan-t.c                   Tests for CHAN functions in innd
 tests/innd/fakeinnd.c                 Provide symbols defined by innd/innd.c
+tests/innd/tinyleaf-long.t            Tests for tinyleaf on overlong lines
 tests/lib                             Test suite for libinn (Directory)
 tests/lib/artnumber-t.c               Tests for lib/artnumber.c
 tests/lib/asprintf-t.c                Tests for lib/asprintf.c
@@ -992,6 +994,7 @@ tests/lib/conffile-t.c                Tests for lib/conffile.c
 tests/lib/confparse-t.c               Tests for lib/confparse.c
 tests/lib/daemon-t.c                  Tests for lib/daemon.c
 tests/lib/date-t.c                    Tests for lib/date.c
+tests/lib/dbz-t.c                     Tests for lib/dbz.c table size checks
 tests/lib/dispatch-t.c                Tests for lib/dispatch.c
 tests/lib/fakewrite.c                 Helper functions for xwrite tests
 tests/lib/fakewrite.h                 Header file for xwrite helper functions

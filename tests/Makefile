@@ -20,7 +20,7 @@ TESTS	= authprogs/ident.t expire/tombstone.t expire/tombstone-hisexpire.t \
 	innd/artparse.t innd/chan.t lib/artnumber.t \
 	lib/asprintf.t lib/bloom.t lib/bloom-hiswalk.t lib/buffer.t \
 	lib/canlock.t lib/concat.t lib/conffile.t \
-	lib/confparse.t lib/daemon.t lib/date.t \
+	lib/confparse.t lib/daemon.t lib/date.t lib/dbz.t \
 	lib/dispatch.t lib/fdflag.t \
 	lib/getaddrinfo.t lib/getnameinfo.t lib/hash.t \
 	lib/hashtab.t lib/headers.t lib/hex.t \
@@ -144,6 +144,12 @@ lib/bloom-hiswalk.t: lib/bloom-hiswalk-t.o tap/basic.o $(STORAGEDEPS)
 
 lib/buffer.t: lib/buffer-t.o tap/basic.o $(LIBINN)
 	$(LINK) lib/buffer-t.o tap/basic.o $(LIBINN)
+
+lib/dbz-lib.o: ../lib/dbz.c
+	$(CC) $(CFLAGS) -c -o $@ ../lib/dbz.c
+
+lib/dbz.t: lib/dbz-t.o lib/dbz-lib.o tap/basic.o $(LIBINN)
+	$(LINK) lib/dbz-t.o lib/dbz-lib.o tap/basic.o $(LIBINN) $(LIBS)
 
 lib/canlock.t: lib/canlock-t.o tap/basic.o $(LIBINN)
 	$(LINK) lib/canlock-t.o tap/basic.o $(LIBINN) $(CANLOCK_LIBS)

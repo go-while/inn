@@ -2,12 +2,14 @@ authprogs/ckpasswd
 authprogs/domain
 authprogs/ident
 clients/getlist
+clients/getlist-malformed
 docs/pod
 expire/tombstone
 expire/tombstone-e2e
 expire/tombstone-hisexpire
 innd/artparse
 innd/chan
+innd/tinyleaf-long
 lib/artnumber
 lib/asprintf
 lib/bloom
@@ -19,6 +21,7 @@ lib/conffile
 lib/confparse
 lib/date
 lib/daemon
+lib/dbz
 lib/dispatch
 lib/fdflag
 lib/getaddrinfo
