@@ -1630,7 +1630,7 @@ NCproc(CHANNEL *cp)
                 }
                 snprintf(buff2, sizeof(buff2), "%s/%lu%d.x",
                          innconf->pathincoming, (unsigned long) now, cp->fd);
-                if (rename(buff, buff2)) {
+                if (fd >= 0 && rename(buff, buff2)) {
                     oerrno = errno;
                     syslog(L_ERROR, "%s cant rename %s to %s: %m",
                            CHANname(cp), failed ? "" : buff, buff2);
