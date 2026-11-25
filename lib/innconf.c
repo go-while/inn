@@ -173,6 +173,7 @@ static const struct config config_table[] = {
     {K(checkincludedtext),          BOOL(false)       },
     {K(clienttimeout),              UNUMBER(1800)     },
     {K(complaints),                 STRING(NULL)      },
+    {K(disablecapabilities),        LIST(NULL)        },
     {K(initialtimeout),             UNUMBER(10)       },
     {K(keyartlimit),                UNUMBER(100000)   },
     {K(keylimit),                   UNUMBER(512)      },
@@ -461,6 +462,17 @@ innconf_validate(struct config_group *group)
     bool okay = true;
     unsigned int i;
     char *fqdn;
+
+    for (i = 0; i < innconf->disablecapabilities->count; i++) {
+        const char *capability = innconf->disablecapabilities->strings[i];
+        if (strcasecmp(capability, "COMPRESS") != 0
+            && strcasecmp(capability, "SASL") != 0
+            && strcasecmp(capability, "STARTTLS") != 0) {
+            config_error_param(group, "disablecapabilities",
+                               "unknown capability %s", capability);
+            okay = false;
+        }
+    }
 
     /* Checks to ensure valid Message-IDs will be generated. */
     fqdn = inn_getfqdn(innconf->domain);

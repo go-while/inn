@@ -109,6 +109,7 @@ struct innconf {
     bool allownewnews;            /* Allow use of the NEWNEWS command */
     bool articlemmap;             /* Use mmap to read articles? */
     unsigned long clienttimeout;  /* How long nnrpd can be inactive */
+    struct vector *disablecapabilities; /* Optional nnrpd capabilities */
     unsigned long initialtimeout; /* How long nnrpd waits for first command */
     unsigned long
         msgidcachesize; /* Number of entries in the message ID cache */

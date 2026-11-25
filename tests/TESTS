@@ -68,6 +68,7 @@ lib/xmalloc
 lib/xwrite
 nnrpd/auth-ext
 nnrpd/cache
+nnrpd/capabilities
 overview/api
 overview/buffindexed
 overview/build

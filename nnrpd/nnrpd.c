@@ -134,6 +134,8 @@ bool PerlLoaded = false;
 bool PY_use_dynamic = false;
 #endif
 
+static bool disable_compress, disable_sasl, disable_starttls;
+
 static char CMDfetchhelp[] = "[message-ID|number]";
 
 
@@ -260,7 +262,8 @@ ExitWithStats(int x, bool readconf)
         sasl_ssf = 0;
         sasl_maxout = NNTP_MAXLEN_COMMAND;
     }
-    sasl_done();
+    if (!disable_sasl)
+        sasl_done();
 #endif /* HAVE_SASL */
 
 #if defined(HAVE_ZLIB)
@@ -390,9 +393,11 @@ CMDcapabilities(int ac, char *av[])
      * Start the string with a space for the strstr() calls afterwards.
      * The list belongs to the SASL library; work on a copy, from which
      * insecure mechanisms may be removed. */
-    sasl_listmech(sasl_conn, NULL, " ", " ", "", &saslmechs, NULL, NULL);
-    if (saslmechs != NULL)
-        mechlist = xstrdup(saslmechs);
+    if (!disable_sasl) {
+        sasl_listmech(sasl_conn, NULL, " ", " ", "", &saslmechs, NULL, NULL);
+        if (saslmechs != NULL)
+            mechlist = xstrdup(saslmechs);
+    }
 #endif
 
     /* The client is not already authenticated. */
@@ -451,7 +456,7 @@ CMDcapabilities(int ac, char *av[])
 
 #if defined(HAVE_ZLIB)
     /* A compression layer is not active. */
-    if (!compression_layer_on) {
+    if (!disable_compress && !compression_layer_on) {
         Printf("COMPRESS DEFLATE\r\n");
     }
 #endif /* HAVE_ZLIB */
@@ -495,7 +500,7 @@ CMDcapabilities(int ac, char *av[])
 #if defined(HAVE_OPENSSL)
     /* A TLS layer is not active, a compression layer is not active,
      * and the client is not already authenticated. */
-    if (!encryption_layer_on
+    if (!disable_starttls && !encryption_layer_on
 #    if defined(HAVE_ZLIB)
         && !compression_layer_on
 #    endif /* HAVE_ZLIB */
@@ -1045,8 +1050,25 @@ main(int argc, char *argv[])
     if (!innconf_read(NULL))
         exit(1);
 
+    for (j = 0; j < innconf->disablecapabilities->count; j++) {
+        const char *capability = innconf->disablecapabilities->strings[j];
+        if (strcasecmp(capability, "SASL") == 0)
+            disable_sasl = true;
+        else if (strcasecmp(capability, "COMPRESS") == 0)
+            disable_compress = true;
+        else if (strcasecmp(capability, "STARTTLS") == 0)
+            disable_starttls = true;
+    }
+    for (cp = CMDtable; cp->Name; cp++) {
+        if ((disable_compress && strcmp(cp->Name, "COMPRESS") == 0)
+            || (disable_starttls && strcmp(cp->Name, "STARTTLS") == 0))
+            cp->Function = CMD_unimp;
+        if (disable_sasl && cp->Function == CMDauthinfo)
+            cp->Help = "USER name|PASS password|GENERIC program [argument ...]";
+    }
+
 #ifdef HAVE_SASL
-    if (sasl_server_init(sasl_callbacks, "INN") != SASL_OK) {
+    if (!disable_sasl && sasl_server_init(sasl_callbacks, "INN") != SASL_OK) {
         syslog(L_FATAL, "sasl_server_init() failed");
         exit(1);
     }
@@ -1476,7 +1498,8 @@ main(int argc, char *argv[])
     }
 
 #ifdef HAVE_SASL
-    SASLnewserver();
+    if (!disable_sasl)
+        SASLnewserver();
 #endif /* HAVE_SASL */
 
     if (PERMaccessconf) {
@@ -1648,6 +1671,12 @@ main(int argc, char *argv[])
                 }
             if (validcommandtoolong)
                 continue;
+        }
+
+        if (disable_sasl && cp->Function == CMDauthinfo && ac > 1
+            && strcasecmp(av[1], "SASL") == 0) {
+            Reply("%d SASL authentication unsupported\r\n", NNTP_ERR_SYNTAX);
+            continue;
         }
 
         /* Check usage. */
