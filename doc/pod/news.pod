@@ -259,6 +259,13 @@ A new I<tlsloglevel> parameter in F<inn.conf> permits enabling the logging
 of TLS/SSL connections by B<nnrpd> for debugging purposes.  It previously
 required changing an internal variable and rebuilding INN.
 
+=item *
+
+B<innd> now warns, in its reply to C<ctlinnd reload all> and in syslog,
+when F<inn.conf> has been modified since it started: changes to that file
+are not taken into account by a reload and require restarting B<innd>.
+It also says so when it cannot verify whether the file has been modified.
+
 =back
 
 =head1 Changes in 2.7.4 (2026-06-22)
