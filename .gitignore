@@ -243,7 +243,6 @@
 /tests/lib/reallocarray.t
 /tests/lib/reservedfd.t
 /tests/lib/setenv.t
-/tests/lib/snprintf.t
 /tests/lib/strlcat.t
 /tests/lib/strlcpy.t
 /tests/lib/tst.t
