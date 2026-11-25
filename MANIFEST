@@ -210,6 +210,7 @@ doc/man/libinn_mmap.3                 Manpage to synchronize a range of mapped p
 doc/man/libinn_newsuser.3             Manpage for news account routines
 doc/man/libinn_qio.3                  Manpage for fast I/O file routines
 doc/man/libinn_sequence.3             Manpage to compare wrapping sequence numbers
+doc/man/libinn_sqlite_helper.3        Manpage for SQLite statement helpers
 doc/man/libinn_tombstone.3            Manpage for tombstone routines
 doc/man/libinn_tst.3                  Manpage for ternary search tree routines
 doc/man/libinn_utility.3              Manpage to convert bytes to and from hexadecimal
@@ -348,6 +349,7 @@ doc/pod/libinn_mmap.pod               Master file for libinn_mmap.3
 doc/pod/libinn_newsuser.pod           Master file for libinn_newsuser.3
 doc/pod/libinn_qio.pod                Master file for libinn_qio.3
 doc/pod/libinn_sequence.pod           Master file for libinn_sequence.3
+doc/pod/libinn_sqlite_helper.pod      Master file for libinn_sqlite_helper.3
 doc/pod/libinn_tombstone.pod          Master file for libinn_tombstone.3
 doc/pod/libinn_tst.pod                Master file for libinn_tst.3
 doc/pod/libinn_utility.pod            Master file for libinn_utility.3

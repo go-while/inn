@@ -21,7 +21,8 @@ MAN3	= ../man/libinn.3 ../man/libinn_clientlib.3 ../man/libinn_dbz.3 \
 	../man/libinn_qio.3 ../man/libinn_tst.3 ../man/libinn_uwildmat.3 \
 	../man/innshellvars.3 ../man/libinn_mmap.3 ../man/libinn_sequence.3 \
 	../man/libinn_utility.3 ../man/libinn_dispatch.3 ../man/libinn_md5.3 \
-	../man/libinn_newsuser.3 ../man/libinn_tombstone.3
+	../man/libinn_newsuser.3 ../man/libinn_tombstone.3 \
+	../man/libinn_sqlite_helper.3
 
 MAN5	= ../man/active.5 ../man/active.times.5 ../man/buffindexed.conf.5 \
 	../man/control.ctl.5 ../man/cycbuff.conf.5 ../man/distrib.pats.5 \
@@ -124,6 +125,8 @@ maintclean: distclean
 ../man/libinn_sequence.3: libinn_sequence.pod	; $(POD2MAN) -s 3 $? > $@
 
 ../man/libinn_tombstone.3: libinn_tombstone.pod	; $(POD2MAN) -s 3 $? > $@
+
+../man/libinn_sqlite_helper.3: libinn_sqlite_helper.pod	; $(POD2MAN) -s 3 $? > $@
 ../man/libinn_tst.3:	libinn_tst.pod		; $(POD2MAN) -s 3 $? > $@
 ../man/libinn_utility.3: libinn_utility.pod	; $(POD2MAN) -s 3 $? > $@
 ../man/libinn_uwildmat.3: libinn_uwildmat.pod	; $(POD2MAN) -s 3 $? > $@

@@ -106,8 +106,9 @@ and related data.  The whole documentation of I<libinn> routines is split
 into several specific man pages besides this one: libinn_clientlib(3),
 libinn_dbz(3), libinn_dispatch(3), libinn_hashtab(3), libinn_inndcomm(3),
 libinn_list(3), libinn_md5(3), libinn_mmap(3), libinn_newsuser(3),
-libinn_qio(3), libinn_sequence(3), libinn_tombstone(3), libinn_tst(3),
-libinn_utility(3) and libinn_uwildmat(3).
+libinn_qio(3), libinn_sequence(3), libinn_sqlite_helper(3),
+libinn_tombstone(3), libinn_tst(3), libinn_utility(3) and
+libinn_uwildmat(3).
 
 =head2 MACROS
 
@@ -458,7 +459,8 @@ POD by Julien Élie.
 active(5), inn.conf(5), libinn_clientlib(3), libinn_dbz(3),
 libinn_dispatch(3), libinn_hashtab(3), libinn_inndcomm(3), libinn_list(3),
 libinn_md5(3), libinn_mmap(3), libinn_newsuser(3), libinn_qio(3),
-libinn_sequence(3), libinn_tombstone(3), libinn_tst(3), libinn_utility(3).
-libinn_uwildmat(3), moderators(5), passwd.nntp(5).
+libinn_sequence(3), libinn_sqlite_helper(3), libinn_tombstone(3),
+libinn_tst(3), libinn_utility(3), libinn_uwildmat(3), moderators(5),
+passwd.nntp(5).
 
 =cut
