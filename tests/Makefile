@@ -20,7 +20,7 @@ TESTS	= authprogs/ident.t expire/tombstone.t expire/tombstone-hisexpire.t \
 	innd/artparse.t innd/chan.t lib/artnumber.t lib/asprintf.t \
 	lib/bloom.t lib/bloom-hiswalk.t lib/buffer.t lib/canlock.t \
 	lib/concat.t lib/conffile.t lib/confparse.t lib/daemon.t lib/date.t \
-	lib/defdist.t lib/dispatch.t lib/fdflag.t lib/fdlimit.t \
+	lib/dbz.t lib/defdist.t lib/dispatch.t lib/fdflag.t lib/fdlimit.t \
 	lib/getaddrinfo.t lib/getnameinfo.t lib/hash.t lib/hashtab.t \
 	lib/headers.t lib/hex.t lib/hissqlite.t lib/hissqlite-convert.t \
 	lib/inet_aton.t lib/inet_ntoa.t lib/inet_ntop.t lib/innconf.t \
@@ -166,6 +166,10 @@ lib/date.t: lib/date-t.o tap/basic.o tap/string.o $(LIBINN)
 
 lib/defdist.t: lib/defdist-t.o tap/basic.o $(LIBINN)
 	$(LINK) lib/defdist-t.o tap/basic.o $(LIBINN) $(LIBS)
+
+lib/dbz.t: lib/dbz-t.o tap/basic.o tap/messages.o tap/string.o $(LIBINN)
+	$(LINK) lib/dbz-t.o tap/basic.o tap/messages.o tap/string.o \
+	    $(LIBINN) $(LIBS)
 
 lib/dispatch.t: lib/dispatch-t.o tap/basic.o $(LIBINN)
 	$(LINK) lib/dispatch-t.o tap/basic.o $(LIBINN)

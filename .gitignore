@@ -217,6 +217,7 @@
 /tests/lib/confparse.t
 /tests/lib/daemon.t
 /tests/lib/date.t
+/tests/lib/dbz.t
 /tests/lib/defdist.t
 /tests/lib/dispatch.t
 /tests/lib/fdflag.t
