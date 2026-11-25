@@ -200,7 +200,9 @@ if [ ! -s ${ACTIVE} ]; then
     #    && mv history.n.hash history.hash
 fi
 
-##  Overview data was rebuilt, and also active needs to be renumbered
+##  Overview data was rebuilt, and also active needs to be renumbered.
+##  The file is not removed here:  innd removes it once it has renumbered
+##  the active file, so that the request is not lost when it fails to start.
 if [ -f ${PATHRUN}/.rebuildoverview ]; then
     echo 'INND: overview was rebuilt, and active needs to be renumbered!'
     RFLAG="-r"
@@ -210,7 +212,7 @@ fi
 (cd ${BATCH} && rm -f bch*)
 (cd ${LOCKS} && rm -f LOCK*)
 (cd ${TEMPSOCKDIR} && rm -f ${TEMPSOCK})
-rm -f ${NEWSCONTROL} ${NNTPCONNECT} ${SERVERPID} ${PATHRUN}/.rebuildoverview
+rm -f ${NEWSCONTROL} ${NNTPCONNECT} ${SERVERPID}
 
 case "$OVMETHOD" in
 ovdb)
