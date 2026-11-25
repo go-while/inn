@@ -9,6 +9,7 @@ expire/tombstone-hisexpire
 innd/artparse
 innd/chan
 innfeed/buffer
+innfeed/buffer-limits
 lib/artnumber
 lib/asprintf
 lib/bloom
