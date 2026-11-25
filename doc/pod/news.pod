@@ -83,6 +83,15 @@ buffers in proportion to their usable sizes.
 
 =item *
 
+B<tinyleaf> now accepts B<-s> to set the maximum article size in bytes and
+B<-t> to set the read timeout in seconds.  Even with default options, a
+full input buffer now gets a 400 reply and disconnects.  Previously an
+oversized article was silently dropped and the peers lost synchronization,
+while an overlong command looped indefinitely.  More than two positional
+arguments are now rejected.
+
+=item *
+
 A new history storage method based on SQLite has been added, named
 C<hissqlite>, selectable instead of C<hisv6> via the I<hismethod>
 parameter in F<inn.conf> when INN is built with SQLite support.  The

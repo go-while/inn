@@ -40,7 +40,8 @@ TESTS	= authprogs/ident.t expire/tombstone.t expire/tombstone-hisexpire.t \
 
 EXTRA	= runtests clients/server-list docs/pod.t lib/xmalloc \
 	  nnrpd/auth-test overview/ovsqlite-read.t overview/ovsqlite-write.t \
-	  perl/minimum-version.t util/innmail.t perl/ovsqlite-client.t
+	  perl/minimum-version.t util/innmail.t perl/ovsqlite-client.t \
+	  innd/tinyleaf-status
 
 BENCHMARKS = lib/history-bench
 
@@ -96,6 +97,11 @@ INNOBJS		= ../innd/art.o ../innd/cc.o ../innd/chan.o ../innd/icd.o \
 INNDLIBS        = $(LIBSTORAGE) $(LIBHIST) $(LIBINN) $(STORAGE_LIBS) \
 		  $(SYSTEMD_LIBS) $(CANLOCK_LIBS) \
 		  $(PYTHON_LIBS) $(REGEX_LIBS) $(LIBS) $(PERL_LIBS)
+
+innd/tinyleaf-status.o: ../innd/tinyleaf.c
+
+innd/tinyleaf-status: innd/tinyleaf-status.o $(LIBINN)
+	$(LINK) innd/tinyleaf-status.o $(LIBINN) $(LIBS)
 
 runtests: runtests.o
 	$(LINK) runtests.o
