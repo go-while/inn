@@ -1,0 +1,617 @@
+=head1 NAME
+
+inn - Overview of the InterNetNews documentation
+
+=head1 DESCRIPTION
+
+InterNetNews (INN) is a complete Usenet system.  It includes innd(8), a
+server that receives and relays news articles, nnrpd(8), a server that
+lets clients read and post articles, and many programs to feed, store,
+expire and maintain news.
+
+This man page is an index of the documentation of INN.  It lists all the
+man pages installed with INN, by section, and the other documentation
+files.
+
+If you are new to INN, start with the F<INSTALL> file.  Then read
+inn.conf(5), newsfeeds(5), incoming.conf(5), storage.conf(5),
+readers.conf(5) and expire.ctl(5), which are the main configuration
+files.  ctlinnd(8) and rc.news(8) explain how to control the running
+server, and news.daily(8) the daily maintenance.
+
+The man pages are installed in I<pathnews>/share/man by default.  If they
+are not found by B<man>, add this directory to your MANPATH environment
+variable or use a command like:
+
+    man -M <pathnews in inn.conf>/share/man inn.conf
+
+=head1 USER COMMANDS
+
+=over 4
+
+=item convdate(1)
+
+Convert to/from RFC 5322 dates and seconds since epoch.
+
+=item fastrm(1)
+
+Quickly remove a list of files.
+
+=item gencancel(1)
+
+Generate cancel control messages.
+
+=item getlist(1)
+
+Get a list from an NNTP server.
+
+=item grephistory(1)
+
+Query the INN history database.
+
+=item inews(1)
+
+Post an article to a news server.
+
+=item inn(1)
+
+This page.
+
+=item innconfval(1)
+
+Get configuration parameters from configuration files.
+
+=item innmail(1)
+
+Simple mail-sending program.
+
+=item nntpget(1)
+
+Get Usenet articles from a remote NNTP server.
+
+=item pgpverify(1)
+
+Cryptographically verify Usenet control messages.
+
+=item pullnews(1)
+
+Pull news from multiple news servers and feed it to another.
+
+=item rnews(1)
+
+Inject individual articles and UUCP batches.
+
+=item shrinkfile(1)
+
+Shrink files on line boundaries.
+
+=item simpleftp(1)
+
+Rudimentary FTP and HTTP(S) client.
+
+=back
+
+=head1 LIBRARIES
+
+=over 4
+
+=item libinn(3)
+
+InterNetNews library routines.
+
+=item libinn_clientlib(3)
+
+NNTP clientlib part of the InterNetNews library.
+
+=item libinn_dbz(3)
+
+Database routines for InterNetNews.
+
+=item libinn_inndcomm(3)
+
+Routines for managing innd control commands.
+
+=item libinn_list(3)
+
+List routines.
+
+=item libinn_qio(3)
+
+Quick I/O routines for reading files.
+
+=item libinn_tst(3)
+
+Ternary search trie functions.
+
+=item libinn_uwildmat(3)
+
+Perform wildmat matching.
+
+=item libinnauth(3)
+
+Routines for writing nnrpd resolvers and authenticators.
+
+=item libinnhist(3)
+
+Routines for managing INN history.
+
+=item libinnstorage(3)
+
+Routines for managing INN storage.
+
+=back
+
+=head1 PERL MODULES
+
+=over 4
+
+=item INN::Config(3pm)
+
+Export all the variables an INN Perl script might need.
+
+=item INN::Utils::Shlock(3pm)
+
+Wrapper around the B<shlock> program.
+
+=item INN::ovsqlite_client(3pm)
+
+Talk to B<ovsqlite-server> from Perl.
+
+=back
+
+=head1 FILE FORMATS
+
+=over 4
+
+=item active(5)
+
+List of newsgroups carried by the server.
+
+=item active.times(5)
+
+List of local creation times of newsgroups.
+
+=item buffindexed.conf(5)
+
+Configuration for the buffindexed overview method.
+
+=item control.ctl(5)
+
+Specify handling of Usenet control messages.
+
+=item cycbuff.conf(5)
+
+Configuration file for INN CNFS storage method.
+
+=item distrib.pats(5)
+
+Default values for the Distribution header field.
+
+=item distributions(5)
+
+Recommended values for the Distribution header field.
+
+=item expire.ctl(5)
+
+Configuration file for article expiration.
+
+=item hissqlite(5)
+
+SQLite-based history storage method for INN.
+
+=item history(5), hisv6(5)
+
+Record of current and recently expired Usenet articles.
+
+=item incoming.conf(5)
+
+Configuration of incoming news feeds.
+
+=item inn.conf(5)
+
+Configuration data for InterNetNews programs.
+
+=item inn-radius.conf(5)
+
+Configuration for nnrpd RADIUS authenticator.
+
+=item inn-secrets.conf(5)
+
+Configuration data for InterNetNews secrets.
+
+=item innfeed.conf(5)
+
+Configuration file for innfeed.
+
+=item innreport.conf(5)
+
+Configuration file for innreport.
+
+=item innwatch.ctl(5)
+
+List of supervisory actions taken by innwatch.
+
+=item localgroups(5)
+
+List of local newsgroups for checkgroups control messages, documented in
+docheckgroups(8).
+
+=item moderators(5)
+
+Submission addresses for moderated groups.
+
+=item motd.news(5), motd.innd(5), motd.nnrpd(5)
+
+Message of the day information for feeders or readers.
+
+=item newsfeeds(5)
+
+Determine where Usenet articles are sent.
+
+=item newsgroups(5)
+
+List of newsgroups and their short descriptions.
+
+=item newslog(5)
+
+Description of INN log files.
+
+=item nnrpd.track(5)
+
+Specify hosts to be tracked by nnrpd.
+
+=item nntpsend.ctl(5)
+
+List of sites to feed via nntpsend.
+
+=item nocem.ctl(5)
+
+Configuration of NoCeM issuers, documented in perl-nocem(8).
+
+=item ovdb(5)
+
+Overview storage method for INN.
+
+=item ovsqlite(5)
+
+SQLite-based overview storage method for INN.
+
+=item passwd.nntp(5)
+
+Passwords for connecting to remote NNTP servers.
+
+=item readers.conf(5)
+
+Access control and configuration for nnrpd.
+
+=item storage.conf(5)
+
+Configuration file for storage manager.
+
+=item subscriptions(5)
+
+Default recommended subscriptions.
+
+=back
+
+=head1 SYSTEM ADMINISTRATION
+
+=over 4
+
+=item actmerge(8)
+
+Merge two active files.
+
+=item actsync(8), actsyncd(8)
+
+Synchronize newsgroups.
+
+=item archive(8)
+
+Usenet article archiver.
+
+=item auth_krb5(8)
+
+nnrpd Kerberos v5 authenticator (only installed when INN is built with
+Kerberos v5 support).
+
+=item batcher(8)
+
+Article batching for InterNetNews.
+
+=item buffchan(8)
+
+Buffered file-writing backend for INN.
+
+=item ckpasswd(8)
+
+nnrpd password authenticator.
+
+=item cnfsheadconf(8)
+
+Read and write CNFS headers.
+
+=item cnfsstat(8)
+
+Show usage of CNFS buffers.
+
+=item controlbatch(8)
+
+Run controlchan against a batch file.
+
+=item controlchan(8)
+
+Channel-fed control message handler.
+
+=item ctlinnd(8)
+
+Control the main InterNetNews daemon.
+
+=item cvtbatch(8)
+
+Convert Usenet batch files to INN format.
+
+=item delayer(8)
+
+A pipe to delay line-based input by a given time.
+
+=item docheckgroups(8)
+
+Process checkgroups and output a list of changes.
+
+=item domain(8)
+
+nnrpd domain resolver.
+
+=item expire(8)
+
+Usenet article and history expiration program.
+
+=item expireover(8)
+
+Expire entries from the news overview database.
+
+=item expirerm(8)
+
+Remove articles that have been expired.
+
+=item hissqlite-convert(8)
+
+Convert an INN history database to the hissqlite method.
+
+=item hissqlite-util(8)
+
+History manipulation utility for hissqlite.
+
+=item ident(8)
+
+nnrpd ident resolver.
+
+=item innbind(8)
+
+Helper program to bind sockets to privileged ports.
+
+=item inncheck(8)
+
+Check INN configuration and database files.
+
+=item innd(8)
+
+InterNetNews daemon.
+
+=item inndf(8)
+
+Report free disk, inodes, and overview information.
+
+=item innfeed(8), imapfeed(8)
+
+Multi-host, multi-connection, streaming NNTP feeder.
+
+=item innreport(8)
+
+Summarize INN log files.
+
+=item innstat(8)
+
+Print snapshot of INN system.
+
+=item innupgrade(8)
+
+Upgrade INN configuration files.
+
+=item innwatch(8)
+
+Monitor the state of INN and the system.
+
+=item innxbatch(8), sendxbatches(8)
+
+Send xbatched Usenet articles to a remote NNTP server.
+
+=item innxmit(8)
+
+Send Usenet articles to a remote NNTP server.
+
+=item mailpost(8)
+
+Feed an e-mail message into a newsgroup.
+
+=item makedbz(8)
+
+Rebuild dbz files.
+
+=item makehistory(8)
+
+Initialize or rebuild INN history database.
+
+=item mod-active(8)
+
+Batch processing of newsgroups creation and removal commands.
+
+=item news.daily(8)
+
+Perform daily Usenet maintenance tasks.
+
+=item news2mail(8)
+
+Channel script to gateway news into e-mails.
+
+=item ninpaths(8), inpaths(8)
+
+Report Usenet Path header field statistics.
+
+=item nnrpd(8)
+
+NNTP server for reader clients.
+
+=item nntpsend(8)
+
+Send Usenet articles to remote sites.
+
+=item ovdb_init(8)
+
+Prepare ovdb database for use.
+
+=item ovdb_monitor(8)
+
+Database maintenance.
+
+=item ovdb_server(8)
+
+Overview helper server for nnrpd.
+
+=item ovdb_stat(8)
+
+Display information from the ovdb database.
+
+=item overchan(8)
+
+Batch update the INN overview database.
+
+=item ovsqlite-server(8)
+
+Sole owner of the ovsqlite database.
+
+=item ovsqlite-util(8)
+
+Overview manipulation utility for ovsqlite.
+
+=item perl-nocem(8)
+
+A NoCeM-on-spool implementation for INN.
+
+=item procbatch(8)
+
+Process an INN funnel file or innfeed-dropped file.
+
+=item prunehistory(8)
+
+Remove tokens from Usenet history file.
+
+=item radius(8)
+
+nnrpd RADIUS password authenticator.
+
+=item rc.news(8)
+
+Start or stop INN daemons.
+
+=item scanlogs(8)
+
+Summarize and rotate INN log files.
+
+=item scanspool(8)
+
+Perform a sanity scan over all articles in news spool.
+
+=item send-ihave(8)
+
+Send ihave control messages to remote sites.
+
+=item send-uucp(8)
+
+Send Usenet articles via UUCP.
+
+=item sendinpaths(8)
+
+Send Usenet Path header field statistics via e-mail.
+
+=item shlock(8)
+
+Create lock files for use in shell scripts.
+
+=item sm(8)
+
+Command-line interface to the INN storage manager.
+
+=item tally.control(8)
+
+Keep track of newsgroup creations and deletions.
+
+=item tdx-util(8)
+
+Overview manipulation utility for tradindexed.
+
+=item tinyleaf(8)
+
+Very simple IHAVE-only NNTP server.
+
+=item writelog(8)
+
+Write or mail a log entry.
+
+=back
+
+=head1 OTHER DOCUMENTATION
+
+The following files are installed in I<pathnews>/doc by default.
+
+=over 4
+
+=item F<INSTALL>
+
+Installation and configuration of INN.  Read it first.
+
+=item F<README>
+
+General information about INN and pointers to more documentation.
+
+=item F<NEWS>
+
+Changes in each release of INN.  Read it before upgrading.
+
+=item F<HACKING>
+
+Information for people who want to work on the source code of INN.
+
+=item F<hook-perl>, F<hook-python>
+
+Writing Perl and Python filters and authentication hooks for innd and
+nnrpd.
+
+=item F<external-auth>
+
+Writing external authenticators and resolvers for nnrpd.
+
+=item F<sample-control>
+
+A sample control message.
+
+=item F<config-design>, F<config-semantics>, F<config-syntax>
+
+Design notes about the configuration file parser.
+
+=item F<history>, F<history-innfeed>
+
+Historical notes about INN and innfeed.
+
+=item F<CONTRIBUTORS>, F<LICENSE>, F<GPL>, F<TODO>
+
+Contributors, license terms and planned work.
+
+=back
+
+=head1 SEE ALSO
+
+ctlinnd(8), inn.conf(5), innd(8), nnrpd(8), rc.news(8).
+
+=cut

@@ -3,7 +3,7 @@ include ../../Makefile.global
 top	= ../..
 
 SEC1	= convdate.1 fastrm.1 gencancel.1 getlist.1 \
-	grephistory.1 inews.1 \
+	grephistory.1 inews.1 inn.1 \
 	innconfval.1 innmail.1 nntpget.1 pgpverify.1 pullnews.1 rnews.1 \
 	shrinkfile.1 simpleftp.1
 
