@@ -60,6 +60,7 @@ struct state {
     unsigned long count;
     unsigned long duplicates;
     FILE *processor;
+    size_t maxsize;
 };
 
 
@@ -108,6 +109,13 @@ command_ihave(struct cvector *command, void *cookie)
     status = nntp_read_multiline(state->nntp, &article, &length);
     switch (status) {
     case NNTP_READ_OK:
+        if (length > state->maxsize) {
+            if (!nntp_respond(state->nntp, NNTP_FAIL_IHAVE_REJECT,
+                              "Article exceeds size limit"))
+                sysdie("cannot flush output");
+            free(msgid);
+            return;
+        }
         break;
     case NNTP_READ_EOF:
         die("connection closed while receiving article");
@@ -116,9 +124,13 @@ command_ihave(struct cvector *command, void *cookie)
     case NNTP_READ_TIMEOUT:
         die("network timeout while receiving article");
     case NNTP_READ_LONG:
-        warn("article %s exceeds maximum size", msgid);
+        /* The terminating dot has not been read.  Close the connection so
+           that article data cannot be mistaken for the next command. */
+        if (!nntp_respond(state->nntp, NNTP_FAIL_TERMINATING,
+                          "Article exceeds input buffer limit"))
+            sysdie("cannot flush output");
         free(msgid);
-        return;
+        shutdown(state);
     default:
         sysdie("internal: unknown NNTP library status");
     }
@@ -218,10 +230,27 @@ command_unknown(struct cvector *command UNUSED, void *cookie)
 }
 
 
+/* Parse a positive decimal limit that fits in both size_t and time_t on
+   supported systems. */
+static int
+parse_limit(const char *arg)
+{
+    char *end;
+    long value;
+
+    errno = 0;
+    value = strtol(arg, &end, 10);
+    if (*arg < '0' || *arg > '9' || *end != '\0' || errno == ERANGE
+        || value < 1 || value > INT_MAX)
+        die("invalid limit: %s", arg);
+    return (int) value;
+}
+
 int
 main(int argc, char *argv[])
 {
-    struct state state = {NULL, 0, 0, NULL};
+    struct state state = {0};
+    int option, timeout = 600;
     struct cvector *command;
     enum nntp_status status;
 
@@ -230,24 +259,40 @@ main(int argc, char *argv[])
     message_handlers_warn(1, message_log_syslog_warning);
     message_handlers_die(1, message_log_syslog_warning);
 
+    state.maxsize = 1024 * 1024;
+    while ((option = getopt(argc, argv, "s:t:")) != -1) {
+        switch (option) {
+        case 's':
+            state.maxsize = parse_limit(optarg);
+            break;
+        case 't':
+            timeout = parse_limit(optarg);
+            break;
+        default:
+            die("usage: tinyleaf [-s bytes] [-t seconds] spool [processor]");
+        }
+    }
+    argc -= optind;
+    argv += optind;
+    if (argc < 1 || argc > 2)
+        die("usage: tinyleaf [-s bytes] [-t seconds] spool [processor]");
+
     /* Change to the spool directory where all articles will be written. */
-    if (argc < 2)
-        die("no spool directory specified");
-    if (chdir(argv[1]) < 0)
-        sysdie("cannot change directory to %s", argv[1]);
+    if (chdir(argv[0]) < 0)
+        sysdie("cannot change directory to %s", argv[0]);
 
     /* If a processing command was specified, open a pipe to it. */
-    if (argc == 3) {
-        state.processor = popen(argv[2], "w");
+    if (argc == 2) {
+        state.processor = popen(argv[1], "w");
         if (state.processor == NULL)
-            sysdie("cannot open a pipe to %s", argv[2]);
+            sysdie("cannot open a pipe to %s", argv[1]);
         setvbuf(state.processor, NULL, _IONBF, BUFSIZ);
     }
 
     /* Go into the main input loop.  The only commands we support, for now,
        are HELP, IHAVE and QUIT. */
     notice("starting");
-    state.nntp = nntp_new(STDIN_FILENO, STDOUT_FILENO, 1024 * 1024, 10 * 60);
+    state.nntp = nntp_new(STDIN_FILENO, STDOUT_FILENO, state.maxsize, timeout);
     nntp_respond(state.nntp, NNTP_OK_BANNER_NOPOST, "tinyfeed ready");
     command = cvector_new();
     while (1) {
@@ -266,8 +311,10 @@ main(int argc, char *argv[])
             notice("network timeout");
             shutdown(&state);
         case NNTP_READ_LONG:
-            warn("long line received");
-            break;
+            if (!nntp_respond(state.nntp, NNTP_FAIL_TERMINATING,
+                              "Command exceeds input buffer limit"))
+                sysdie("cannot flush output");
+            shutdown(&state);
         default:
             sysdie("internal: unknown NNTP library status");
         }
