@@ -182,6 +182,13 @@ also installed as man pages in section 7: inn-checklist(7),
 inn-external-auth(7), inn-hacking(7), inn-hook-perl(7), inn-hook-python(7),
 inn-install(7) and inn-readme(7).  The plain text files are still installed.
 
+=item *
+
+B<actsyncd> accepts a debug level for FTP, HTTP and HTTPS sources.
+It retrieves the remote active file before running a trial comparison.
+In debug mode without I<debug_outfmt>, it now always uses S<B<-o c>>
+(before, the output format came from the C<flags=> line).
+
 =back
 
 =head1 Changes in 2.7.5 (not yet released)
