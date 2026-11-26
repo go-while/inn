@@ -47,7 +47,9 @@ When a signal interrupts the rotation, B<scanlogs> tries to resume the server
 if it paused it, removes a partly written archive, releases its lock if it
 still holds its process ID and exits with status 1.  If B<ctlinnd go> fails
 and B<ctlinnd mode> does not show that the pause of this run is gone,
-B<scanlogs> prints the B<ctlinnd go> command to run.
+B<scanlogs> prints the B<ctlinnd go> command to run.  B<ctlinnd go> and
+B<ctlinnd mode> wait at most 600 seconds for the server; a timeout counts as
+a failure.
 
 Before it flushes the logs, B<scanlogs> moves what an interrupted run left
 behind to a uniquely named F<recovered.*> directory under I<pathlog>/OLD and
