@@ -117,6 +117,18 @@ store_article_common(char *text, size_t size)
     handle.groups = start;
     handle.groupslen = end - start;
 
+    /* Find the Path header field body (without the final CRLF), which the
+       path key of storage.conf matches.  Without one, the path is left
+       unset. */
+    start = wire_findheader(text, size, "Path", true);
+    if (start != NULL) {
+        end = wire_endheader(start, text + size - 1);
+        if (end != NULL) {
+            handle.path = start;
+            handle.pathlen = end - start - 1;
+        }
+    }
+
     /* Store the article. */
     token = SMstore(handle);
     free(handle.iov);

@@ -133,6 +133,13 @@ files behind after a failed creation, and the buffindexed overview method
 validates its F<group.index> file and no longer frees memory twice when
 mapping overview data fails.  Many thanks to Kevin Bowling for the patches.
 
+=item *
+
+C<sm -s> now matches the I<path> key of F<storage.conf> against the Path
+header field of the article it stores.  It did not supply it, so a I<path>
+pattern was matched against an empty value, and the article could be stored
+in the wrong storage class.
+
 =back
 
 =head1 Changes in 2.7.5 (not yet released)
