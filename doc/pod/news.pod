@@ -610,6 +610,14 @@ B<nnrpd> can show authenticated usernames in process titles when the
 I<addprocesstitleuser> option is enabled for the reader's access group.
 The option is off by default.
 
+=item *
+
+B<innmail> now exits with a non-zero status and says why when the MTA
+fails, for instance when it rejects the message or cannot queue it, or
+exits before reading the whole message.  It previously exited with status 0
+in the first case and could be killed by C<SIGPIPE> in the second, so
+callers could not tell why the mail was not sent.
+
 =back
 
 =head1 Changes in 2.7.5 (not yet released)
