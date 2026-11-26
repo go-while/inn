@@ -1,6 +1,7 @@
 authprogs/ckpasswd
 authprogs/domain
 authprogs/ident
+authprogs/krb5
 clients/getlist
 docs/pod
 expire/tombstone
