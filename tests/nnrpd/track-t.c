@@ -27,7 +27,7 @@ main(void)
     pid_t child;
     int status;
     static const struct {
-        char *host;
+        const char *host;
         const char *identity;
     } cases[] = {
         {"router.example.test", "Router"},

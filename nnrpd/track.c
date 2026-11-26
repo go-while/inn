@@ -70,7 +70,7 @@ warn_empty_host(void)
 */
 
 int
-TrackClient(char *client, char *user, size_t len)
+TrackClient(const char *client, char *user, size_t len)
 {
     int RARTon;
     FILE *fd;
