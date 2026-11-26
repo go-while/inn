@@ -1,7 +1,7 @@
 #! /bin/sh
 # Exercise scanlogs in a private spool with a stand-in for ctlinnd.
 . "$C_TAP_SOURCE/tap/libtap.sh"
-plan 123
+plan 125
 tmpdir=$(test_tmpdir)
 fixture=$tmpdir/scanlogs-$$
 mkdir -p "$fixture/bin" "$fixture/log" || exit 1
@@ -179,6 +179,23 @@ signal_at_ageing() {
     printf '#! /bin/sh\nrm -f "$0"\nkill -TERM $(cat "$fixture/LOCK.scanlogs")\nexec expr "$@"\n' \
         >"$fixture/bin/expr"
     chmod +x "$fixture/bin/expr"
+}
+# Make the mkdir of the staging directory send SIGTERM to scanlogs right
+# after it created the directory.  Other mkdir calls go to the real mkdir.
+signal_after_staging_mkdir() {
+    cat >"$fixture/bin/mkdir" <<'EOF'
+#! /bin/sh
+PATH=$(echo "$PATH" | sed "s|$fixture/bin:||g")
+case "$*" in
+    */.scanlogs.*)
+        rm -f "$fixture/bin/mkdir"
+        mkdir "$@" || exit
+        kill -TERM $(cat "$fixture/LOCK.scanlogs")
+        ;;
+    *) exec mkdir "$@" ;;
+esac
+EOF
+    chmod +x "$fixture/bin/mkdir"
 }
 # Count the go commands sent to the server.
 gocount() {
@@ -449,6 +466,16 @@ ok 'next run saves the plain archive' \
     cmp "$(saved errlog.0)" "$fixture/errlog-plain"
 ok 'next run archives the new plain log' \
     cmp "$old/errlog.1" "$fixture/errlog-after-plain"
+
+# A signal right after the staging directory is created.
+echo staging >"$fixture/log/news"
+reset_ctlinnd
+signal_after_staging_mkdir
+run 'gzip -9'
+ok 'signal after the staging mkdir exits 1' test "$?" -eq 1
+set -- "$old"/.scanlogs.*
+ok 'signal after the staging mkdir leaves no staging directory' test ! -e "$1"
+rm -f "$fixture/bin/mkdir"
 
 # A signal after the syslog files are copied and truncated.
 echo notice-1 >"$fixture/log/news.notice"

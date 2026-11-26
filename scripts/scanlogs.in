@@ -154,7 +154,7 @@ cleanup_rotation() {
     fi
     ##  rm, rmdir, mv and chmod name the file they could not handle; any
     ##  such failure makes the exit status 1.
-    if [ -n "${archive_tmp}" ]; then
+    if [ -n "${archive_tmp}" ] && [ -d "${archive_tmp%/*}" ]; then
         rm -f "${archive_tmp}" || status=1
         rmdir "${archive_tmp%/*}" || status=1
     fi
@@ -478,10 +478,12 @@ rotate_archives() {
         LOGCYCLES=3
     fi
     if [ "$#" -gt 0 ]; then
-        ##  Stage output on the archive filesystem for an atomic rename.
+        ##  Stage output on the archive filesystem for an atomic rename.  The
+        ##  name is set first, so that cleanup_rotation also removes the
+        ##  directory after a signal right after mkdir.
         stage="${OLD}/.scanlogs.$$"
-        (umask 077 && mkdir "${stage}") || return 1
         archive_tmp="${stage}/archive"
+        (umask 077 && mkdir "${stage}") || return 1
     fi
     for F in ${LOGS}; do
         ##  Skip if file doesn't exist.
