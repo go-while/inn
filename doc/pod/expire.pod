@@ -76,8 +76,14 @@ This is useful when the filesystem does not have sufficient space to hold both
 the old and new history files.  When this flag is used, B<expire> leaves the
 server paused and creates a zero-length file named after the new history file,
 with an extension of C<.done> to indicate that it has successfully completed
-the expiration.  The calling script should install the new history file and
-unpause the server.  The B<-r> flag should be used with this flag.
+the expiration.  The calling script should install the new history files and
+then unpause the server with C<ctlinnd go> and the reason given with B<-r>;
+B<innd> opens the new files at that moment.  When running B<expire> with this
+flag by hand, do not forget that C<ctlinnd go>: until then, the server accepts
+no articles.  (Up to S<INN 2.7>, B<expire> unpaused the server when it
+finished, contrary to what this manual page said, so that B<innd> wrote to the
+old files while they were being replaced.)  The B<-r> flag should be used with
+this flag.
 
 This option is not available with the C<hissqlite> history method.
 
