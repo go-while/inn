@@ -133,6 +133,16 @@ files behind after a failed creation, and the buffindexed overview method
 validates its F<group.index> file and no longer frees memory twice when
 mapping overview data fails.  Many thanks to Kevin Bowling for the patches.
 
+=item *
+
+Fixed B<nntpget -u>, which set the time of its timestamp file to the end of
+the transfer.  The articles arriving on the remote server after the list of
+new articles was built, and before the end of the transfer, were never
+fetched.  The file now gets the time at which the list was requested, taken
+from the C<DATE> command of the remote server.  It is replaced only when it is
+complete, and it is no longer updated when the transfer fails, including when
+a server gives a temporary negative reply; the exit status is still zero.
+
 =back
 
 =head1 Changes in 2.7.5 (not yet released)
