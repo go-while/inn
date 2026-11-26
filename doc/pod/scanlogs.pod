@@ -33,15 +33,23 @@ parameter can be set in F<inn.conf>).  B<scanlogs> also keeps archives
 of the F<active> file in this directory.
 
 I<compressformat> in F<inn.conf> selects the compressor at run time,
-overriding B<--with-log-compress>.  After a method change, older archives
-keep their suffix as they rotate.  If compression fails, the current log is
-archived in plain text and B<scanlogs> exits with a nonzero status.
+overriding B<--with-log-compress>.  After a method change, older archives keep
+their suffix as they rotate.  If compression fails, the current log is
+archived in plain text, without a suffix, and B<scanlogs> exits with a nonzero
+status.
 
-When a signal interrupts the rotation, B<scanlogs> resumes the server if it
-paused it, removes a partly written archive, releases its lock and exits with
-status 1.  The next rotation moves any pending logs to a uniquely named
-F<recovered.*> directory under I<pathlog>/OLD and reports their paths.
-These files are kept outside the numbered rotation.
+When a signal interrupts the rotation, B<scanlogs> tries to resume the server
+if it paused it, removes a partly written archive, releases its lock and exits
+with status 1.  If the server cannot be resumed, B<scanlogs> prints the
+B<ctlinnd go> command to run.
+
+Before it flushes the logs, B<scanlogs> moves what an interrupted run left
+behind to a uniquely named F<recovered.*> directory under I<pathlog>/OLD and
+reports the paths: a log in I<pathlog>/OLD not yet archived, an archive of
+generation 0 not yet aged, and a flushed F<.old> log in I<pathlog>.  These
+files are kept outside the numbered rotation and are not read by
+B<innreport>; review them and remove them when they are no longer needed.
+With B<norotate>, B<scanlogs> rotates nothing and none of this applies.
 
 It invokes B<tally.control> if F<newgroup.log> or F<rmgroup.log> exists
 in I<pathlog> (see the F<control.log> entry of newslog(5) for more
