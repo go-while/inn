@@ -18,6 +18,7 @@ lib/concat
 lib/conffile
 lib/confparse
 lib/date
+lib/dbz-keys
 lib/daemon
 lib/dispatch
 lib/fdflag
