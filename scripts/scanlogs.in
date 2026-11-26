@@ -146,6 +146,8 @@ fi
 archive_tmp=
 cleanup_rotation() {
     status=$?
+    ##  A further signal must not cut the cleanup short.
+    trap '' 1 2 3 15
     ##  Resume the server unless resumeserver already failed and reported it.
     if [ "${RESUMESTATUS}" -eq 0 ]; then
         resumeserver || status=1
@@ -154,7 +156,10 @@ cleanup_rotation() {
         rm -f "${archive_tmp}"
         rmdir "${archive_tmp%/*}"
     fi
-    rm -f "${LOCK}"
+    ##  Only remove the lock of this run:  it may be held by another one.
+    LOCKPID=
+    { read LOCKPID <"${LOCK}"; } 2>/dev/null
+    test "${LOCKPID}" = "$$" && rm -f "${LOCK}"
     exit "${status}"
 }
 
@@ -168,12 +173,6 @@ RESUMESTATUS=0
 
 ##  Rotate the logs?
 if ${ROTATE}; then
-    ##  Lock out others.
-    shlock -p $$ -f ${LOCK} || {
-        echo "$0: Locked by $(cat ${LOCK})"
-        exit 1
-    }
-
     ##  Resume the server if this run paused it.  It is called when the
     ##  rotation is done, and also on errors and when a signal is received,
     ##  so that the server is not left paused by scanlogs.  PAUSED is "maybe"
@@ -206,10 +205,18 @@ if ${ROTATE}; then
         return 1
     }
     ##  On every exit after this point, cleanup_rotation resumes the server,
-    ##  removes a partly written archive and releases the lock.  A signal
-    ##  only reports the interruption and makes the exit status 1.
+    ##  removes a partly written archive and releases the lock of this run.
+    ##  The traps are set before the lock is taken, so that a signal right
+    ##  after shlock cannot leave the lock behind.  A signal only reports the
+    ##  interruption and makes the exit status 1.
     trap cleanup_rotation 0
     trap 'echo "$0: log rotation interrupted" >&2; exit 1' 1 2 3 15
+
+    ##  Lock out others.
+    shlock -p $$ -f ${LOCK} || {
+        echo "$0: Locked by $(cat ${LOCK})"
+        exit 1
+    }
 
     HERE=$(pwd)
     cd "${MOST_LOGS}" || exit 1

@@ -1,7 +1,7 @@
 #! /bin/sh
 # Exercise scanlogs in a private spool with a stand-in for ctlinnd.
 . "$C_TAP_SOURCE/tap/libtap.sh"
-plan 93
+plan 102
 tmpdir=$(test_tmpdir)
 fixture=$tmpdir/scanlogs-$$
 mkdir -p "$fixture/bin" "$fixture/log" || exit 1
@@ -48,7 +48,7 @@ case "$command" in
     logmode)
         if [ -e "$fixture/logmodesig" ]; then
             if [ -e "$fixture/logmode.seen" ]; then
-                kill -TERM "$(cat "$fixture/LOCK.scanlogs")"
+                kill -TERM $(cat "$fixture/LOCK.scanlogs")
             else
                 touch "$fixture/logmode.seen"
             fi
@@ -67,7 +67,7 @@ case "$command" in
     pause)
         echo "$*" >"$fixture/paused"
         test -e "$fixture/pausesig" \
-            && kill -TERM "$(cat "$fixture/LOCK.scanlogs")"
+            && kill -TERM $(cat "$fixture/LOCK.scanlogs")
         ;;
     go)
         if [ -e "$fixture/gofail" ]; then
@@ -82,8 +82,9 @@ case "$command" in
         rm -f "$fixture/paused"
         ;;
     flushlogs)
+        test -e "$fixture/steallock" && echo 4343 >"$fixture/LOCK.scanlogs"
         test -e "$fixture/flushsig" \
-            && kill -TERM "$(cat "$fixture/LOCK.scanlogs")"
+            && kill -TERM $(cat "$fixture/LOCK.scanlogs")
         if [ -e "$fixture/flushfail" ]; then
             echo 'Cannot flush (simulated)'
             exit 1
@@ -104,7 +105,15 @@ case "$command" in
 esac
 exit 0
 EOF
-printf '#! /bin/sh\nfor lock do :; done\necho "$2" >"$lock"\n' >"$fixture/bin/shlock"
+# Like shlock, the stand-in writes the PID right-aligned in ten columns.
+cat >"$fixture/bin/shlock" <<'EOF'
+#! /bin/sh
+for lock do :; done
+test -e "$fixture/shlockfail" && exit 1
+printf '%10d\n' "$2" >"$lock"
+test -e "$fixture/shlocksig" && kill -TERM "$2"
+exit 0
+EOF
 printf '#! /bin/sh\ncat >"$fixture/mail"\n' >"$fixture/bin/mail"
 cat >"$fixture/bin/gzip" <<'EOF'
 #! /bin/sh
@@ -115,7 +124,7 @@ case "$1" in
             echo partial
             test ! -f "$fixture/log/OLD/news.0.gz" &&
                 touch "$fixture/archive-hidden"
-            kill -TERM "$(cat "$fixture/LOCK.scanlogs")"
+            kill -TERM $(cat "$fixture/LOCK.scanlogs")
         fi
         ;;
     *) echo partial; exit 1 ;;
@@ -135,7 +144,8 @@ reset_ctlinnd() {
     rm -f "$fixture/ctl.calls" "$fixture/paused" "$fixture/flushfail" \
         "$fixture/flushsig" "$fixture/pausesig" "$fixture/gofail" \
         "$fixture/modefail" "$fixture/takelock" "$fixture/logmodesig" \
-        "$fixture/logmode.seen"
+        "$fixture/logmode.seen" "$fixture/shlockfail" "$fixture/shlocksig" \
+        "$fixture/steallock"
 }
 # Path of a file that the last run saved to a recovered.* directory.
 saved() {
@@ -145,7 +155,7 @@ saved() {
 # Make the next expr call, the first one of the ageing of the archives, send
 # SIGTERM to scanlogs.  The stand-in removes itself.
 signal_at_ageing() {
-    printf '#! /bin/sh\nrm -f "$0"\nkill -TERM "$(cat "$fixture/LOCK.scanlogs")"\nexec expr "$@"\n' \
+    printf '#! /bin/sh\nrm -f "$0"\nkill -TERM $(cat "$fixture/LOCK.scanlogs")\nexec expr "$@"\n' \
         >"$fixture/bin/expr"
     chmod +x "$fixture/bin/expr"
 }
@@ -307,6 +317,33 @@ ok 'failed go prints the command to resume the server' \
 ok 'failed go is not retried at exit' test "$(gocount)" -eq 1
 ok 'failed go still rotates the log' cmp "$old/news.1.gz" "$fixture/expected"
 ok 'failed go releases the lock' test ! -e "$fixture/LOCK.scanlogs"
+
+# The scanlogs lock: held by another run, taken over during the run, and a
+# signal right after it is taken.
+echo locked >"$fixture/log/news"
+reset_ctlinnd
+echo 4242 >"$fixture/LOCK.scanlogs"
+touch "$fixture/shlockfail"
+run 'gzip -9'
+ok 'refused lock exits 1' test "$?" -eq 1
+ok 'refused lock is reported' grep -q 'Locked by 4242' "$fixture/output"
+ok 'refused lock is kept' grep -qx 4242 "$fixture/LOCK.scanlogs"
+ok 'refused lock does not pause the server' test ! -e "$fixture/ctl.calls"
+ok 'refused lock leaves the log in place' grep -qx locked "$fixture/log/news"
+rm -f "$fixture/LOCK.scanlogs"
+reset_ctlinnd
+touch "$fixture/steallock"
+run 'gzip -9'
+ok 'run whose lock is taken over succeeds' test "$?" -eq 0
+ok 'lock taken over by another process is kept' \
+    grep -qx 4343 "$fixture/LOCK.scanlogs"
+rm -f "$fixture/LOCK.scanlogs"
+reset_ctlinnd
+touch "$fixture/shlocksig"
+run 'gzip -9'
+ok 'signal right after the lock is taken exits 1' test "$?" -eq 1
+ok 'signal right after the lock is taken releases it' \
+    test ! -e "$fixture/LOCK.scanlogs"
 
 # A signal after an archive is published and before it is aged.  errlog is
 # the first log rotated.
