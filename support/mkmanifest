@@ -349,6 +349,7 @@ tests/lib/xwrite.t
 tests/nnrpd/auth-ext.t
 tests/nnrpd/track.t
 tests/nnrpd/auth-test
+tests/nnrpd/cache.t
 tests/overview/api.t
 tests/overview/buffindexed.t
 tests/overview/build.t
