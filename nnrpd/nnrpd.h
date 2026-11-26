@@ -78,6 +78,7 @@ typedef struct _ACCESSGROUP {
     int addinjectiondate;
     int addinjectionpostingaccount;
     int addinjectionpostinghost;
+    bool addprocesstitleuser;
     char *nnrpdposthost;
     unsigned long nnrpdpostport;
     int nnrpdoverstats;
@@ -249,6 +250,7 @@ extern int LockPostRec(char *path);
 extern void UnlockPostRec(char *path);
 extern int RateLimit(long *sleeptime, char *path);
 extern void ExitWithStats(int x, bool readconf) __attribute__((__noreturn__));
+extern void SetTitleUser(void);
 extern char *GetHeader(const char *header, bool stripspaces);
 extern void GRPreport(void);
 extern ARTNUM GRPexactcount(char *group, ARTNUM low, ARTNUM high);

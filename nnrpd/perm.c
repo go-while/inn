@@ -189,11 +189,12 @@ static int ConfigBitsize;
 #define PERMpython_dynamic             62
 #define PERMgroupexactcount            63
 #define PERMprogram_timeout            64
+#define PERMaddprocesstitleuser        65
 #if defined(HAVE_OPENSSL) || defined(HAVE_SASL)
-#    define PERMrequire_encryption 65
-#    define PERMMAX                66
+#    define PERMrequire_encryption 66
+#    define PERMMAX                67
 #else
-#    define PERMMAX 65
+#    define PERMMAX 66
 #endif
 
 #define TEST_CONFIG(a, b)                                            \
@@ -282,6 +283,7 @@ static CONFTOKEN PERMtoks[] = {
     {PERMpython_dynamic,             (char *) "python_dynamic:"            },
     {PERMgroupexactcount,            (char *) "groupexactcount:"           },
     {PERMprogram_timeout,            (char *) "program_timeout:"           },
+    {PERMaddprocesstitleuser,        (char *) "addprocesstitleuser:"       },
 #if defined(HAVE_OPENSSL) || defined(HAVE_SASL)
     {PERMrequire_encryption,         (char *) "require_encryption:"        },
 #endif
@@ -535,6 +537,7 @@ SetDefaultAccess(ACCESSGROUP *curaccess)
     curaccess->addinjectionpostingaccount =
         innconf->addinjectionpostingaccount;
     curaccess->addinjectionpostinghost = innconf->addinjectionpostinghost;
+    curaccess->addprocesstitleuser = false;
     curaccess->nnrpdposthost = innconf->nnrpdposthost;
     curaccess->nnrpdpostport = innconf->nnrpdpostport;
     curaccess->nnrpdoverstats = innconf->nnrpdoverstats;
@@ -1087,6 +1090,11 @@ accessdecl_parse(ACCESSGROUP *curaccess, CONFFILE *f, CONFTOKEN *tok)
             curaccess->addinjectionpostinghost = boolval;
         SET_CONFIG(oldtype);
         break;
+    case PERMaddprocesstitleuser:
+        if (boolval != -1)
+            curaccess->addprocesstitleuser = boolval;
+        SET_CONFIG(oldtype);
+        break;
     case PERMnnrpdposthost:
         if (curaccess->nnrpdposthost)
             free(curaccess->nnrpdposthost);
@@ -1407,6 +1415,7 @@ PERMreadfile(char *filename)
             case PERMaddinjectiondate:
             case PERMaddinjectionpostingaccount:
             case PERMaddinjectionpostinghost:
+            case PERMaddprocesstitleuser:
             case PERMnnrpdposthost:
             case PERMnnrpdpostport:
             case PERMnnrpdoverstats:
@@ -1574,6 +1583,7 @@ PERMgetaccess(bool initialconnection)
 {
     char *uname;
     int i;
+    bool resolved = false;
 
     if (ConfigBit == NULL) {
         if (PERMMAX % 8 == 0) {
@@ -1602,6 +1612,7 @@ PERMgetaccess(bool initialconnection)
 #endif
         if ((uname = ResolveUser(auth_realms[i])) != NULL) {
             PERMauthorized = true;
+            resolved = true;
         }
         if (uname == NULL && auth_realms[i]->default_user != NULL) {
             uname = xstrdup(auth_realms[i]->default_user);
@@ -1619,6 +1630,10 @@ PERMgetaccess(bool initialconnection)
         }
         PERMneedauth = false;
         success_auth = auth_realms[i];
+        /* Only a name a resolver returned is authenticated; a default:
+           identity is not, even if an earlier lookup was. */
+        if (resolved)
+            SetTitleUser();
         syslog(L_TRACE, "%s res %s", Client.host, PERMuser);
     } else if (initialconnection && !PERMcanauthenticate) {
         /* Couldn't resolve the user. */

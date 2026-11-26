@@ -303,6 +303,7 @@ SASLauth(int ac, char *av[])
         PERMneedauth = false;
         PERMauthorized = true;
         PERMcanauthenticate = false;
+        SetTitleUser();
 
         syslog(L_NOTICE, "%s user %s", Client.host, PERMuser);
 

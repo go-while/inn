@@ -305,6 +305,7 @@ CMDauthinfo(int ac, char *av[])
             PERMauthorized = true;
             PERMcanauthenticate = false;
             PERMgroupmadeinvalid = makeGroupInvalid();
+            SetTitleUser();
             free(logrec);
             return;
         case 0:
@@ -413,6 +414,7 @@ CMDauthinfo(int ac, char *av[])
             PERMauthorized = true;
             PERMcanauthenticate = false;
             PERMgroupmadeinvalid = makeGroupInvalid();
+            SetTitleUser();
             return;
         }
 
