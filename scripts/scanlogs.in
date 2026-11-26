@@ -215,24 +215,40 @@ if ${ROTATE}; then
     cd "${MOST_LOGS}" || exit 1
     mkdir -p "${OLD}" || exit 1
 
-    ##  Save pending sources from an interrupted rotation before flushing.
-    ##  Keep them outside the numbered generations so they are not aged out.
+    ##  Save what an interrupted run left behind before flushing:  a log not
+    ##  yet archived (OLD/<log>), an archive not yet aged (OLD/<log>.0 with
+    ##  or without a suffix) and a flushed log not yet moved to OLD (<log>.old
+    ##  in pathlog).  The steps below would remove or overwrite them.  Keep
+    ##  them outside the numbered generations so they are not aged out.
     recovered_dir=
-    for F in ${LOGS}; do
-        BASE=${F##*/}
-        pending="${OLD}/${BASE}"
-        test -f "${pending}" || continue
+    save_pending() {
+        test -f "$1" || return 0
         if [ -z "${recovered_dir}" ]; then
             recovered_dir="${OLD}/recovered.$$"
-            suffix=0
+            n=0
             while [ -e "${recovered_dir}" ] || [ -L "${recovered_dir}" ]; do
-                suffix=$((suffix + 1))
-                recovered_dir="${OLD}/recovered.$$.${suffix}"
+                n=$((n + 1))
+                recovered_dir="${OLD}/recovered.$$.${n}"
             done
             (umask 077 && mkdir "${recovered_dir}") || exit 1
         fi
-        mv "${pending}" "${recovered_dir}/${BASE}" || exit 1
-        echo "$0: saved pending log to ${recovered_dir}/${BASE}" >&2
+        mv "$1" "${recovered_dir}/$2" || exit 1
+        echo "$0: saved pending log to ${recovered_dir}/$2" >&2
+    }
+    for F in ${LOGS}; do
+        BASE=${F##*/}
+        save_pending "${OLD}/${BASE}" "${BASE}"
+        for suffix in '' .gz .bz2 .Z .xz "${Z}"; do
+            save_pending "${OLD}/${BASE}.0${suffix}" "${BASE}.0${suffix}"
+        done
+        ##  The active file is copied, not flushed, and unwanted.log is
+        ##  copied without being reset:  neither has a pending .old file.
+        case ${F} in
+        ${ACTIVEFILE} | ${UNWANTED_LOG}) ;;
+        *)
+            save_pending "${F}.old" "${BASE}.old"
+            ;;
+        esac
     done
 
     ctlinnd -s logmode

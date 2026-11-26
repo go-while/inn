@@ -1,7 +1,7 @@
 #! /bin/sh
 # Exercise scanlogs in a private spool with a stand-in for ctlinnd.
 . "$C_TAP_SOURCE/tap/libtap.sh"
-plan 78
+plan 93
 tmpdir=$(test_tmpdir)
 fixture=$tmpdir/scanlogs-$$
 mkdir -p "$fixture/bin" "$fixture/log" || exit 1
@@ -28,8 +28,9 @@ PATH=$fixture/bin:$PATH
 export PATH
 EOF
 # The stand-in for ctlinnd logs its commands to ctl.calls and keeps the pause
-# reason in the file paused.  Flag files in the fixture make commands fail or
-# send SIGTERM to scanlogs while the server is paused.
+# reason in the file paused.  Like innd, flushlogs renames news and errlog to
+# .old, over an existing .old file.  Flag files in the fixture make commands
+# fail or send SIGTERM to scanlogs while the server is paused.
 cat >"$fixture/bin/ctlinnd" <<'EOF'
 #! /bin/sh
 echo "$*" >>"$fixture/ctl.calls"
@@ -44,6 +45,15 @@ done
 command=$1
 shift
 case "$command" in
+    logmode)
+        if [ -e "$fixture/logmodesig" ]; then
+            if [ -e "$fixture/logmode.seen" ]; then
+                kill -TERM "$(cat "$fixture/LOCK.scanlogs")"
+            else
+                touch "$fixture/logmode.seen"
+            fi
+        fi
+        ;;
     mode)
         test -e "$fixture/modefail" && exit 1
         if [ "${TEST_THROTTLE_FAILURE:-}" = yes ]; then
@@ -78,6 +88,10 @@ case "$command" in
             echo 'Cannot flush (simulated)'
             exit 1
         fi
+        for log in news errlog; do
+            mv -f "$fixture/log/$log" "$fixture/log/$log.old"
+            : >"$fixture/log/$log"
+        done
         echo Ok
         ;;
     throttle)
@@ -120,7 +134,20 @@ run() {
 reset_ctlinnd() {
     rm -f "$fixture/ctl.calls" "$fixture/paused" "$fixture/flushfail" \
         "$fixture/flushsig" "$fixture/pausesig" "$fixture/gofail" \
-        "$fixture/modefail" "$fixture/takelock"
+        "$fixture/modefail" "$fixture/takelock" "$fixture/logmodesig" \
+        "$fixture/logmode.seen"
+}
+# Path of a file that the last run saved to a recovered.* directory.
+saved() {
+    sed -n "s|^.*saved pending log to \(.*/$1\)\$|\1|p" "$fixture/output" \
+        | sed 1q
+}
+# Make the next expr call, the first one of the ageing of the archives, send
+# SIGTERM to scanlogs.  The stand-in removes itself.
+signal_at_ageing() {
+    printf '#! /bin/sh\nrm -f "$0"\nkill -TERM "$(cat "$fixture/LOCK.scanlogs")"\nexec expr "$@"\n' \
+        >"$fixture/bin/expr"
+    chmod +x "$fixture/bin/expr"
 }
 # Count the go commands sent to the server.
 gocount() {
@@ -250,6 +277,15 @@ ok 'signal while paused resumes the server' test ! -f "$fixture/paused"
 ok 'signal while paused releases the lock' test ! -e "$fixture/LOCK.scanlogs"
 set -- "$old"/.scanlogs.*
 ok 'signal while paused leaves no staged output' test ! -e "$1"
+ok 'signal while paused leaves the flushed log in pathlog' \
+    grep -qx signal-paused "$fixture/log/news.old"
+echo after-signal >"$fixture/log/news"
+echo after-signal >"$fixture/expected"
+reset_ctlinnd
+run 'gzip -9'
+ok 'next run saves the flushed log' grep -qx signal-paused "$(saved news.old)"
+ok 'next run archives the new log after a flushed one' \
+    cmp "$old/news.1.gz" "$fixture/expected"
 
 echo signal-pausing >"$fixture/log/news"
 reset_ctlinnd
@@ -271,6 +307,58 @@ ok 'failed go prints the command to resume the server' \
 ok 'failed go is not retried at exit' test "$(gocount)" -eq 1
 ok 'failed go still rotates the log' cmp "$old/news.1.gz" "$fixture/expected"
 ok 'failed go releases the lock' test ! -e "$fixture/LOCK.scanlogs"
+
+# A signal after an archive is published and before it is aged.  errlog is
+# the first log rotated.
+echo errlog-older >"$fixture/log/errlog"
+echo errlog-older >"$fixture/errlog-older"
+reset_ctlinnd
+run 'gzip -9'
+echo errlog-published >"$fixture/log/errlog"
+echo errlog-published >"$fixture/errlog-published"
+signal_at_ageing
+run 'gzip -9'
+ok 'signal before ageing exits 1' test "$?" -eq 1
+ok 'signal before ageing leaves the published archive' \
+    cmp "$old/errlog.0.gz" "$fixture/errlog-published"
+echo errlog-next >"$fixture/log/errlog"
+echo errlog-next >"$fixture/errlog-next"
+reset_ctlinnd
+run 'gzip -9'
+ok 'next run after a signal before ageing succeeds' test "$?" -eq 0
+ok 'next run saves the published archive' \
+    cmp "$(saved errlog.0.gz)" "$fixture/errlog-published"
+ok 'next run archives the new log' cmp "$old/errlog.1.gz" "$fixture/errlog-next"
+ok 'next run keeps the older generation' \
+    cmp "$old/errlog.2.gz" "$fixture/errlog-older"
+echo errlog-plain >"$fixture/log/errlog"
+echo errlog-plain >"$fixture/errlog-plain"
+signal_at_ageing
+run cat
+ok 'signal before ageing a plain archive exits 1' test "$?" -eq 1
+echo errlog-after-plain >"$fixture/log/errlog"
+echo errlog-after-plain >"$fixture/errlog-after-plain"
+run cat
+ok 'next run saves the plain archive' \
+    cmp "$(saved errlog.0)" "$fixture/errlog-plain"
+ok 'next run archives the new plain log' \
+    cmp "$old/errlog.1" "$fixture/errlog-after-plain"
+
+# A signal after the syslog files are copied and truncated.
+echo notice-1 >"$fixture/log/news.notice"
+echo notice-1 >"$fixture/notice-1"
+reset_ctlinnd
+touch "$fixture/logmodesig"
+run 'gzip -9'
+ok 'signal after the syslog copy exits 1' test "$?" -eq 1
+echo notice-2 >"$fixture/log/news.notice"
+echo notice-2 >"$fixture/notice-2"
+reset_ctlinnd
+run 'gzip -9'
+ok 'next run saves the syslog copy' \
+    cmp "$(saved news.notice.old)" "$fixture/notice-1"
+ok 'next run archives the new syslog' \
+    cmp "$old/news.notice.1.gz" "$fixture/notice-2"
 
 # news.daily: report and exit status of an aborted run, and its lock.
 printf '#! /bin/sh\necho scanlogs-output\nexit 3\n' >"$fixture/bin/scanlogs"
