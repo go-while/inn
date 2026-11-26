@@ -1126,8 +1126,8 @@ tests/storage/caf-t.c                 Tests for CAF file validation and cleaning
 tests/storage/cancel-tombstone-t.c    Tests for SMcanceltombstone
 tests/storage/cnfs-weighted.t         Tests for size-weighted CNFS placement
 tests/storage/makehistory.t           Tests for expire/makehistory
-tests/storage/sm.t                    Tests for frontends/sm
-tests/storage/sm-path.t               Tests for sm and the path key of storage.conf
+tests/storage/sm-path.t              Tests for sm and the path key of storage.conf
+tests/storage/sm.t                   Tests for frontends/sm
 tests/storage/timecaf-t.c             Tests for timecaf writer flush and reopen
 tests/storage/tombstone-t.c           Tests for tombstone read errors, rename and header bytes
 tests/tap                             Helper scripts for TAP (Directory)
