@@ -51,6 +51,22 @@ L<Upgrading from 2.6 to 2.7>.
 
 =item *
 
+The new I<compressformat> setting in F<inn.conf> selects the compressor and
+options for logs rotated by B<scanlogs>.  Existing archives continue to age
+under their original suffix when the method changes.  B<scanlogs> no longer
+leaves a partial archive when compression fails or is interrupted, and exits
+with status 1 when a signal interrupts the rotation (it used to exit with
+status 0), after trying to resume the server.  Before rotating, it moves the
+logs, archives and copy of the F<active> file that an interrupted run left
+behind to a F<recovered.*> directory under I<pathlog>/OLD, which the news
+administrator should review and remove.  B<news.daily> now exits with a
+nonzero status if B<scanlogs> fails, and when it aborts the maintenance
+because the server cannot be throttled or unthrottled or the new history files
+cannot be installed, it mails the whole report, including the output of
+B<scanlogs>, instead of a short message.
+
+=item *
+
 A new history storage method based on SQLite has been added, named
 C<hissqlite>, selectable instead of C<hisv6> via the I<hismethod>
 parameter in F<inn.conf> when INN is built with SQLite support.  The

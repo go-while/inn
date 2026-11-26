@@ -14,6 +14,9 @@ I<pathlog>/OLD; they may be compressed and thus may have a C<.1.gz>, C<.2.gz>,
 etc. extension, up to C<.nn.gz> where C<nn> is the number of old logs kept by
 B<scanlogs> which is set by I<logcycles> in F<inn.conf>.
 
+The archive suffix follows I<compressformat> in F<inn.conf>, or the
+B<--with-log-compress> build option when that parameter is unset.
+
 The B<scanlogs> script and related utilities are responsible for rotating
 and compressing these files.  Some log files always have data (like
 F<news.notice>), others only have data if there is a problem (like

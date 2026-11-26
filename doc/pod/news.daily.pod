@@ -37,7 +37,8 @@ F<inn.conf>);
 
 =item *
 
-processing log files and rotating the archived log files with B<scanlogs>;
+processing and rotating logs with B<scanlogs>, using I<compressformat>
+from F<inn.conf> or the compressor selected at build time;
 
 =item *
 
@@ -61,7 +62,12 @@ removing any old socket files found in the I<pathrun> directory;
 
 =item *
 
-collecting all the output and mailing it.
+collecting all the output and mailing it.  The report is also mailed when
+expiration is aborted because the server cannot be throttled or unthrottled or
+the new history files cannot be installed; in such an aborted run, the output
+of B<scanlogs> ends the report.  B<news.daily> returns the nonzero B<scanlogs>
+status when maintenance runs to completion, or C<1> if that maintenance
+aborts.
 
 =back
 

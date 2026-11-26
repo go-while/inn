@@ -112,6 +112,68 @@ for I; do
     esac
 done
 
+result=0
+##  Keep the compressor and its arguments in "$@" during rotation.  Runtime
+##  arguments are whitespace-separated words, with no shell or glob expansion.
+if ${ROTATE}; then
+    COMPRESS_EXT=${Z}
+    set -f
+    if [ -n "${COMPRESSFORMAT}" ]; then
+        set -- ${COMPRESSFORMAT}
+        case "${1##*/}" in
+        gzip)     COMPRESS_EXT=.gz ;;
+        bzip2)    COMPRESS_EXT=.bz2 ;;
+        compress) COMPRESS_EXT=.Z ;;
+        xz)       COMPRESS_EXT=.xz ;;
+        cat)      COMPRESS_EXT='' ;;
+        *)
+            echo "$0: unknown compressformat: ${COMPRESSFORMAT}" >&2
+            set --
+            result=1
+            ;;
+        esac
+        if [ "$#" -gt 0 ] && ! command -v "$1" >/dev/null 2>&1; then
+            echo "$0: log compressor unavailable: $1" >&2
+            set --
+            result=1
+        fi
+    else
+        set -- ${LOG_COMPRESS}
+    fi
+    set +f
+fi
+
+archive_tmp=
+cleanup_rotation() {
+    status=$?
+    ##  A further signal must not cut the cleanup short.
+    trap '' 1 2 3 15
+    ##  Resume the server unless resumeserver already failed and reported it.
+    if [ "${RESUMESTATUS}" -eq 0 ]; then
+        resumeserver || status=1
+    fi
+    ##  rm, rmdir, mv and chmod name the file they could not handle; any
+    ##  such failure makes the exit status 1.
+    if [ -n "${archive_tmp}" ] && [ -d "${archive_tmp%/*}" ]; then
+        rm -f "${archive_tmp}" || status=1
+        rmdir "${archive_tmp%/*}" || status=1
+    fi
+    ##  Only remove the lock of this run:  it may be held by another one.
+    ##  shlock writes the PID right-aligned.  A lock that exists but cannot
+    ##  be read is reported and left in place.
+    if [ -e "${LOCK}" ]; then
+        if LOCKCONTENT=$(cat "${LOCK}" 2>&1); then
+            if [ "${LOCKCONTENT##* }" = "$$" ]; then
+                rm -f "${LOCK}" || status=1
+            fi
+        elif [ -e "${LOCK}" ]; then
+            echo "$0: cannot read ${LOCK}, left in place: ${LOCKCONTENT}" >&2
+            status=1
+        fi
+    fi
+    exit "${status}"
+}
+
 ##  Make sure every log exists.
 for F in ${LOGS}; do
     test ! -f ${F} && touch ${F}
@@ -122,12 +184,6 @@ RESUMESTATUS=0
 
 ##  Rotate the logs?
 if ${ROTATE}; then
-    ##  Lock out others.
-    shlock -p $$ -f ${LOCK} || {
-        echo "$0: Locked by $(cat ${LOCK})"
-        exit 1
-    }
-
     ##  Resume the server if this run paused it.  It is called when the
     ##  rotation is done, and also on errors and when a signal is received,
     ##  so that the server is not left paused by scanlogs.  PAUSED is "maybe"
@@ -136,17 +192,21 @@ if ${ROTATE}; then
     ##  when the server is known not to be paused by this run any more.  The
     ##  reason is specific to this run:  its "go" cannot release a pause made
     ##  by someone else.
+    ##  go and mode wait at most TOUT seconds for innd (the timeout news.daily
+    ##  uses), so that a server that does not answer cannot hang the cleanup,
+    ##  which ignores signals.  A timeout counts as a failed command.
     PAUSED=false
     PAUSEREASON="Flushing log and syslog files $$"
+    TOUT=600
     resumeserver() {
         test "${PAUSED}" = false && return 0
-        GOOUTPUT=$(ctlinnd -s go "${PAUSEREASON}" 2>&1) && {
+        GOOUTPUT=$(ctlinnd -t "${TOUT}" -s go "${PAUSEREASON}" 2>&1) && {
             PAUSED=false
             return 0
         }
         ##  The reply to go, or to the pause, may have been lost:  look at
         ##  what the server does.  A failed query proves nothing.
-        if SERVERMODE=$(ctlinnd mode 2>&1); then
+        if SERVERMODE=$(ctlinnd -t "${TOUT}" mode 2>&1); then
             SERVERMODE=$(echo "${SERVERMODE}" | ${SED} 1q)
             if [ "${SERVERMODE}" != "Server paused ${PAUSEREASON}" ]; then
                 ##  Running (go did work, or the pause was refused), or
@@ -159,11 +219,63 @@ if ${ROTATE}; then
         echo "$0: cannot resume innd, run: ctlinnd go \"${PAUSEREASON}\"" 1>&2
         return 1
     }
-    trap 'resumeserver; STATUS=$?; rm -f ${LOCK}; exit ${STATUS}' 1 2 3 15
+    ##  On every exit after this point, cleanup_rotation resumes the server,
+    ##  removes a partly written archive and releases the lock of this run.
+    ##  The traps are set before the lock is taken, so that a signal right
+    ##  after shlock cannot leave the lock behind.  A signal only reports the
+    ##  interruption and makes the exit status 1.
+    trap cleanup_rotation 0
+    trap 'echo "$0: log rotation interrupted" >&2; exit 1' 1 2 3 15
+
+    ##  Lock out others.
+    shlock -p $$ -f ${LOCK} || {
+        echo "$0: Locked by $(cat ${LOCK})"
+        exit 1
+    }
 
     HERE=$(pwd)
-    cd ${MOST_LOGS}
-    test ! -d ${OLD} && mkdir ${OLD}
+    cd "${MOST_LOGS}" || exit 1
+    mkdir -p "${OLD}" || exit 1
+
+    ##  Save what an interrupted run left behind before flushing:  a log not
+    ##  yet archived (OLD/<log>), an archive not yet aged (OLD/<log>.0 with
+    ##  or without a suffix), a flushed log not yet moved to OLD (<log>.old
+    ##  in pathlog) and a copy of the active file not yet moved to OLD/active
+    ##  (OLD/active.old).  The steps below would remove or overwrite them.
+    ##  Keep them outside the numbered generations so they are not aged out.
+    recovered_dir=
+    save_pending() {
+        test -f "$1" || return 0
+        if [ -z "${recovered_dir}" ]; then
+            recovered_dir="${OLD}/recovered.$$"
+            n=0
+            while [ -e "${recovered_dir}" ] || [ -L "${recovered_dir}" ]; do
+                n=$((n + 1))
+                recovered_dir="${OLD}/recovered.$$.${n}"
+            done
+            (umask 077 && mkdir "${recovered_dir}") || exit 1
+        fi
+        mv "$1" "${recovered_dir}/$2" || exit 1
+        echo "$0: saved pending log to ${recovered_dir}/$2" >&2
+    }
+    for F in ${LOGS}; do
+        BASE=${F##*/}
+        save_pending "${OLD}/${BASE}" "${BASE}"
+        for suffix in '' .gz .bz2 .Z .xz "${Z}"; do
+            save_pending "${OLD}/${BASE}.0${suffix}" "${BASE}.0${suffix}"
+        done
+        ##  The active file is copied to OLD/active.old, not flushed, and
+        ##  unwanted.log is copied without being reset.
+        case ${F} in
+        ${ACTIVEFILE})
+            save_pending "${OLD}/${BASE}.old" "${BASE}.old"
+            ;;
+        ${UNWANTED_LOG}) ;;
+        *)
+            save_pending "${F}.old" "${BASE}.old"
+            ;;
+        esac
+    done
 
     ctlinnd -s logmode
     PAUSED=maybe
@@ -177,8 +289,6 @@ if ${ROTATE}; then
     if [ "$OUTPUT" != "Ok" -a "$OUTPUT" != "In debug mode" ]; then
         echo "$OUTPUT"
         echo 'Cannot flush logs.'
-        resumeserver
-        rm -f ${LOCK}
         exit 1
     fi
 
@@ -237,7 +347,6 @@ if ${ROTATE}; then
     for F in ${LOGS}; do
         ##  Process the current (just-flushed) log.
         BASE=$(basename ${F})
-        rm -f ${OLD}/${BASE}
         case ${F} in
         ${SYSLOG_CRIT} | ${SYSLOG_ERR} | ${ERRLOG} | ${LOG} | \
             ${SYSLOG_NOTICE} | ${PERLNOCEM})
@@ -266,7 +375,7 @@ if ${ROTATE}; then
             if [ -f ${F}.old ]; then
                 mv ${F}.old ${OLD}/${BASE}
             else
-                rm -f ${OLD}/${BASE} ${F}.new
+                rm -f ${F}.new
                 touch ${F}.new
                 chmod 0660 ${F}.new
                 ln ${F} ${F}.old
@@ -361,36 +470,69 @@ if [ -s ${OLD_SYSLOG} -o -s ${OLD_LOG} ]; then
 fi
 rm -f ${OLD_LOG} ${OLD_SYSLOG} ${OLD_PERLNOCEM} ${INNREPORT}
 
-##  Compress and rotate the logs.
-if ${ROTATE}; then
-    cd ${OLD}
+##  Compress and rotate the logs while preserving the source on failure.
+##  A failed rm, mv or chmod, which names the file, makes the status 1.
+rotate_archives() {
+    cd "${OLD}" || return 1
     if [ X${LOGCYCLES} = X ]; then
         LOGCYCLES=3
+    fi
+    if [ "$#" -gt 0 ]; then
+        ##  Stage output on the archive filesystem for an atomic rename.  The
+        ##  name is set first, so that cleanup_rotation also removes the
+        ##  directory after a signal right after mkdir.
+        stage="${OLD}/.scanlogs.$$"
+        archive_tmp="${stage}/archive"
+        (umask 077 && mkdir "${stage}") || return 1
     fi
     for F in ${LOGS}; do
         ##  Skip if file doesn't exist.
         BASE=$(basename ${F})
         test -f ${BASE} || continue
 
-        ##  Compress the file.
-        ${LOG_COMPRESS} <${BASE} >${BASE}.0${Z} && rm -f ${BASE}
-        chmod 0440 ${BASE}.0${Z}
+        ##  On compressor failure keep this generation in plain text.
+        EXT=${COMPRESS_EXT}
+        if [ "$#" -gt 0 ] && "$@" <"${BASE}" >"${archive_tmp}"; then
+            chmod 0440 "${archive_tmp}" || return 1
+            mv -f "${archive_tmp}" "${BASE}.0${EXT}" || return 1
+            rm -f "${BASE}" || result=1
+        else
+            if [ "$#" -gt 0 ]; then
+                echo "$0: compression failed for ${BASE}, keeping plain log" >&2
+                rm -f "${archive_tmp}"
+            fi
+            mv -f "${BASE}" "${BASE}.0" || return 1
+            chmod 0440 "${BASE}.0"
+            result=1
+        fi
 
-        ##  Do rotation.
-        EXT=${LOGCYCLES}
-        rm -f ${BASE}.${LOGCYCLES}${Z}
-        while [ ${EXT} -gt 0 ]; do
-            NEXT=${EXT}
-            EXT=$(expr ${EXT} - 1)
-            test -f ${BASE}.${EXT}${Z} \
-                && rm -f ${BASE}.${NEXT}${Z} \
-                && mv ${BASE}.${EXT}${Z} ${BASE}.${NEXT}${Z}
+        ##  Older generations retain their original compression method.
+        for suffix in '' .gz .bz2 .Z .xz "${Z}"; do
+            age=${LOGCYCLES}
+            rm -f "${BASE}.${age}${suffix}" || result=1
+        done
+        age=${LOGCYCLES}
+        while [ "${age}" -gt 0 ]; do
+            next=${age}
+            age=$(expr "${age}" - 1)
+            for suffix in '' .gz .bz2 .Z .xz "${Z}"; do
+                if [ -f "${BASE}.${age}${suffix}" ]; then
+                    mv -f "${BASE}.${age}${suffix}" "${BASE}.${next}${suffix}" || return 1
+                fi
+            done
         done
     done
+    return "${result}"
+}
 
-    ##  Remove lock.
-    rm -f ${LOCK}
+if ${ROTATE}; then
+    rotate_archives "$@"
+    result=$?
 fi
 
 ##  All done.
-exit ${RESUMESTATUS}
+##  The exit status is 1 if the rotation or the resume of the server failed.
+if [ "${result}" -ne 0 ] || [ "${RESUMESTATUS}" -ne 0 ]; then
+    exit 1
+fi
+exit 0

@@ -32,6 +32,34 @@ I<logcycles> old compressed log files in I<pathlog>/OLD (the I<logcycles>
 parameter can be set in F<inn.conf>).  B<scanlogs> also keeps archives
 of the F<active> file in this directory.
 
+I<compressformat> in F<inn.conf> selects the compressor at run time,
+overriding B<--with-log-compress>.  After a method change, older archives keep
+their suffix as they rotate.  If compression fails, the current log is
+archived in plain text, without a suffix, and B<scanlogs> exits with a nonzero
+status.  It also exits with status 1 when it cannot move a file to
+F<recovered.*>, create its staging directory, publish an archive (B<chmod>,
+B<mv>), age a generation (B<mv>), remove the compressed source, the oldest
+generation, its staging directory or its lock, or read its lock at exit.
+Errors of some other file operations, such as the copies of the syslog files
+and the moves of the flushed logs to I<pathlog>/OLD, are not checked.
+
+When a signal interrupts the rotation, B<scanlogs> tries to resume the server
+if it paused it, removes a partly written archive, releases its lock if it
+still holds its process ID and exits with status 1.  If B<ctlinnd go> fails
+and B<ctlinnd mode> does not show that the pause of this run is gone,
+B<scanlogs> prints the B<ctlinnd go> command to run.  B<ctlinnd go> and
+B<ctlinnd mode> wait at most 600 seconds for the server; a timeout counts as
+a failure.
+
+Before it flushes the logs, B<scanlogs> moves what an interrupted run left
+behind to a uniquely named F<recovered.*> directory under I<pathlog>/OLD and
+reports the paths: a log in I<pathlog>/OLD not yet archived, an archive of
+generation 0 not yet aged, a flushed F<.old> log in I<pathlog>, and a copy of
+the F<active> file not yet moved to I<pathlog>/OLD/active.  These files are
+kept outside the numbered rotation and are not read by B<innreport>; review
+them and remove them when they are no longer needed.  With B<norotate>,
+B<scanlogs> rotates nothing and none of this applies.
+
 It invokes B<tally.control> if F<newgroup.log> or F<rmgroup.log> exists
 in I<pathlog> (see the F<control.log> entry of newslog(5) for more
 information about that).
