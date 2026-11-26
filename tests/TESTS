@@ -2,6 +2,7 @@ authprogs/ckpasswd
 authprogs/domain
 authprogs/ident
 clients/getlist
+control/pgpverify-syslog
 docs/pod
 expire/tombstone
 expire/tombstone-e2e
