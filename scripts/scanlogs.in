@@ -235,9 +235,10 @@ if ${ROTATE}; then
 
     ##  Save what an interrupted run left behind before flushing:  a log not
     ##  yet archived (OLD/<log>), an archive not yet aged (OLD/<log>.0 with
-    ##  or without a suffix) and a flushed log not yet moved to OLD (<log>.old
-    ##  in pathlog).  The steps below would remove or overwrite them.  Keep
-    ##  them outside the numbered generations so they are not aged out.
+    ##  or without a suffix), a flushed log not yet moved to OLD (<log>.old
+    ##  in pathlog) and a copy of the active file not yet moved to OLD/active
+    ##  (OLD/active.old).  The steps below would remove or overwrite them.
+    ##  Keep them outside the numbered generations so they are not aged out.
     recovered_dir=
     save_pending() {
         test -f "$1" || return 0
@@ -259,10 +260,13 @@ if ${ROTATE}; then
         for suffix in '' .gz .bz2 .Z .xz "${Z}"; do
             save_pending "${OLD}/${BASE}.0${suffix}" "${BASE}.0${suffix}"
         done
-        ##  The active file is copied, not flushed, and unwanted.log is
-        ##  copied without being reset:  neither has a pending .old file.
+        ##  The active file is copied to OLD/active.old, not flushed, and
+        ##  unwanted.log is copied without being reset.
         case ${F} in
-        ${ACTIVEFILE} | ${UNWANTED_LOG}) ;;
+        ${ACTIVEFILE})
+            save_pending "${OLD}/${BASE}.old" "${BASE}.old"
+            ;;
+        ${UNWANTED_LOG}) ;;
         *)
             save_pending "${F}.old" "${BASE}.old"
             ;;

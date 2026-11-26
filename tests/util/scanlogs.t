@@ -1,7 +1,7 @@
 #! /bin/sh
 # Exercise scanlogs in a private spool with a stand-in for ctlinnd.
 . "$C_TAP_SOURCE/tap/libtap.sh"
-plan 113
+plan 117
 tmpdir=$(test_tmpdir)
 fixture=$tmpdir/scanlogs-$$
 mkdir -p "$fixture/bin" "$fixture/log" || exit 1
@@ -84,6 +84,8 @@ case "$command" in
             exit 1
         fi
         rm -f "$fixture/paused"
+        test -e "$fixture/gosig" \
+            && kill -TERM $(cat "$fixture/LOCK.scanlogs")
         ;;
     flushlogs)
         test -e "$fixture/steallock" && echo 4343 >"$fixture/LOCK.scanlogs"
@@ -150,7 +152,8 @@ reset_ctlinnd() {
         "$fixture/flushsig" "$fixture/pausesig" "$fixture/gofail" \
         "$fixture/modefail" "$fixture/takelock" "$fixture/logmodesig" \
         "$fixture/logmode.seen" "$fixture/shlockfail" "$fixture/shlocksig" \
-        "$fixture/steallock" "$fixture/pausefail" "$fixture/locknoread"
+        "$fixture/steallock" "$fixture/pausefail" "$fixture/locknoread" \
+        "$fixture/gosig"
 }
 # Path of a file that the last run saved to a recovered.* directory.
 saved() {
@@ -437,6 +440,24 @@ ok 'next run saves the syslog copy' \
     cmp "$(saved news.notice.old)" "$fixture/notice-1"
 ok 'next run archives the new syslog' \
     cmp "$old/news.notice.1.gz" "$fixture/notice-2"
+
+# A signal after the active file is copied to OLD/active.old and before the
+# copy is moved to OLD/active (the go that resumes the server comes between).
+echo active-1 >"$fixture/active"
+echo active-1 >"$fixture/active-1"
+reset_ctlinnd
+touch "$fixture/gosig"
+run 'gzip -9'
+ok 'signal after the active copy exits 1' test "$?" -eq 1
+ok 'signal after the active copy leaves it in OLD' \
+    cmp "$old/active.old" "$fixture/active-1"
+echo active-2 >"$fixture/active"
+reset_ctlinnd
+run 'gzip -9'
+ok 'next run saves the active copy' \
+    cmp "$(saved active.old)" "$fixture/active-1"
+ok 'next run archives the new active copy' \
+    cmp "$old/active.1.gz" "$fixture/active"
 
 # news.daily: report and exit status of an aborted run, and its lock.
 printf '#! /bin/sh\necho scanlogs-output\nexit 3\n' >"$fixture/bin/scanlogs"
