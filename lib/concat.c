@@ -64,7 +64,7 @@ concat(const char *first, ...)
          * downstream conversions to int don't generate a vulnerability.
          */
         if (length >= INT_MAX - strlen(string))
-            sysdie("concat input too long");
+            die("concat input too long");
         length += strlen(string);
     }
     va_end(args);

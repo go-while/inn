@@ -92,7 +92,7 @@ BATCHclose(FILE *F)
      * processor which exits with a zero status. */
     failed = ferror(F);
     if (F == stdout)
-        status = fflush(stdout) == EOF ? 1 : 0;
+        status = fflush(stdout) == EOF ? -1 : 0;
     else
         status = pclose(F);
     return (status == 0 && failed) ? 1 : status;
@@ -389,8 +389,8 @@ main(int ac, char *av[])
                 if (BATCHstatus == -1)
                     syswarn("%s cannot close batch %d", Host, BATCHcount);
                 else
-                    syswarn("%s batch %d exit status %d", Host, BATCHcount,
-                            BATCHstatus);
+                    warn("%s batch %d exit status %d", Host, BATCHcount,
+                         BATCHstatus);
                 break;
             }
             ArtsInCB = 0;

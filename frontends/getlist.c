@@ -152,7 +152,7 @@ get_authinfo(const char *server, char **username, char **password)
     passwords = QIOopen(path);
     if (passwords == NULL) {
         if (errno != ENOENT)
-            warn("cannot open %s", path);
+            syswarn("cannot open %s", path);
         return false;
     }
     free(path);
