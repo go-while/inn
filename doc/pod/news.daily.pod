@@ -62,10 +62,12 @@ removing any old socket files found in the I<pathrun> directory;
 
 =item *
 
-collecting all the output and mailing it.  If B<scanlogs> fails, the report
-is still mailed, including when a throttle, unthrottle, or history file
-check aborts expiry.  B<news.daily> returns the nonzero B<scanlogs> status
-when maintenance runs to completion, or C<1> if that maintenance aborts.
+collecting all the output and mailing it.  The report is also mailed when
+B<scanlogs> fails, and when expiration is aborted because the server cannot
+be throttled or unthrottled or the new history files cannot be installed;
+the output of B<scanlogs> then ends the report.  B<news.daily> returns the
+nonzero B<scanlogs> status when maintenance runs to completion, or C<1> if
+that maintenance aborts.
 
 =back
 
