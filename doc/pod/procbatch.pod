@@ -77,7 +77,8 @@ article spool (see B<-s>).
 
 Put the output file(s) into the directory I<outdir> (defaults to I<pathtmp>
 as set in F<inn.conf>).  When also specifying B<-m>, the temporary output
-files will still be put here before being moved into their final location.
+files will still be put here, and removed once their entries have been
+appended to the tape files.
 
 =item B<-e> I<peer>
 
@@ -115,7 +116,15 @@ B<-m>.
 
 Unlink the input batchfile after processing.  Note that, combined with
 B<-e>, the batchfile is removed although the entries for other peers have
-not been processed.
+not been processed.  The input batchfile is kept
+when an output file could not be completely written (for instance because
+the file system is full); B<procbatch> then cuts the output files back to
+their size before the run, reports the error and exits with a non-zero
+status.  It is also kept when an output file is locked by another process,
+for instance another B<procbatch> writing to the same file: B<procbatch>
+locks each output file while it writes to it (with B<-m>, until its entries
+are appended to the tape file and it is removed), and does not wait for a
+lock.
 
 =item B<-v>
 
