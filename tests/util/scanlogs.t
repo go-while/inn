@@ -1,7 +1,7 @@
 #! /bin/sh
 # Exercise scanlogs in a private spool with a stand-in for ctlinnd.
 . "$C_TAP_SOURCE/tap/libtap.sh"
-plan 117
+plan 123
 tmpdir=$(test_tmpdir)
 fixture=$tmpdir/scanlogs-$$
 mkdir -p "$fixture/bin" "$fixture/log" || exit 1
@@ -34,16 +34,27 @@ EOF
 cat >"$fixture/bin/ctlinnd" <<'EOF'
 #! /bin/sh
 echo "$*" >>"$fixture/ctl.calls"
+timeout=
 while :; do
     case "$1" in
         -s) shift ;;
-        -t) shift 2 ;;
-        -t*) shift ;;
+        -t) timeout=$2; shift 2 ;;
+        -t*) timeout=${1#-t}; shift ;;
         *) break ;;
     esac
 done
 command=$1
 shift
+# With the flag gohang, innd does not answer go and mode: ctlinnd -t gives up,
+# without -t it would wait for ever (recorded in the file hung).
+hang() {
+    if [ -n "$timeout" ]; then
+        echo 'ctlinnd: timed out (simulated)'
+        exit 1
+    fi
+    echo "$command without a timeout" >>"$fixture/hung"
+    exit 1
+}
 case "$command" in
     logmode)
         if [ -e "$fixture/logmodesig" ]; then
@@ -55,6 +66,7 @@ case "$command" in
         fi
         ;;
     mode)
+        test -e "$fixture/gohang" && hang
         test -e "$fixture/modefail" && exit 1
         if [ "${TEST_THROTTLE_FAILURE:-}" = yes ]; then
             echo 'Server paused by [innwatch: fixture]'
@@ -74,6 +86,7 @@ case "$command" in
             && kill -TERM $(cat "$fixture/LOCK.scanlogs")
         ;;
     go)
+        test -e "$fixture/gohang" && hang
         if [ -e "$fixture/gofail" ]; then
             echo 'go failed (simulated)'
             exit 1
@@ -153,7 +166,7 @@ reset_ctlinnd() {
         "$fixture/modefail" "$fixture/takelock" "$fixture/logmodesig" \
         "$fixture/logmode.seen" "$fixture/shlockfail" "$fixture/shlocksig" \
         "$fixture/steallock" "$fixture/pausefail" "$fixture/locknoread" \
-        "$fixture/gosig"
+        "$fixture/gosig" "$fixture/gohang" "$fixture/hung"
 }
 # Path of a file that the last run saved to a recovered.* directory.
 saved() {
@@ -169,7 +182,7 @@ signal_at_ageing() {
 }
 # Count the go commands sent to the server.
 gocount() {
-    grep -c '^-s go ' "$fixture/ctl.calls"
+    grep -c -e '-s go ' "$fixture/ctl.calls"
 }
 # Check that the scanlogs output follows the throttle diagnostic in the mail.
 logs_after_throttle() {
@@ -337,6 +350,18 @@ ok 'failed go and mode prints the command to resume the server' \
     grep -q 'cannot resume innd, run: ctlinnd go' "$fixture/output"
 ok 'failed go and mode is not retried at exit' test "$(gocount)" -eq 1
 
+echo go-hangs >"$fixture/log/news"
+reset_ctlinnd
+touch "$fixture/gohang" "$fixture/flushsig"
+run 'gzip -9'
+ok 'unanswered go after a signal exits 1' test "$?" -eq 1
+ok 'unanswered go prints the command to resume the server' \
+    grep -q 'cannot resume innd, run: ctlinnd go' "$fixture/output"
+ok 'go waits with a timeout' grep -q -e '^-t 600 -s go ' "$fixture/ctl.calls"
+ok 'mode waits with a timeout' grep -qx -e '-t 600 mode' "$fixture/ctl.calls"
+ok 'no go or mode waits without a timeout' test ! -e "$fixture/hung"
+ok 'unanswered go releases the lock' test ! -e "$fixture/LOCK.scanlogs"
+
 echo pause-fails >"$fixture/log/news"
 echo pause-fails >"$fixture/expected"
 reset_ctlinnd
@@ -345,7 +370,7 @@ run 'gzip -9'
 ok 'refused pause still rotates and exits 0' test "$?" -eq 0
 ok 'refused pause rotates the log' cmp "$old/news.1.gz" "$fixture/expected"
 ok 'refused pause makes go look at the server mode' \
-    grep -qx mode "$fixture/ctl.calls"
+    grep -qx -e '-t 600 mode' "$fixture/ctl.calls"
 ok 'refused pause leaves the server running' test ! -f "$fixture/paused"
 
 # The scanlogs lock: held by another run, taken over during the run, and a

@@ -192,17 +192,21 @@ if ${ROTATE}; then
     ##  when the server is known not to be paused by this run any more.  The
     ##  reason is specific to this run:  its "go" cannot release a pause made
     ##  by someone else.
+    ##  go and mode wait at most TOUT seconds for innd (the timeout news.daily
+    ##  uses), so that a server that does not answer cannot hang the cleanup,
+    ##  which ignores signals.  A timeout counts as a failed command.
     PAUSED=false
     PAUSEREASON="Flushing log and syslog files $$"
+    TOUT=600
     resumeserver() {
         test "${PAUSED}" = false && return 0
-        GOOUTPUT=$(ctlinnd -s go "${PAUSEREASON}" 2>&1) && {
+        GOOUTPUT=$(ctlinnd -t "${TOUT}" -s go "${PAUSEREASON}" 2>&1) && {
             PAUSED=false
             return 0
         }
         ##  The reply to go, or to the pause, may have been lost:  look at
         ##  what the server does.  A failed query proves nothing.
-        if SERVERMODE=$(ctlinnd mode 2>&1); then
+        if SERVERMODE=$(ctlinnd -t "${TOUT}" mode 2>&1); then
             SERVERMODE=$(echo "${SERVERMODE}" | ${SED} 1q)
             if [ "${SERVERMODE}" != "Server paused ${PAUSEREASON}" ]; then
                 ##  Running (go did work, or the pause was refused), or
