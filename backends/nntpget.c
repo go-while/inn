@@ -418,7 +418,7 @@ main(int ac, char *av[])
             if (i != NNTP_CONT_IHAVE) {
                 /* 436, 400 or another reply which is not "not wanted": the
                  * article was not offered, try it again next time. */
-                syswarn("%s to IHAVE %s", buff, mesgid);
+                warn("%s to IHAVE %s", buff, mesgid);
                 printf("%s\n", mesgid);
                 Failed = true;
                 break;
@@ -441,7 +441,7 @@ main(int ac, char *av[])
             bool retry = (i != NNTP_FAIL_MSGID_NOTFOUND);
 
             if (retry) {
-                syswarn("%s to ARTICLE %s", buff, mesgid);
+                warn("%s to ARTICLE %s", buff, mesgid);
                 printf("%s\n", mesgid);
                 Failed = true;
             }
@@ -499,7 +499,7 @@ main(int ac, char *av[])
                 continue;
             if (i == NNTP_FAIL_IHAVE_DEFER
                 || (i / 100 == 4 && i != NNTP_FAIL_IHAVE_REJECT)) {
-                syswarn("%s to %s", buff, mesgid);
+                warn("%s to %s", buff, mesgid);
                 printf("%s\n", mesgid);
                 Failed = true;
                 break;
