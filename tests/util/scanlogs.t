@@ -1,7 +1,7 @@
 #! /bin/sh
 # Exercise scanlogs in a private spool with a stand-in for ctlinnd.
 . "$C_TAP_SOURCE/tap/libtap.sh"
-plan 110
+plan 113
 tmpdir=$(test_tmpdir)
 fixture=$tmpdir/scanlogs-$$
 mkdir -p "$fixture/bin" "$fixture/log" || exit 1
@@ -87,6 +87,7 @@ case "$command" in
         ;;
     flushlogs)
         test -e "$fixture/steallock" && echo 4343 >"$fixture/LOCK.scanlogs"
+        test -e "$fixture/locknoread" && chmod 000 "$fixture/LOCK.scanlogs"
         test -e "$fixture/flushsig" \
             && kill -TERM $(cat "$fixture/LOCK.scanlogs")
         if [ -e "$fixture/flushfail" ]; then
@@ -149,7 +150,7 @@ reset_ctlinnd() {
         "$fixture/flushsig" "$fixture/pausesig" "$fixture/gofail" \
         "$fixture/modefail" "$fixture/takelock" "$fixture/logmodesig" \
         "$fixture/logmode.seen" "$fixture/shlockfail" "$fixture/shlocksig" \
-        "$fixture/steallock" "$fixture/pausefail"
+        "$fixture/steallock" "$fixture/pausefail" "$fixture/locknoread"
 }
 # Path of a file that the last run saved to a recovered.* directory.
 saved() {
@@ -370,6 +371,20 @@ run 'gzip -9'
 ok 'signal right after the lock is taken exits 1' test "$?" -eq 1
 ok 'signal right after the lock is taken releases it' \
     test ! -e "$fixture/LOCK.scanlogs"
+reset_ctlinnd
+touch "$fixture/locknoread"
+run 'gzip -9'
+status=$?
+if [ "$(id -u)" -eq 0 ]; then
+    skip_block 3 'root can read a lock of mode 000'
+else
+    ok 'unreadable lock exits 1' test "$status" -eq 1
+    ok 'unreadable lock is reported' \
+        grep -q 'cannot read .*LOCK.scanlogs, left in place' "$fixture/output"
+    ok 'unreadable lock is left in place' test -e "$fixture/LOCK.scanlogs"
+fi
+chmod 644 "$fixture/LOCK.scanlogs" 2>/dev/null
+rm -f "$fixture/LOCK.scanlogs"
 
 # A signal after an archive is published and before it is aged.  errlog is
 # the first log rotated.

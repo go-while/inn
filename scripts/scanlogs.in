@@ -159,10 +159,17 @@ cleanup_rotation() {
         rmdir "${archive_tmp%/*}" || status=1
     fi
     ##  Only remove the lock of this run:  it may be held by another one.
-    LOCKPID=
-    { read LOCKPID <"${LOCK}"; } 2>/dev/null
-    if [ "${LOCKPID}" = "$$" ]; then
-        rm -f "${LOCK}" || status=1
+    ##  shlock writes the PID right-aligned.  A lock that exists but cannot
+    ##  be read is reported and left in place.
+    if [ -e "${LOCK}" ]; then
+        if LOCKCONTENT=$(cat "${LOCK}" 2>&1); then
+            if [ "${LOCKCONTENT##* }" = "$$" ]; then
+                rm -f "${LOCK}" || status=1
+            fi
+        elif [ -e "${LOCK}" ]; then
+            echo "$0: cannot read ${LOCK}, left in place: ${LOCKCONTENT}" >&2
+            status=1
+        fi
     fi
     exit "${status}"
 }
