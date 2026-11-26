@@ -13,7 +13,8 @@ B<expireover> expires old entries from the news overview database.  It
 reads in a list of newsgroups (by default from I<pathdb>/active, but a
 different file can be specified with the B<-f> option) and then removes
 from the overview database mentions of any articles that no longer exist
-in the news spool.
+in the news spool.  With tradindexed, expiry skips rebuilding overview files for
+groups with no entries and an already normalized pair of water marks.
 
 If I<groupbaseexpiry> in F<inn.conf> is true, B<expireover> also removes
 old articles from the news spool according to the expiration rules in
