@@ -258,6 +258,13 @@ fi
 
 mail_report() {
     if ${DOMAIL}; then
+        ##  Add the output of scanlogs if the report did not show it yet,
+        ##  because the maintenance was aborted.
+        if [ -s "${TEMPLOGS}" ]; then
+            echo ''
+            cat "${TEMPLOGS}"
+        fi
+        rm -f "${TEMPLOGS}"
         exec 1>&3 2>&1 3>&-
         MAIL="${MAILCMD} -a '${ADDHEADER}' -s '${MAILSUBJ}' ${NEWSMASTER}"
         test -s ${TEMP} && cat ${TEMP} | ${SED} -e 's/^~/~~/' | eval ${MAIL}
@@ -265,7 +272,10 @@ mail_report() {
     fi
 }
 
-##  Abort maintenance after acquiring the daily lock.
+##  Abort maintenance after acquiring the daily lock:  report the error (the
+##  first argument, then each further one on a line of its own) and the
+##  status of the news system, release the lock of this run, and mail the
+##  report so far.  A paused or throttled server is left as it is.
 maintenance_error() {
     echo "$0: $1"
     shift
@@ -273,7 +283,7 @@ maintenance_error() {
         echo "${LINE}"
     done
     ${INNSTAT}
-    rm -f "${LOCK}"
+    unlock
     mail_report
     exit 1
 }
@@ -400,15 +410,12 @@ if ${DOEXPIRE}; then
     ##  in ${EXPDIR}, which expire would overwrite.  Leave it to the
     ##  administrator.
     if [ -n "${EXPDIR}" ] && [ -f "${EXPDIR}/history.n.done" ]; then
-        (
-            echo "$0: ${EXPDIR}/history.n.done exists: an earlier installation"
-            echo "of new history files did not complete.  Finish it (move the"
-            echo "remaining history.n files of ${EXPDIR} to ${HISTDIR} without"
-            echo "the .n, remove history.n.done, ctlinnd go) before the next"
-            echo "expiration."
-            ${INNSTAT}
-        ) | eval ${MAIL}
-        exit 1
+        maintenance_error \
+            "${EXPDIR}/history.n.done exists: an earlier installation" \
+            "of new history files did not complete.  Finish it (move the" \
+            "remaining history.n files of ${EXPDIR} to ${HISTDIR} without" \
+            "the .n, remove history.n.done, ctlinnd go) before the next" \
+            "expiration."
     fi
 
     ##  Wait to be fairly certain innwatch is not in the middle of a pass.
@@ -512,13 +519,9 @@ if ${DOEXPIRE}; then
         case "${HISMODE}" in
         "Server paused"* | "Server throttled"*) ;;
         *)
-            (
-                echo "$0: Cannot make sure that the server is paused"
-                echo "(mode: ${HISMODE:-no answer}).  The new history files"
-                echo "are left in ${EXPDIR} and the old ones in place."
-                ${INNSTAT}
-            ) | eval ${MAIL}
-            exit 1
+            maintenance_error "Cannot make sure that the server is paused" \
+                "(mode: ${HISMODE:-no answer}).  The new history files" \
+                "are left in ${EXPDIR} and the old ones in place."
             ;;
         esac
 
@@ -535,15 +538,12 @@ if ${DOEXPIRE}; then
         ##  "true >" rather than "cp /dev/null": BusyBox cp replaces a file
         ##  it cannot open for writing instead of failing.
         if ! true >"${HISTORY}"; then
-            (
-                echo "$0: Cannot empty ${HISTORY} to install the new history"
-                echo "files of ${EXPDIR}; nothing was moved and the server is"
-                echo "left paused.  Install them by hand, remove history.n.done"
-                echo "and unpause the server (ctlinnd go with the reason shown"
-                echo "by ctlinnd mode)."
-                ${INNSTAT}
-            ) | eval ${MAIL}
-            exit 1
+            maintenance_error \
+                "Cannot empty ${HISTORY} to install the new history" \
+                "files of ${EXPDIR}; nothing was moved and the server is" \
+                "left paused.  Install them by hand, remove history.n.done" \
+                "and unpause the server (ctlinnd go with the reason shown" \
+                "by ctlinnd mode)."
         fi
         HISFAILED=
         mv -f ${EXPDIR}/history.n ${HISTORY} || HISFAILED=history.n
@@ -553,16 +553,13 @@ if ${DOEXPIRE}; then
                 || HISFAILED=history.n.${EXT}
         done
         if [ -n "${HISFAILED}" ]; then
-            (
-                echo "$0: Cannot move ${EXPDIR}/${HISFAILED} to ${HISTDIR}"
-                echo "The history database is incomplete and the server is left"
-                echo "paused.  Move the remaining history.n files of ${EXPDIR}"
-                echo "to ${HISTDIR} (without the .n) and remove history.n.done"
-                echo "before unpausing it (ctlinnd go with the reason shown by"
-                echo "ctlinnd mode)."
-                ${INNSTAT}
-            ) | eval ${MAIL}
-            exit 1
+            maintenance_error \
+                "Cannot move ${EXPDIR}/${HISFAILED} to ${HISTDIR}" \
+                "The history database is incomplete and the server is left" \
+                "paused.  Move the remaining history.n files of ${EXPDIR}" \
+                "to ${HISTDIR} (without the .n) and remove history.n.done" \
+                "before unpausing it (ctlinnd go with the reason shown by" \
+                "ctlinnd mode)."
         fi
         rm -f ${EXPDIR}/history.n.done
 
