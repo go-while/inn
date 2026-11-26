@@ -21,6 +21,7 @@ lib/conffile
 lib/confparse
 lib/date
 lib/dbz
+lib/dbz-keys
 lib/daemon
 lib/defdist
 lib/dispatch

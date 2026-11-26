@@ -863,6 +863,7 @@ hisv6_writeline(struct hisv6 *h, const HASH *hash, time_t arrived,
                 time_t posted, time_t expires, const TOKEN *token)
 {
     bool r;
+    bool flush = !(h->flags & HIS_INCORE);
     size_t i, length;
     char hisline[HISV6_MAXLINE + 1];
     char location[HISV6_MAX_LOCATION];
@@ -886,13 +887,16 @@ hisv6_writeline(struct hisv6 *h, const HASH *hash, time_t arrived,
         return false;
     }
 
+#ifdef DO_TAGGED_HASH
+    /* A later insertion can read this row while resolving a tag collision. */
+    flush = true;
+#endif
     i = fwrite(hisline, 1, length, h->writefp);
 
     /* If the write failed, the history line is now an orphan.  Attempt to
        rewind the write pointer to our offset to avoid leaving behind a
        partial write and desyncing the offset from our file position. */
-    if (i < length
-        || (!(h->flags & HIS_INCORE) && fflush(h->writefp) == EOF)) {
+    if (i < length || (flush && fflush(h->writefp) == EOF)) {
         hisv6_errloc(location, (size_t) -1, h->offset);
         hisv6_seterror(h, concat("can't write history ", h->histpath, location,
                                  " ", strerror(errno), NULL));

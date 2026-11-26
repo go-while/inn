@@ -674,6 +674,12 @@ against the new headers before using the updated library.  The OVDB
 reader protocol still limits water marks to the width of its existing
 unsigned integer fields.
 
+=item *
+
+With tagged hashing, the hisv6 history index now retains the first
+offset for a duplicate Message-ID, as the default index already does.
+hisv6 logs these duplicates as C<dbzstore duplicate message-id>.
+
 =back
 
 =head1 Changes in 2.7.5 (not yet released)
