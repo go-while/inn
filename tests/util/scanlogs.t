@@ -2,7 +2,8 @@
 # Exercise scanlogs in a private spool with a stand-in for ctlinnd.
 . "$C_TAP_SOURCE/tap/libtap.sh"
 plan 41
-fixture=$(test_tmpdir)/scanlogs-$$
+tmpdir=$(test_tmpdir)
+fixture=$tmpdir/scanlogs-$$
 mkdir -p "$fixture/bin" "$fixture/log" || exit 1
 export fixture
 cat >"$fixture/vars" <<'EOF'
@@ -142,3 +143,4 @@ ok 'next rotation saves the interrupted log intact' cmp "$1" "$fixture/interrupt
 ok 'next rotation reports the saved log path' grep -Fq "saved pending log to $1" "$fixture/output"
 
 rm -rf "$fixture"
+rmdir "$tmpdir" 2>/dev/null || :
