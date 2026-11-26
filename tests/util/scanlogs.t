@@ -1,7 +1,7 @@
 #! /bin/sh
 # Exercise scanlogs in a private spool with a stand-in for ctlinnd.
 . "$C_TAP_SOURCE/tap/libtap.sh"
-plan 102
+plan 110
 tmpdir=$(test_tmpdir)
 fixture=$tmpdir/scanlogs-$$
 mkdir -p "$fixture/bin" "$fixture/log" || exit 1
@@ -65,6 +65,10 @@ case "$command" in
         fi
         ;;
     pause)
+        if [ -e "$fixture/pausefail" ]; then
+            echo 'pause refused (simulated)'
+            exit 1
+        fi
         echo "$*" >"$fixture/paused"
         test -e "$fixture/pausesig" \
             && kill -TERM $(cat "$fixture/LOCK.scanlogs")
@@ -145,7 +149,7 @@ reset_ctlinnd() {
         "$fixture/flushsig" "$fixture/pausesig" "$fixture/gofail" \
         "$fixture/modefail" "$fixture/takelock" "$fixture/logmodesig" \
         "$fixture/logmode.seen" "$fixture/shlockfail" "$fixture/shlocksig" \
-        "$fixture/steallock"
+        "$fixture/steallock" "$fixture/pausefail"
 }
 # Path of a file that the last run saved to a recovered.* directory.
 saved() {
@@ -182,6 +186,8 @@ ok 'new generation has plain suffix' cmp "$old/news.1" "$fixture/second"
 printf 'third\n' >"$fixture/log/news"
 run 'gzip -invalid'
 ok 'compressor error is reported' test "$?" -ne 0
+ok 'compressor error names the log' \
+    grep -q 'compression failed for news, keeping plain log' "$fixture/output"
 ok 'failed compression retains the complete plain log' cmp "$old/news.1" "$fixture/third"
 ok 'oldest compressed generation expired' test ! -f "$old/news.2.gz"
 ok 'preceding plain generation retained' cmp "$old/news.2" "$fixture/second"
@@ -317,6 +323,26 @@ ok 'failed go prints the command to resume the server' \
 ok 'failed go is not retried at exit' test "$(gocount)" -eq 1
 ok 'failed go still rotates the log' cmp "$old/news.1.gz" "$fixture/expected"
 ok 'failed go releases the lock' test ! -e "$fixture/LOCK.scanlogs"
+
+echo mode-fails >"$fixture/log/news"
+reset_ctlinnd
+touch "$fixture/gofail" "$fixture/modefail"
+run 'gzip -9'
+ok 'failed go and mode exits 1' test "$?" -eq 1
+ok 'failed go and mode prints the command to resume the server' \
+    grep -q 'cannot resume innd, run: ctlinnd go' "$fixture/output"
+ok 'failed go and mode is not retried at exit' test "$(gocount)" -eq 1
+
+echo pause-fails >"$fixture/log/news"
+echo pause-fails >"$fixture/expected"
+reset_ctlinnd
+touch "$fixture/pausefail"
+run 'gzip -9'
+ok 'refused pause still rotates and exits 0' test "$?" -eq 0
+ok 'refused pause rotates the log' cmp "$old/news.1.gz" "$fixture/expected"
+ok 'refused pause makes go look at the server mode' \
+    grep -qx mode "$fixture/ctl.calls"
+ok 'refused pause leaves the server running' test ! -f "$fixture/paused"
 
 # The scanlogs lock: held by another run, taken over during the run, and a
 # signal right after it is taken.
