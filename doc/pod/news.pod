@@ -1050,6 +1050,14 @@ effect: which C<ctlinnd> command reloads it, whether B<nnrpd> picks it up
 at the next connection, or whether a restart is needed.  The C<ctlinnd
 reload> keywords are now listed one by one in ctlinnd(8).
 
+=item *
+
+Tradspool writes F<tradspool.map> without using stdio, so that it can be
+updated on platforms that have a stdio limitation, such as 64-bit Solaris
+versions prior to 11.0, all 32-bit Solaris versions and 32-bit applications
+running on 64-bit Solaris.  The temporary file is now removed after a failed
+write.
+
 =back
 
 =head1 Changes in 2.7.4 (2026-06-22)
