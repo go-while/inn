@@ -666,6 +666,14 @@ B<expire> while the files of an earlier incomplete installation are still
 there.  The reason it gives B<expire> no longer includes the expdir path,
 which could exceed the 80 characters B<innd> accepts.
 
+=item *
+
+The C overview API function B<OVgroupstats> now returns the low and
+high water marks through C<ARTNUM *> parameters.  Rebuild callers
+against the new headers before using the updated library.  The OVDB
+reader protocol still limits water marks to the width of its existing
+unsigned integer fields.
+
 =back
 
 =head1 Changes in 2.7.5 (not yet released)

@@ -142,9 +142,8 @@ static char xref_header[] = "Xref";
 static void
 process_newnews(char *group, bool AllGroups, time_t date)
 {
-    int low, high;
+    ARTNUM low, high;
     char **xrefs;
-    int count;
     void *handle;
     char *p;
     time_t arrived;
@@ -161,7 +160,7 @@ process_newnews(char *group, bool AllGroups, time_t date)
         return;
     if (!AllGroups && !PERMmatch(groups, grplist))
         return;
-    if (!OVgroupstats(group, &low, &high, &count, NULL))
+    if (!OVgroupstats(group, &low, &high, NULL, NULL))
         return;
     /* Do not touch ARTlow and ARThigh: they belong to the group the reader
      * has selected, which is not necessarily the group scanned here. */

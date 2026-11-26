@@ -19,7 +19,7 @@
 BEGIN_DECLS
 
 bool ovsqlite_open(int mode);
-bool ovsqlite_groupstats(const char *group, int *lo, int *hi, int *count,
+bool ovsqlite_groupstats(const char *group, ARTNUM *lo, ARTNUM *hi, int *count,
                          int *flag);
 bool ovsqlite_groupadd(const char *group, ARTNUM lo, ARTNUM hi, char *flag);
 bool ovsqlite_groupdel(const char *group);

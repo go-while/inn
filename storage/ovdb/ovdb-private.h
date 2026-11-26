@@ -141,8 +141,8 @@ struct rs_cmd {
 
 struct rs_groupstats {
     uint32_t status;
-    int lo;
-    int hi;
+    unsigned int lo;
+    unsigned int hi;
     int count;
     int flag;
     uint32_t aliaslen;

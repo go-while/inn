@@ -113,7 +113,8 @@ tradindexed_open(int mode)
 **  and the structure API used internally.
 */
 bool
-tradindexed_groupstats(const char *group, int *low, int *high, int *count,
+tradindexed_groupstats(const char *group, ARTNUM *low, ARTNUM *high,
+                       int *count,
                        int *flag)
 {
     const struct group_entry *entry;

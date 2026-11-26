@@ -50,9 +50,10 @@ overview_data_parse(char *data, unsigned long *artnum)
 /* Check both the active-file cutoff used by makehistory -I and the normal
  * first-article low water mark when cutoff is disabled. */
 static bool
-group_stats(char *group, int wantlow, int wanthigh, int wantcount)
+group_stats(char *group, ARTNUM wantlow, ARTNUM wanthigh, int wantcount)
 {
-    int low, high, count, flag;
+    ARTNUM low, high;
+    int count, flag;
 
     return OVgroupstats(group, &low, &high, &count, &flag) && low == wantlow
            && high == wanthigh && count == wantcount;

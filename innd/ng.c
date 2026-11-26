@@ -331,7 +331,8 @@ NGsplit(char *p, int size, LISTBUFFER *list)
 bool
 NGrenumber(NEWSGROUP *ngp)
 {
-    int low, high, count, flag;
+    ARTNUM low, high;
+    int count, flag;
     char *f2;
     char *f3;
     char *f4;
