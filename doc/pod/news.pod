@@ -1043,6 +1043,13 @@ as it arrived (with its line endings, normally CRLF, and dot-stuffing), up
 to the line ending of its last line.  Filters that hash the body (like the EMP checks of
 Cleanfeed) or look at its end get different values than before.
 
+=item *
+
+The man pages of the configuration files now say how changes to them take
+effect: which C<ctlinnd> command reloads it, whether B<nnrpd> picks it up
+at the next connection, or whether a restart is needed.  The C<ctlinnd
+reload> keywords are now listed one by one in ctlinnd(8).
+
 =back
 
 =head1 Changes in 2.7.4 (2026-06-22)

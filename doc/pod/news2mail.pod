@@ -107,6 +107,16 @@ It then goes on with the next articles.  When its input ends, it exits with
 status 1 if some articles were not mailed, so that B<innd> logs an error; the
 log messages above are the only record of which ones.
 
+B<news2mail> only reads F<news2mail.cf> when it starts.  After any changes,
+make B<innd> spawn a new B<news2mail> process with the following command
+(assuming C<news2mail!> is the name of the channel feed in F<newsfeeds>):
+
+    ctlinnd flush news2mail!
+
+When you add a mailing-list to F<newsfeeds>, reloading F<newsfeeds> with
+C<ctlinnd reload newsfeeds 'reason'> is enough, as it also restarts the
+channel feeds.
+
 =head1 FILES
 
 =over 4
