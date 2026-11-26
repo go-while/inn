@@ -35,8 +35,8 @@ TESTS	= authprogs/ident.t expire/tombstone.t expire/tombstone-hisexpire.t \
 	lib/setenv.t lib/snprintf.t lib/strlcat.t \
 	lib/strlcpy.t lib/tst.t lib/uwildmat.t lib/vector.t lib/wire.t \
 	lib/xwrite.t nnrpd/auth-ext.t overview/api.t overview/buffindexed.t \
-	overview/ovsqlite.t overview/tdx-group.t overview/tradindexed.t \
-	overview/xref.t \
+	overview/ovdb-compress.t overview/ovsqlite.t overview/tdx-group.t \
+	overview/tradindexed.t overview/xref.t \
 	storage/caf.t storage/cancel-tombstone.t util/innbind.t
 
 ##  Extra stuff that needs to be built before tests can be run.
@@ -351,6 +351,10 @@ overview/buffindexed-t.o: overview/overview-t.c
 
 overview/buffindexed.t: overview/buffindexed-t.o tap/basic.o $(STORAGEDEPS)
 	$(LINKDEPS) overview/buffindexed-t.o tap/basic.o $(STORAGELIBS) $(LIBS)
+
+overview/ovdb-compress.t: overview/ovdb-compress-t.o tap/basic.o $(STORAGEDEPS)
+	$(LINKDEPS) overview/ovdb-compress-t.o tap/basic.o $(STORAGELIBS) \
+	    $(LIBS)
 
 overview/ovsqlite.t: overview/ovsqlite-t.o tap/basic.o $(STORAGEDEPS)
 	$(LINKDEPS) overview/ovsqlite-t.o tap/basic.o $(STORAGELIBS) $(LIBS)
