@@ -617,60 +617,49 @@ enum timer {
     } while (0)
 
 
-/*
-**  Global data.
-**
-** Do not change "extern" to "EXTERN" in the Global data.  The ones
-** marked with "extern" are initialized in innd.c.  The ones marked
-** with "EXTERN" are not explicitly initialized in innd.c.
-*/
-#if defined(DEFINE_DATA)
-#    define EXTERN /* NULL */
-#else
-#    define EXTERN extern
-#endif
+/* Global data. */
 extern const ARTHEADER ARTheaders[MAX_ARTHEADER];
 extern bool BufferedLogs;
-EXTERN bool AnyIncoming;
+extern bool AnyIncoming;
 extern bool Debug;
 extern bool laxmid;
-EXTERN bool ICDneedsetup;
-EXTERN bool NeedHeaders;
-EXTERN bool NeedOverview;
-EXTERN bool NeedPath;
-EXTERN bool NeedStoredGroup;
-EXTERN bool NeedReplicdata;
+extern bool ICDneedsetup;
+extern bool NeedHeaders;
+extern bool NeedOverview;
+extern bool NeedPath;
+extern bool NeedStoredGroup;
+extern bool NeedReplicdata;
 extern bool NNRPTracing;
 extern bool StreamingOff;
 extern bool Tracing;
-EXTERN struct buffer Path;
-EXTERN struct buffer Pathalias;
-EXTERN struct buffer Pathcluster;
-EXTERN char *ModeReason;   /* NNTP reject message */
-EXTERN char *NNRPReason;   /* NNRP reject message */
-EXTERN char *Reservation;  /* Reserved lock message */
-EXTERN char *RejectReason; /* NNTP reject message */
-EXTERN FILE *Errlog;
-EXTERN FILE *Log;
+extern struct buffer Path;
+extern struct buffer Pathalias;
+extern struct buffer Pathcluster;
+extern char *ModeReason;   /* NNTP reject message */
+extern char *NNRPReason;   /* NNRP reject message */
+extern char *Reservation;  /* Reserved lock message */
+extern char *RejectReason; /* NNTP reject message */
+extern FILE *Errlog;
+extern FILE *Log;
 extern char LogName[];
 extern int ErrorCount;
-EXTERN unsigned long ICDactivedirty;
-EXTERN int MaxOutgoing;
-EXTERN int nGroups;
-EXTERN SITEIDX nSites;
-EXTERN volatile sig_atomic_t PROCneedscan;
-EXTERN NEWSGROUP **GroupPointers;
-EXTERN NEWSGROUP *Groups;
+extern unsigned long ICDactivedirty;
+extern int MaxOutgoing;
+extern int nGroups;
+extern SITEIDX nSites;
+extern volatile sig_atomic_t PROCneedscan;
+extern NEWSGROUP **GroupPointers;
+extern NEWSGROUP *Groups;
 extern OPERATINGMODE Mode;
-EXTERN volatile sig_atomic_t GotTerminate;
-EXTERN SITE *Sites;
-EXTERN int SITEreaderrors;
-EXTERN SITE ME;
-EXTERN struct timeval TimeOut;
-EXTERN struct timeval Now; /* Reasonably accurate time */
-EXTERN bool ThrottledbyIOError;
-EXTERN char *NCgreeting;
-EXTERN struct history *History;
+extern volatile sig_atomic_t GotTerminate;
+extern SITE *Sites;
+extern int SITEreaderrors;
+extern SITE ME;
+extern struct timeval TimeOut;
+extern struct timeval Now; /* Reasonably accurate time */
+extern bool ThrottledbyIOError;
+extern char *NCgreeting;
+extern struct history *History;
 
 /*
 ** Table size for limiting incoming connects.  Do not change the table

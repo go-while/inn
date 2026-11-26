@@ -14,12 +14,6 @@
 #include "inn/newsuser.h"
 #include "innperl.h"
 
-/* Silent this warning because of the way we deal with EXTERN. */
-#if defined(__llvm__) || defined(__clang__)
-#    pragma GCC diagnostic ignored "-Wmissing-variable-declarations"
-#endif
-
-#define DEFINE_DATA
 #include "inn/ov.h"
 #include "innd.h"
 
