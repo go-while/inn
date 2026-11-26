@@ -1,5 +1,7 @@
 /* Test suite for list routines. */
 
+#define LIBTEST_NEW_FORMAT 1
+
 #include "portable/system.h"
 
 #include "inn/libinn.h"
@@ -13,53 +15,55 @@ main(void)
     struct list list;
     struct node a, b, c;
 
-    test_init(28);
+    plan(28);
 
     list_new(&list);
-    ok(1, list_isempty(&list));
+    ok(list_isempty(&list), "new list is empty");
 
-    ok(2, list_addhead(&list, &a) == &a);
-    ok(3, !list_isempty(&list));
-    ok(4, list_head(&list) == &a);
-    ok(5, list_tail(&list) == &a);
-    ok(6, list_remhead(&list) == &a);
-    ok(7, list_isempty(&list));
+    ok(list_addhead(&list, &a) == &a, "addhead returns the inserted node");
+    ok(!list_isempty(&list), "addhead makes the list nonempty");
+    ok(list_head(&list) == &a, "head finds the sole node");
+    ok(list_tail(&list) == &a, "tail finds the sole node after addhead");
+    ok(list_remhead(&list) == &a, "remhead returns the sole node");
+    ok(list_isempty(&list), "remhead empties the list");
 
-    ok(8, list_addhead(&list, &a) == &a);
-    ok(9, list_remtail(&list) == &a);
-    ok(10, list_isempty(&list));
+    ok(list_addhead(&list, &a) == &a, "addhead can reuse the removed node");
+    ok(list_remtail(&list) == &a, "remtail finds a node added at the head");
+    ok(list_isempty(&list), "remtail empties the list");
 
-    ok(11, list_addtail(&list, &a) == &a);
-    ok(12, !list_isempty(&list));
-    ok(13, list_head(&list) == &a);
-    ok(14, list_tail(&list) == &a);
-    ok(15, list_remhead(&list) == &a);
-    ok(16, list_isempty(&list));
+    ok(list_addtail(&list, &a) == &a, "addtail returns the inserted node");
+    ok(!list_isempty(&list), "addtail makes the list nonempty");
+    ok(list_head(&list) == &a, "head finds a node added at the tail");
+    ok(list_tail(&list) == &a, "tail finds the sole node after addtail");
+    ok(list_remhead(&list) == &a, "remhead finds a node added at the tail");
+    ok(list_isempty(&list), "remhead empties the list after addtail");
 
     list_addtail(&list, &a);
-    ok(17, list_remtail(&list) == &a);
-    ok(18, list_isempty(&list));
+    ok(list_remtail(&list) == &a, "remtail finds a node added at the tail");
+    ok(list_isempty(&list), "remtail empties the list after addtail");
 
     list_addhead(&list, &a);
-    ok(19, list_remove(&a) == &a);
-    ok(20, list_isempty(&list));
+    ok(list_remove(&a) == &a, "remove returns the unlinked node");
+    ok(list_isempty(&list), "remove empties a single-node list");
 
     list_addtail(&list, &a);
     list_addtail(&list, &b);
     list_insert(&list, &c, &a);
-    ok(21, list_succ(&c) == &b);
-    ok(22, list_pred(&c) == &a);
+    ok(list_succ(&c) == &b, "middle node has the following node");
+    ok(list_pred(&c) == &a, "middle node has the previous node");
     list_remove(&c);
     list_insert(&list, &c, &b);
-    ok(23, list_succ(&c) == NULL);
-    ok(24, list_pred(&c) == &b);
+    ok(list_succ(&c) == NULL, "last node has no successor");
+    ok(list_pred(&c) == &b, "last node has the previous node");
     list_remove(&c);
     list_insert(&list, &c, NULL);
-    ok(25, list_succ(&c) == &a);
-    ok(26, list_pred(&c) == NULL);
+    ok(list_succ(&c) == &a, "first node has the following node");
+    ok(list_pred(&c) == NULL, "first node has no predecessor");
     list_remove(&c);
-    ok(27, list_head(&list) == &a);
-    ok(28, list_tail(&list) == &b);
+    ok(list_head(&list) == &a,
+       "head is unchanged after removing inserted nodes");
+    ok(list_tail(&list) == &b,
+       "tail is unchanged after removing inserted nodes");
 
     return 0;
 }

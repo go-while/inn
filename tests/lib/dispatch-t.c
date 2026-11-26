@@ -1,5 +1,7 @@
 /* dispatch test suite. */
 
+#define LIBTEST_NEW_FORMAT 1
+
 #include "portable/system.h"
 
 #include "inn/dispatch.h"
@@ -83,7 +85,7 @@ main(void)
 {
     struct cvector *command;
 
-    test_init(18);
+    plan(18);
 
     command = cvector_new();
     cvector_resize(command, 6);
@@ -91,49 +93,50 @@ main(void)
     cvector_add(command, "0");
     dispatch(command, commands, ARRAY_SIZE(commands), command_unknown,
              command_syntax, &last_handler);
-    ok_string(1, "0", last_handler);
-    ok(2, last_args_valid);
+    is_string("0", last_handler, "dispatch a command with no operands");
+    ok(last_args_valid, "zero-operand command sees the expected vector");
     command->strings[0] = "1";
     cvector_add(command, "arg1");
     dispatch(command, commands, ARRAY_SIZE(commands), command_unknown,
              command_syntax, &last_handler);
-    ok_string(3, "1", last_handler);
-    ok(4, last_args_valid);
+    is_string("1", last_handler, "dispatch a command with one operand");
+    ok(last_args_valid, "one-operand command sees the expected vector");
     command->strings[0] = "4";
     dispatch(command, commands, ARRAY_SIZE(commands), command_unknown,
              command_syntax, &last_handler);
-    ok_string(5, "syntax", last_handler);
-    ok(6, last_args_valid);
+    is_string("syntax", last_handler, "reject too few operands");
+    ok(last_args_valid, "syntax handler sees the incomplete vector");
     cvector_add(command, "arg2");
     dispatch(command, commands, ARRAY_SIZE(commands), command_unknown,
              command_syntax, &last_handler);
-    ok_string(7, "4", last_handler);
-    ok(8, last_args_valid);
+    is_string("4", last_handler, "dispatch with two operands");
+    ok(last_args_valid, "two-operand command sees the expected vector");
     cvector_add(command, "arg3");
     dispatch(command, commands, ARRAY_SIZE(commands), command_unknown,
              command_syntax, &last_handler);
-    ok_string(9, "4", last_handler);
-    ok(10, last_args_valid);
+    is_string("4", last_handler, "dispatch with three operands");
+    ok(last_args_valid, "three-operand command sees the expected vector");
     cvector_add(command, "arg4");
     dispatch(command, commands, ARRAY_SIZE(commands), command_unknown,
              command_syntax, &last_handler);
-    ok_string(11, "4", last_handler);
-    ok(12, last_args_valid);
+    is_string("4", last_handler, "dispatch with four operands");
+    ok(last_args_valid, "four-operand command sees the expected vector");
     cvector_add(command, "arg5");
     dispatch(command, commands, ARRAY_SIZE(commands), command_unknown,
              command_syntax, &last_handler);
-    ok_string(13, "syntax", last_handler);
-    ok(14, last_args_valid);
+    is_string("syntax", last_handler, "reject too many operands");
+    ok(last_args_valid, "syntax handler sees the oversized vector");
     command->strings[0] = "5";
     dispatch(command, commands, ARRAY_SIZE(commands), command_unknown,
              command_syntax, &last_handler);
-    ok_string(15, "unknown", last_handler);
-    ok(16, last_args_valid);
+    is_string("unknown", last_handler, "select the unknown command handler");
+    ok(last_args_valid, "unknown command handler sees the expected vector");
     cvector_resize(command, 0);
     dispatch(command, commands, ARRAY_SIZE(commands), command_unknown,
              command_syntax, &last_handler);
-    ok_string(17, "unknown", last_handler);
-    ok(18, last_args_valid);
+    is_string("unknown", last_handler,
+              "select the unknown command handler for an empty vector");
+    ok(last_args_valid, "unknown command handler sees the empty vector");
 
     return 0;
 }

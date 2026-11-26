@@ -1,5 +1,7 @@
 /* MD5 hashing test suite. */
 
+#define LIBTEST_NEW_FORMAT 1
+
 #include "portable/system.h"
 
 #include "inn/libinn.h"
@@ -82,7 +84,7 @@ test_md5(int n, const char *expected, const unsigned char *data, size_t length)
 
     md5_hash(data, length, digest);
     digest2hex(digest, hexdigest);
-    ok_string(n, expected, hexdigest);
+    is_string(expected, hexdigest, "MD5 vector %d", n);
 }
 
 int
@@ -94,7 +96,7 @@ main(void)
     struct md5_context context;
     char hexdigest[33];
 
-    test_init(12 + ARRAY_SIZE(testdata));
+    plan(12 + ARRAY_SIZE(testdata));
 
     test_md5(1, "93b885adfe0da089cdf634904fd59f71", SUC "\0", 1);
     test_md5(2, "e94a053c3fbfcfb22b4debaa11af7718", SUC "\0ab\n", 4);
@@ -117,7 +119,8 @@ main(void)
     md5_update(&context, data + 64 * 1024 - 42, 42);
     md5_final(&context);
     digest2hex(context.digest, hexdigest);
-    ok_string(10, "3d8897b14254c9f86fbad3fe22f62edd", hexdigest);
+    is_string("3d8897b14254c9f86fbad3fe22f62edd", hexdigest,
+              "incremental hashing matches the one-shot digest");
 
     /* Part of the MD5 test suite from RFC 1321. */
     for (i = 0, n = 'A'; n <= 'Z'; i++, n++)

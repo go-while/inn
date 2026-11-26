@@ -13,6 +13,8 @@
  * Written by Kevin Bowling in 2026.
  */
 
+#define LIBTEST_NEW_FORMAT 1
+
 #include "portable/system.h"
 
 #include <ctype.h>
@@ -387,7 +389,7 @@ main(void)
     struct hash *groups;
     bool status;
 
-    test_init(5);
+    plan(5);
 
     if (access("../data/overview/basic", F_OK) == 0) {
         if (chdir("../data") < 0)
@@ -401,25 +403,26 @@ main(void)
     }
 
     /* Test 1: open in direct reader mode (OV_READ triggers direct_open). */
-    ok(1, OVopen(OV_READ));
+    ok(OVopen(OV_READ), "open SQLite overview read-only");
 
     /* Test 2: group stats match expected values. */
     groups = load_expected("overview/basic");
     status = true;
     hash_traverse(groups, verify_group, &status);
-    ok(2, status);
+    ok(status, "list groups with the expected metadata");
 
     /* Test 3: per-article data integrity (token, overview, arrived). */
-    ok(3, verify_articles("overview/basic"));
+    ok(verify_articles("overview/basic"), "read back the stored articles");
 
     /* Test 4: multi-article search returns articles in order. */
-    ok(4, verify_search_order("overview/basic"));
+    ok(verify_search_order("overview/basic"),
+       "search returns articles in order");
 
     hash_free(groups);
     OVclose();
 
     /* Test 5: close and reopen works. */
-    ok(5, OVopen(OV_READ));
+    ok(OVopen(OV_READ), "reopen SQLite overview after closing it");
     OVclose();
 
     return 0;

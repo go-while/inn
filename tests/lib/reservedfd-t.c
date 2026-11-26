@@ -3,6 +3,8 @@
 **  Written by Kevin Bowling in 2026.
 */
 
+#define LIBTEST_NEW_FORMAT 1
+
 #include "portable/system.h"
 
 #include "inn/libinn.h"
@@ -13,29 +15,29 @@ main(void)
 {
     FILE *file;
 
-    test_init(11);
+    plan(11);
 
-    ok(1, fdreserve(4));
-    ok(2, fdreserve(2));
-    ok(3, fdreserve(4));
+    ok(fdreserve(4), "reserve four descriptors");
+    ok(fdreserve(2), "shrink the reserve to two");
+    ok(fdreserve(4), "grow the reserve back to four");
 
     file = Fopen("/dev/null", "r", 3);
-    ok(4, file != NULL);
-    ok_int(5, 0, Fclose(file));
+    ok(file != NULL, "open the last reserved slot");
+    is_int(0, Fclose(file), "close the last reserved slot");
 
     /* The upper bound is exclusive and must fall back to ordinary fopen. */
     file = Fopen("/dev/null", "r", 4);
-    ok(6, file != NULL);
-    ok_int(7, 0, Fclose(file));
+    ok(file != NULL, "fall back to fopen at the exclusive bound");
+    is_int(0, Fclose(file), "close the ordinary stream");
 
     /* A failed freopen closes its stream; the reserved slot must be rebuilt
        with fopen before it can be reused. */
     file = Fopen("/this/path/does/not/exist", "r", 0);
-    ok(8, file == NULL);
+    ok(file == NULL, "missing file closes the reserved stream");
     file = Fopen("/dev/null", "r", 0);
-    ok(9, file != NULL);
-    ok_int(10, 0, Fclose(file));
+    ok(file != NULL, "reuse the reserved slot after a failed open");
+    is_int(0, Fclose(file), "close the reused stream");
 
-    ok(11, fdreserve(0));
+    ok(fdreserve(0), "release the descriptor reserve");
     return 0;
 }
