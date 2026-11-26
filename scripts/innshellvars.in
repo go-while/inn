@@ -11,6 +11,9 @@ export LC_CTYPE
 
 prefix=@prefix@
 exec_prefix=@exec_prefix@
+##  innconfval does not print unset parameters:  do not let a value of the
+##  caller's environment (from cron, for instance) stand in for them.
+unset COMPRESSFORMAT
 eval $(@bindir@/innconfval -s)
 
 NEWSHOME=${PATHNEWS}
