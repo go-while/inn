@@ -716,6 +716,7 @@ main(int ac, char *av[])
     bool IgnoreOld;
     bool Writing;
     bool UnlinkFile;
+    bool Aside;
     bool val;
     bool inplace;
     time_t TimeWarp;
@@ -814,6 +815,10 @@ main(int ac, char *av[])
     av += optind;
     if ((ac != 0 && ac != 1))
         Usage();
+
+    /* With -d or -f (and without -t), the new history is written aside
+     * for the caller to install. */
+    Aside = (NHistoryText != NULL || NHistoryPath != NULL) && !EXPtracing;
 
     /* if EXPtracing is set, then pass in a path, this ensures we
      * don't replace the existing hisv6 history files */
@@ -1039,7 +1044,12 @@ main(int ac, char *av[])
         fclose(EXPfopen(false, buff, "w", true, Server, false));
     }
 
-    CleanupAndExit(Server, !Bad, Bad ? 1 : 0);
+    /* When the new history was written aside (-d or -f), leave the server
+       paused: the caller installs the new files and then resumes it with
+       ctlinnd go, so that innd does not write to the old files meanwhile
+       (it opens the new ones on go).  On failure, HISexpire has already
+       resumed it. */
+    CleanupAndExit(Server, !Bad && !(Aside && Writing), Bad ? 1 : 0);
     /* NOTREACHED */
     abort();
 }

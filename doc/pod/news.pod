@@ -151,6 +151,27 @@ that a pause made by someone else is not released, and the lock is released
 as before.  When the server cannot be resumed, B<scanlogs> reports it and
 exits with a non-zero status.
 
+=item *
+
+B<expire> now leaves the server paused when it is run with the B<-d> flag
+(or B<-f>), as its manual page always said: whoever installs the new history
+files has to unpause the server with C<ctlinnd go> afterwards.  This matters
+if you run C<expire -d> by hand; B<news.daily> does it for you.  Because
+B<expire> unpaused the server, B<innd> kept accepting articles and writing
+them to the old history files while B<news.daily>, run with the I<expdir>
+keyword, replaced them; B<innd> did not open the new files, and the final
+C<ctlinnd go> of B<news.daily> failed.  A failure to move one of the new
+files, for instance because the history filesystem is full, also no longer
+goes unnoticed: B<news.daily> used to remove the completion marker and leave
+B<innd> running with an empty history file or with files of both
+generations.  It now leaves the server paused, keeps the files not yet moved,
+and notifies the newsmaster.  It also no longer replaces the history files
+when it cannot confirm that the server is paused, when B<expire> failed, or
+when the old history file cannot be emptied, and it no longer runs
+B<expire> while the files of an earlier incomplete installation are still
+there.  The reason it gives B<expire> no longer includes the expdir path,
+which could exceed the 80 characters B<innd> accepts.
+
 =back
 
 =head1 Changes in 2.7.5 (not yet released)

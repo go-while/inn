@@ -124,7 +124,25 @@ Specify the file to use as the F<expire.ctl> file for B<expire>.
 By default, B<expire> builds the new history database in the same directory as
 the current one.  Using this keyword specifies a different location to build
 the new C<hisv6> database (by passing the B<-d> flag to B<expire>), which will
-then be moved to the right location when finished.
+then be moved to the right location when finished.  B<expire> leaves the
+server paused, and B<news.daily> unpauses it once the new files are in place,
+so the server accepts no articles while they are moved; when I<path> is on
+another filesystem, each move is a copy, and the server stays paused for its
+whole duration.  If the server cannot be confirmed to be paused, the new files
+are left in I<path> and the old ones in place.  As this option is meant for a
+filesystem that cannot hold both the old and the new history files, the old
+history file is emptied first, and then the new files replace the old ones
+one by one.  If one of them cannot be moved, the server stays paused with an
+incomplete history database until the administrator acts: the files not yet
+moved and F<history.n.done> are kept in I<path>, and the newsmaster is
+notified, so that the installation can be completed by hand before running
+C<ctlinnd go>.  Nothing is moved either when B<expire> failed, or when the
+old history file cannot be emptied.  As long as F<history.n.done> is in
+I<path>, B<news.daily> does not run B<expire> again (it would overwrite the
+new files) and notifies the newsmaster instead.  The server is paused with
+the reason C<Expiring> followed by the process ID of B<news.daily> and
+C<with expdir>; it used to include I<path>, which made it longer than the
+80 characters B<innd> accepts when I<path> was long.
 
 This option is not available with the C<hissqlite> history method.
 
