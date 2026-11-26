@@ -635,6 +635,16 @@ with a non-zero status.  The output files are locked while they are written
 and, with B<-m>, until they are appended to the tape files and removed;
 B<procbatch> fails in the same way when another process holds the lock.
 
+=item *
+
+A line of the F<history> file too long to be read (more than 32 KB, which
+only a damaged file has) no longer ends the reading of that file.  B<expire>
+run with B<-n> treated it as the end of the file, and its new F<history>
+file then lacked every entry after that line; when connected to the server,
+B<expire> paused B<innd> there, for the rest of the file.  Such a line is now
+skipped like the other malformed lines.  B<expire> also no longer fails on
+an empty F<history> file.
+
 =back
 
 =head1 Changes in 2.7.5 (not yet released)

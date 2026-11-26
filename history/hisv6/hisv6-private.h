@@ -78,6 +78,9 @@ struct hisv6_walkstate {
     void *cookie;
     bool paused;
     bool ignore;
+    /* set for a walk:  without a pause of the server, an unterminated last
+     * line is normally the one it is writing, so it is not reported */
+    bool walk;
     /* the next two fields are only used during expire... they should
      * probably be linked off of cookie, but I've been lazy */
     struct hisv6 *new;

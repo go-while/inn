@@ -35,6 +35,7 @@ lib/hex
 lib/hissqlite
 lib/hissqlite-convert
 lib/hissqlite-util
+lib/hisv6-walk
 lib/inet_aton
 lib/inet_ntoa
 lib/inet_ntop

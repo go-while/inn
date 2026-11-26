@@ -345,6 +345,10 @@ main(int argc, char *argv[])
     exec(st.db, "begin");
     if (!HISwalk(src, NULL, &st, convert_cb))
         die("HISwalk failed: %s", HISerror(src));
+    /* The walk skips malformed lines (and warns about each of them); it then
+       reports how many it skipped. */
+    if (HISerror(src) != NULL)
+        warn("source not converted completely: %s", HISerror(src));
     exec(st.db, "commit");
     HISclose(src);
 
