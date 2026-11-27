@@ -101,6 +101,7 @@ util/innbind
 util/inndf
 util/innmail
 util/innupgrade
+util/mod-active
 util/news.daily
 util/ninpaths
 util/simpleftp

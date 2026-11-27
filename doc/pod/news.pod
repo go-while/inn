@@ -692,6 +692,14 @@ only when all the history files are in place:  if B<expire> was killed while
 replacing them, B<news.daily> leaves the server paused and reports the
 missing files, as B<innd> would exit when reopening an incomplete history.
 
+=item *
+
+B<mod-active> no longer leaves B<innd> paused when it cannot open the
+current F<active> file or create the new one, or when it receives a hangup,
+interrupt, quit or termination signal before the new F<active> file is put
+in place.  It then tries to resume the server, as it already did when writing
+the new F<active> file failed.
+
 =back
 
 =head1 Changes in 2.7.5 (not yet released)
