@@ -21,6 +21,7 @@
 static void reader(CHANNEL *cp UNUSED);
 static void writedone(CHANNEL *cp UNUSED);
 static void wakeup(CHANNEL *cp UNUSED);
+static void test_close_nntp(void);
 
 /* Initialize things enough to be able to call channel functions.  This only
    has to be called once. */
@@ -51,7 +52,7 @@ main(void)
     int fd;
     CHANNEL *cp;
 
-    plan(15);
+    plan(18);
     initialize();
     message_handlers_notice(0);
 
@@ -131,7 +132,33 @@ wakeup(CHANNEL *cp)
               "the callback argument survives sleep");
     CHANclose(cp, CHANname(cp));
     is_int(CTfree, cp->Type, "close frees the channel");
+    test_close_nntp();
     CHANshutdown();
     unlink("output");
     exit(0);
+}
+
+/* ARTstore fills the header buffer of an NNTP channel when a feed uses the
+   H item of the W flag.  Closing the channel must free it, as CHANcreate
+   overwrites the channel when its slot is reused. */
+static void
+test_close_nntp(void)
+{
+    CHANNEL *cp;
+    int fd;
+
+    fd = open("/dev/null", O_RDONLY);
+    if (fd < 0)
+        sysdie("cannot open /dev/null");
+    if (!isvalidfd(fd))
+        sysdie("file descriptor %d too high (see rlimitnofile in inn.conf)",
+               fd);
+    cp = CHANcreate(fd, CTnntp, CSgetcmd, reader, NULL);
+    buffer_set(&cp->Data.Headers, "Path: test\n", strlen("Path: test\n"));
+    ok(cp->Data.Headers.data != NULL, "the NNTP channel has a header buffer");
+    CHANclose(cp, "test nntp");
+    ok(cp->Data.Headers.data == NULL, "close frees the header buffer");
+    ok(cp->Data.Headers.size == 0 && cp->Data.Headers.used == 0
+           && cp->Data.Headers.left == 0,
+       "close resets the header buffer counters");
 }
