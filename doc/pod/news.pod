@@ -136,9 +136,10 @@ mapping overview data fails.  Many thanks to Kevin Bowling for the patches.
 =item *
 
 B<mod-active> no longer leaves B<innd> paused when it cannot open the
-current F<active> file or create the new one, or when it is interrupted by
-a signal while rewriting the F<active> file.  The server is resumed in these
-cases too, as it already was when writing the new F<active> file failed.
+current F<active> file or create the new one, or when it receives a hangup,
+interrupt, quit or termination signal before the new F<active> file is put
+in place.  It then tries to resume the server, as it already did when writing
+the new F<active> file failed.
 
 =back
 

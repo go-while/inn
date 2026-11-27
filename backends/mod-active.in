@@ -21,6 +21,8 @@ my $pausemsg = 'batch active update, ok';  # message to be used for pausing?
 my $diff_flags = '';    # flags for diff(1); default chosen if null
 my $changes = 0;        # number of changes to do
 my $ispaused = 0;       # whether the server is paused by this run
+my $caught;             # signal received while pausing the server
+my %oldsig;             # signal handlers to restore
 
 $0 =~ s#^.*/##;
 
@@ -70,13 +72,22 @@ if ($changes == 0) {
 
 print "$changes change(s) to do\n" if $debug;
 
+# Until the new active file is put in place, a signal makes the script die,
+# so that the END block resumes the server.  A signal received while pausing
+# the server is handled once the pause is done.  Signals ignored when the
+# script was started stay ignored.
+for my $signal (qw(HUP INT QUIT TERM)) {
+    next if defined($SIG{$signal}) && $SIG{$signal} eq 'IGNORE';
+    $oldsig{$signal} = defined($SIG{$signal}) ? $SIG{$signal} : 'DEFAULT';
+    $SIG{$signal} = sub {
+        die "$0: caught SIG$signal, aborting\n" if $ispaused;
+        $caught = $signal;
+    };
+}
+
 ctlinnd("pause $pausemsg");
 $ispaused = 1;
-
-# Let the END block resume the server when interrupted.
-for my $signal (qw(HUP INT QUIT TERM)) {
-    $SIG{$signal} = sub { die "$0: caught SIG$signal, aborting\n" };
-}
+die "$0: caught SIG$caught, aborting\n" if $caught;
 
 open(my $OLDACT, '<', $oldact) || die "$0: open $oldact: $!\n";
 open(my $NEWACT, '>', $newact) || die "$0: open $newact: $!\n";
@@ -106,7 +117,8 @@ close($OLDACT) || warn "$0: close $oldact: $!\n";
 close($NEWACT) || warn "$0: close $newact: $!\n";
 
 # From now on, do not restart INN before dying: the active file may be
-# missing, or not yet reloaded.
+# missing, or not yet reloaded.  Signals are handled as before.
+$SIG{$_} = $oldsig{$_} for keys %oldsig;
 $ispaused = 0;
 
 if (!rename "$oldact", "$oldact.old") {
@@ -142,9 +154,12 @@ exit 0;
 
 END {
     # In case we bail out while being paused, make sure that the show goes on!
-    # Keep the exit status of the script.
-    local $?;
-    ctlinnd("go $pausemsg") if $ispaused;
+    # Keep the exit status of the script, also when resuming fails.
+    if ($ispaused) {
+        local $?;
+        eval { ctlinnd("go $pausemsg") };
+        warn $@ if $@;
+    }
 }
 
 sub ctlinnd {
