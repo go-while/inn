@@ -1134,6 +1134,15 @@ versions prior to 11.0, all 32-bit Solaris versions and 32-bit applications
 running on 64-bit Solaris.  The temporary file is now removed after a failed
 write.
 
+=item *
+
+Fixed a memory leak in B<innd> when a feed in F<newsfeeds> uses the C<H>
+item of the C<W> flag: the buffer holding the header fields of the last
+article received on a connection was not freed when the connection was
+closed, so each connection of a peer, and each article posted through
+B<nnrpd>, could leak memory up to the size of the header fields of an
+article.
+
 =back
 
 =head1 Changes in 2.7.4 (2026-06-22)
