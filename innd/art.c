@@ -371,18 +371,12 @@ ARTparsepath(const char *p, int size, LISTBUFFER *list)
 **  including all the interesting article information.
 */
 void
-ARTlogreject(CHANNEL *cp, const char *text)
+ARTpreparelogreject(CHANNEL *cp)
 {
     ARTDATA *data = &cp->Data;
     HDRCONTENT *hc = data->HdrContent;
     int hopcount;
     char **hops;
-
-    /* We may not yet have received the message-ID of the rejected article. */
-    if (HDR_FOUND(HDR__MESSAGE_ID)) {
-        HDR_LASTCHAR_SAVE(HDR__MESSAGE_ID);
-        HDR_PARSE_START(HDR__MESSAGE_ID);
-    }
 
     /* Set up the header fields that we want to use.  We only need to parse the
        path on rejections if logipaddr is false or we can't find a good host.
@@ -416,11 +410,49 @@ ARTlogreject(CHANNEL *cp, const char *text)
     }
 
     data->FeedsiteLength = strlen(data->Feedsite);
+}
+
+
+void
+ARTlogreject(CHANNEL *cp, const char *text)
+{
+    ARTDATA *data = &cp->Data;
+    HDRCONTENT *hc = data->HdrContent;
+
+    /* We may not yet have received the message-ID of the rejected article. */
+    if (HDR_FOUND(HDR__MESSAGE_ID)) {
+        HDR_LASTCHAR_SAVE(HDR__MESSAGE_ID);
+        HDR_PARSE_START(HDR__MESSAGE_ID);
+    }
+
+    ARTpreparelogreject(cp);
 
     ARTlog(data, ART_REJECT, text != NULL ? text : cp->Error);
 
     if (HDR_FOUND(HDR__MESSAGE_ID))
         HDR_PARSE_END(HDR__MESSAGE_ID);
+}
+
+
+/* Log a rejection after the input buffer holding its header has been
+ * discarded.  ARTpreparelogreject() must have been called while the header
+ * was still available. */
+void
+ARTlogrejectsaved(CHANNEL *cp, const char *messageid, const char *text)
+{
+    ARTDATA *data = &cp->Data;
+    HDRCONTENT *hc = data->HdrContent;
+    HDRCONTENT saved = hc[HDR__MESSAGE_ID];
+
+    if (messageid != NULL) {
+        hc[HDR__MESSAGE_ID].Value = (char *) messageid;
+        hc[HDR__MESSAGE_ID].Length = strlen(messageid);
+    } else {
+        hc[HDR__MESSAGE_ID].Value = NULL;
+        hc[HDR__MESSAGE_ID].Length = 0;
+    }
+    ARTlog(data, ART_REJECT, text != NULL ? text : cp->Error);
+    hc[HDR__MESSAGE_ID] = saved;
 }
 
 /*
@@ -751,6 +783,8 @@ ARTprepare(CHANNEL *cp)
     data->BytesHeader = NULL;
     data->Feedsite = "?";
     data->FeedsiteLength = strlen(data->Feedsite);
+    cp->LargeArtSize = 0;
+    cp->DiscardingLargeArticle = false;
     *cp->Error = '\0';
 }
 
@@ -790,8 +824,14 @@ ARTchecksize(CHANNEL *cp)
     if (innconf->maxartsize != 0 && size > innconf->maxartsize) {
         if (cp->State == CSgotarticle || cp->State == CSgotlargearticle)
             cp->State = CSgotlargearticle;
-        else
+        else {
+            if (cp->State != CSeatarticle)
+                ARTerror(
+                    cp,
+                    "Article of %lu bytes exceeds local limit of %lu bytes",
+                    (unsigned long) size, innconf->maxartsize);
             cp->State = CSeatarticle;
+        }
     }
     if (cp->State == CSgotlargearticle) {
         notice("%s internal rejecting huge article (%lu > %lu)", CHANname(cp),
@@ -1130,7 +1170,9 @@ ARTreject(Reject_type code, CHANNEL *cp)
     /* Remember why the article was rejected (for the status file) */
 
     cp->Rejected++;
-    cp->RejectSize += (unsigned long long) (cp->Next - cp->Start);
+    cp->RejectSize += cp->LargeArtSize
+                      + (unsigned long long) (cp->Next - cp->Start);
+    cp->LargeArtSize = 0;
 
     /* Streaming is used.  Increase the reject counter for TAKETHIS. */
     if (cp->Sendid.size > 3) {

@@ -477,6 +477,9 @@ CHANclose(CHANNEL *cp, const char *name)
         cp->Sendid.data = NULL;
     }
 
+    free(cp->LargeArtMessageID);
+    cp->LargeArtMessageID = NULL;
+
     /* Free the space allocated for NNTP commands. */
     if (cp->av != NULL) {
         free(cp->av[0]);
