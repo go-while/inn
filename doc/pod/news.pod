@@ -133,6 +133,18 @@ files behind after a failed creation, and the buffindexed overview method
 validates its F<group.index> file and no longer frees memory twice when
 mapping overview data fails.  Many thanks to Kevin Bowling for the patches.
 
+=item *
+
+B<news.daily> now resumes B<innd> when the B<expire> it ran was killed while
+it had paused the server, which it does near the end of a run with the
+C<hisv6> history method.  The server stayed paused until the news
+administrator intervened, and the next B<expire> could not run either.  Only
+a pause with the default reason of B<expire> (C<Expiring process> followed by
+a process ID) is released, only when that process is no longer running, and
+only when all the history files are in place:  if B<expire> was killed while
+replacing them, B<news.daily> leaves the server paused and reports the
+missing files, as B<innd> would exit when reopening an incomplete history.
+
 =back
 
 =head1 Changes in 2.7.5 (not yet released)
