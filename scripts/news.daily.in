@@ -484,13 +484,25 @@ if (ctlinnd mode | grep "Reserved ${REASON}" >/dev/null); then
     ctlinnd -s reserve "" 2>/dev/null
 fi
 
-##  Did we become throttled during the run?
+##  Did we become throttled during the run, or did expire leave the server
+##  paused (in case it was killed)?
 SERVERMODE=$(ctlinnd mode 2>/dev/null | ${SED} 1q)
 case "${SERVERMODE}" in
 "Server throttled"*)
     ##  We did, try to unthrottle the server.
     echo "${SERVERMODE} -- trying to recover"
     ctlinnd -s go ""
+    ;;
+"Server paused Expiring process "*)
+    ##  Only resume the server if that expire process is gone.
+    EXPIREPID=$(expr "${SERVERMODE}" \
+        : 'Server paused Expiring process \([0-9]*\)$')
+    test -n "${EXPIREPID}" && {
+        kill -0 "${EXPIREPID}" 2>/dev/null || {
+            echo "${SERVERMODE} -- trying to recover"
+            ctlinnd -s go "Expiring process ${EXPIREPID}"
+        }
+    }
     ;;
 esac
 
